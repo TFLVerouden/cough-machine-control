@@ -1,9 +1,10 @@
 import serial
 import time
 import serial.tools.list_ports
+import threading
 
 # Find a connected Arduino
-def find_arduino(description = 'Arduino'):
+def find_arduino(description='Arduino'):
     ports = list(serial.tools.list_ports.comports())
     for port in ports:
         if description in port.description:
@@ -28,17 +29,29 @@ def set_time(duration_ms):
 def open_valve():
     ser.write('OPEN\n'.encode())
 
+def reset_time():
+    ser.write('RESET\n'.encode())
+
 def monitor_serial():
-    print('Serial monitor:')
     while True:
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8').rstrip()
-            print(line)
+            print(f'\r{line}\nEnter command: ', end='')
 
-# Example usage
-set_time(5000)  # Set the timing duration to 5000 ms (5 seconds)
-time.sleep(2)  # Wait for 2 seconds
-open_valve()  # Open the valve
+def manual_input():
+    while True:
+        command = input("Enter command: ")
+        ser.write(f'{command}\n'.encode())
 
-# Continuously read from Arduino
-monitor_serial()
+# Start the serial monitor in a separate thread
+serial_thread = threading.Thread(target=monitor_serial)
+serial_thread.daemon = True
+serial_thread.start()
+
+# Start the manual input loop
+manual_input()
+
+# Test the functions
+# set_time(5000)
+# open_valve()
+# reset_time()
