@@ -3,17 +3,19 @@ import time
 import serial.tools.list_ports
 
 # Find a connected Arduino
-def find_arduino():
+def find_arduino(description = 'Arduino'):
     ports = list(serial.tools.list_ports.comports())
     for port in ports:
-        if 'Arduino' in port.description or 'EDBG' in port.description:
+        if description in port.description:
             return port.device
     return None
 
-# Set up the serial connection (adjust the port and baud rate as needed)
-arduino_port = find_arduino()
+# Set up the serial connection
+arduino_port = find_arduino('EDBG')
+arduino_baudrate = 9600
+
 if arduino_port:
-    ser = serial.Serial(arduino_port, 9600, timeout=1)
+    ser = serial.Serial(arduino_port, arduino_baudrate, timeout=1)
     print(f'Arduino found on port {arduino_port}, connecting...')
     time.sleep(2)  # Wait for the connection to establish
 else:
