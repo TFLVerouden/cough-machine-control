@@ -2,6 +2,8 @@ const int ledPin = LED_BUILTIN;  // Use the built-in LED
 int duration = 0;  // Variable to store the duration
 bool timeSet = false;  // Flag to check if time has been set
 
+// TODO: Precede each print with "ARDUINO SAYS:"
+
 void setup() {
   pinMode(ledPin, OUTPUT);  // Set the LED pin as an output
   digitalWrite(ledPin, LOW);  // Ensure the LED is off initially
