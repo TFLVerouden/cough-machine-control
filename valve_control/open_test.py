@@ -20,6 +20,10 @@ if arduino_port:
     print(f'Arduino found on port {arduino_port}, connecting...')
     time.sleep(2)  # Wait for the connection to establish
 else:
+    # Print a list of all the device descriptions
+    print('No Arduino found, available devices:')
+    for port in list(serial.tools.list_ports.comports()):
+        print(port.description)
     # Stop the script if the Arduino is not found
     raise SystemError('Arduino not found')
 
