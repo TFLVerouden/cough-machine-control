@@ -6,13 +6,23 @@ import threading
 # Find a connected Arduino
 def find_arduino(description='Arduino'):
     ports = list(serial.tools.list_ports.comports())
-    for port in ports:
-        if description in port.description:
-            return port.device
-    return None
+    ports.sort(key=lambda port: int(port.device.replace('COM', '')))
+
+    available_ports = [port.device for port in ports if description in port.description]
+
+    if len(available_ports) == 1:
+        return available_ports[0]
+    else:
+        print('Available devices:')
+        for port in ports:
+            print(f'{port.device} - {port.description}')
+
+        choice = input(f'Enter the {description} COM port number (e.g., 3 for COM3): ')
+        return f'COM{choice}'
+
 
 # Set up the serial connection
-arduino_port = find_arduino('EDBG')
+arduino_port = find_arduino()
 arduino_baudrate = 9600
 
 if arduino_port:
