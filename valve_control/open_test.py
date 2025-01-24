@@ -4,7 +4,7 @@ import serial.tools.list_ports
 import threading
 
 # Find a connected Arduino
-def find_arduino(description='Arduino'):
+def find_serial_device(description='Arduino'):
     ports = list(serial.tools.list_ports.comports())
     ports.sort(key=lambda port: int(port.device.replace('COM', '')))
 
@@ -22,7 +22,7 @@ def find_arduino(description='Arduino'):
 
 
 # Set up the serial connection
-arduino_port = find_arduino()
+arduino_port = find_serial_device(description='Arduino')
 arduino_baudrate = 9600
 
 if arduino_port:
