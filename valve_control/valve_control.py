@@ -3,6 +3,7 @@ import time
 import serial.tools.list_ports
 import datetime
 import csv
+import os
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -22,13 +23,18 @@ def find_serial_device(description):
         return f'COM{choice}'
 
 if __name__ == '__main__':
+    # Create the data directory if it doesn't exist
+    data_dir = 'data'
+    if not os.path.exists(data_dir):
+        os.makedirs(data_dir)
+
     # Get the experiment name
     experiment_name_default = "test"
-    experiment_name = int(input(f'Enter experiment name (press RETURN for "{experiment_name_default}"): ').strip() or experiment_name_default)
+    experiment_name = input(f'Enter experiment name (press ENTER for "{experiment_name_default}"): ').strip() or experiment_name_default
 
     # Get the duration of the valve opening
     duration_ms_default = 1000
-    duration_ms = int(input(f'Enter valve opening duration (press RETURN for {duration_ms_default} ms): ').strip() or duration_ms_default)
+    duration_ms = int(input(f'Enter valve opening duration (press ENTER for {duration_ms_default} ms): ').strip() or duration_ms_default)
 
     # Set the before and after times
     before_time = 2  # seconds
@@ -83,38 +89,19 @@ if __name__ == '__main__':
 
     # Save the readings to a CSV file
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
-    filename = f'{timestamp}_{experiment_name}.csv'
+    filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
     with open(filename, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile)
         # Write the header
-        csvwriter.writerow(['Experiment Name', experiment_name])
-        csvwriter.writerow(['Start Time (UTC)', start_time])
-        csvwriter.writerow(['Opening Duration (ms)', duration_ms])
-        csvwriter.writerow(['Before Time (s)', before_time])
-        csvwriter.writerow(['After Time (s)', after_time])
+        csvwriter.writerow(['Experiment name', experiment_name])
+        csvwriter.writerow(['Start time (UTC)', start_time])
+        csvwriter.writerow(['Opening duration (ms)', duration_ms])
+        csvwriter.writerow(['Time before opening (s)', before_time])
+        csvwriter.writerow(['Time after closing (s)', after_time])
         csvwriter.writerow([])
-        csvwriter.writerow(['Elapsed Time (s)', 'Pressure', 'Flow Meter'])
+        csvwriter.writerow(['Elapsed time (s)', 'Pressure (bar)',
+                            'Flow rate (a.u.)'])
 
         # Write the readings
         for reading in readings:
             csvwriter.writerow(reading)
-
-
-    # while True:
-    #     if ser.in_waiting > 0:
-    #         line = ser.readline().decode('utf-8').rstrip()
-    #         print(f'\r{line}\nEnter command: ', end='')
-
-    # def manual_input():
-    #     while True:
-    #         command = input("Enter command: ")
-    #         ser.write(f'{command}\n'.encode())
-    #
-    # # Start the serial monitor in a separate thread
-    # serial_thread = threading.Thread(target=monitor_serial)
-    # serial_thread.daemon = True
-    # serial_thread.start()
-    #
-    # # Start the manual input loop
-    # manual_input()
-    #
