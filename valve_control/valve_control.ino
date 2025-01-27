@@ -69,7 +69,7 @@ void handleCommand(String command) {
       openValve();
       currentState = OPENING;
     } else {
-      Serial.println("ARDUINO error: duration not set");
+      Serial.println("Error: TIME not set");
       currentState = ERROR;
     }
 
@@ -77,15 +77,15 @@ void handleCommand(String command) {
     if (valveOpen) {
       currentState = CLOSING;
     } else {
-      Serial.println("ARDUINO warning: valve is already closed");
+      Serial.println("Valve is already closed");
     }
 
   } else if (command == "RESET") {
-    Serial.println("ARDUINO resetting time");
+    Serial.println("Resetting time");
     timeSet = false;
 
   } else {
-    Serial.println("ARDUINO error: Unknown command");
+    Serial.println("Error: Unknown command");
   }
 }
 
