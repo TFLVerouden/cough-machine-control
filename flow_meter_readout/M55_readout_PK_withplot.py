@@ -33,15 +33,18 @@ if status == 0:
     comstr = str('com')+str(COM)
     print(comstr)
     print('standard baudrate = 38400')
-    baudrate = input('Device baudrate = ')
+    # baudrate = input('Device baudrate = ')
+    baudrate = 38400
     print('the default node address is 3')
-    node     = input('node = ')
+    node = 3
+    # node     = input('node = ')
     
-    antwoord = input('Are the settings correct? [y/n]')
-    if antwoord == 'y':
-        status = 1
-    else:
-        status = 0
+    # antwoord = input('Are the settings correct? [y/n]')
+    # if antwoord == 'y':
+    #     status = 1
+    # else:
+    #     status = 0
+    status = 1
 
 if status == 1:
     DUT         = propar.instrument( comport = comstr, address = int(node) , baudrate = int(baudrate) ) # 3 = IFI1, 128 indien direct met comport verbondend
@@ -50,8 +53,13 @@ if status == 1:
 while status ==1:
     meettijd = input('meausurement time in seconds = ')
     root.withdraw()
-    print('select the file add .txt for a textfile')
-    file_name = filedialog.asksaveasfilename()
+    # print('select the file add .txt for a textfile')
+    # file_name = filedialog.asksaveasfilename()
+
+    # Create file
+
+
+    file_name = 'flow_meter_test.txt'
     print(file_name)
 
     # filenaam
