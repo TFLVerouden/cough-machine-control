@@ -1,7 +1,7 @@
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
 const int powerPin = 5;  // Use pin 5 for 5.0V control
+const int pressurePin = A0;  // Placeholder pin for pressure reading
 int duration = 0;  // Variable to store the duration
-bool timeSet = false;  // Flag to check if time has been set
 bool valveOpen = false;  // Flag to check if the valve is open
 unsigned long startTime = 0;  // Variable to store the start time
 
@@ -17,10 +17,10 @@ State currentState = IDLE;
 void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(powerPin, OUTPUT);
+  pinMode(pressurePin, INPUT);
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
   Serial.begin(9600);
-  Serial.println("ARDUINO ready");
 }
 
 void loop() {
@@ -54,43 +54,29 @@ void loop() {
 }
 
 void handleCommand(String command) {
-  Serial.print("ARDUINO received command: ");
-  Serial.println(command);
-
-  if (command.startsWith("TIME")) {
+  if (command.startsWith("OPEN")) {
     duration = command.substring(5).toInt();
-    Serial.print("ARDUINO setting opening duration to: ");
-    Serial.print(duration);
-    Serial.println(" ms");
-    timeSet = true;
-
-  } else if (command == "OPEN") {
-    if (timeSet) {
+    if (duration > 0) {
       openValve();
       currentState = OPENING;
     } else {
-      Serial.println("Error: TIME not set");
       currentState = ERROR;
     }
 
   } else if (command == "CLOSE") {
     if (valveOpen) {
       currentState = CLOSING;
-    } else {
-      Serial.println("Valve is already closed");
     }
 
-  } else if (command == "RESET") {
-    Serial.println("Resetting time");
-    timeSet = false;
+  } else if (command == "?PRESSURE") {
+    readPressure();
 
   } else {
-    Serial.println("Error: Unknown command");
+    currentState = ERROR;
   }
 }
 
 void openValve() {
-  Serial.println("ARDUINO opened the valve");
   digitalWrite(ledPin, HIGH);
   digitalWrite(powerPin, HIGH);
   valveOpen = true;
@@ -98,10 +84,10 @@ void openValve() {
 }
 
 void closeValve() {
-  Serial.println("ARDUINO closed the valve");
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
   valveOpen = false;
+  Serial.println("!FINISHED");
 }
 
 void blinkError() {
@@ -111,4 +97,10 @@ void blinkError() {
     digitalWrite(ledPin, LOW);
     delay(100);
   }
+}
+
+void readPressure() {
+  // int pressureValue = analogRead(pressurePin);
+  int pressureValue = 0;
+  Serial.println(pressureValue);
 }
