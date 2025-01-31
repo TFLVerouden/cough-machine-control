@@ -3,6 +3,7 @@ import scipy as sc
 import matplotlib.pyplot as plt
 import Gupta2009 as Gupta
 
+
 #testing
 
 Tau = np.linspace(0,10,101)
@@ -39,11 +40,17 @@ PVT_D = 110E-3 #s
 
 cough_D = Gupta.M_model(Tau,PVT_D,CPFR_D,CEV_D)
 
+#person E, me based on Gupta et al
+PVT_E, CPFR_E, CEV_E = Gupta.estimator("Male",70, 1.89)
+
+cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
+
 plt.figure()
 plt.plot(Tau,cough_A,label= "Person A, lower bounds male",c='b')
 plt.plot(Tau,cough_B,label= "Person B, higher bounds male",c='r')
 plt.plot(Tau,cough_C,label= "Person C, lower bounds female",c='g')
 plt.plot(Tau,cough_D,label= "Person D, higher bounds female",c='k')
+plt.plot(Tau,cough_E,label= "Me",c='orange')
 plt.xlabel(r"$\tau$")
 plt.ylabel("M")
 plt.legend()
