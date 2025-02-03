@@ -5,7 +5,7 @@ import serial.tools.list_ports
 import datetime
 import csv
 import os
-
+import numpy as np
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     # Record the start time
     start_time = datetime.datetime.now(datetime.timezone.utc)
-    readings = []
+    readings = np.array([],dtype=float)
 
     # Start the while loop
     valve_opened = False
@@ -103,12 +103,13 @@ if __name__ == '__main__':
                 finished_time = current_time
             else:
                 # Assume it's a pressure value
-                pressure_value = response
+                pressure_value = float(response)
 
                 # Read the flow meter value
-                flow_meter_value = flow_meter.readParameter(8)
-                readings.append(
-                        (elapsed_time, pressure_value, flow_meter_value))
+                flow_meter_value = float(flow_meter.readParameter(8))
+
+                readings = np.append(readings, [elapsed_time, pressure_value, flow_meter_value])
+
 
         # Ask the Arduino for a single pressure readout
         ser.write('P?\n'.encode())
@@ -129,6 +130,9 @@ if __name__ == '__main__':
 
     # Save the readings to a CSV file
     print('Saving data...')
+    flow_meter_calibration_value = 10 / 30000 #L/s at maximum capacity: 30.000 a.u.
+    readings = readings.reshape(-1,3)
+    readings[:,2] = readings[:,2] * flow_meter_calibration_value  #now in L/s
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
     filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
     with open(filename, 'w', newline='') as csvfile:
@@ -141,7 +145,7 @@ if __name__ == '__main__':
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
         csvwriter.writerow([])
         csvwriter.writerow(
-                ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (a.u.)'])
+                ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (L/s)'])
 
         # Write the readings
         for reading in readings:
