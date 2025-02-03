@@ -1,3 +1,4 @@
+import propar
 import serial
 import time
 import serial.tools.list_ports
@@ -33,22 +34,39 @@ if __name__ == '__main__':
     experiment_name = input(f'Enter experiment name (press ENTER for "{experiment_name_default}"): ').strip() or experiment_name_default
 
     # Get the duration of the valve opening
-    duration_ms_default = 1000
+    duration_ms_default = 500
     duration_ms = int(input(f'Enter valve opening duration (press ENTER for {duration_ms_default} ms): ').strip() or duration_ms_default)
 
     # Set the before and after times
-    before_time = 2  # seconds
-    after_time = 2  # seconds
+    before_time_ms = 500
+    after_time_ms = 500
 
-    # Set up the serial connection
+    # Set up the Arduino serial connection
     arduino_port = find_serial_device(description='Adafruit')
-    arduino_baudrate = 9600
+    arduino_baudrate = 115200
 
     if arduino_port:
         ser = serial.Serial(arduino_port, arduino_baudrate, timeout=1)
-        time.sleep(2)  # Wait for the connection to establish
+        time.sleep(1)  # Wait for the connection to establish
+        print(f'Connected to Arduino on {arduino_port}')
     else:
         raise SystemError('Arduino not found')
+
+    # Set up the flow meter serial connection
+    flow_meter_port = find_serial_device(description='Bronkhorst')
+    flow_meter_baudrate = 38400
+    flow_meter_node = 3
+
+    if flow_meter_port:
+        flow_meter = propar.instrument(comport=flow_meter_port,
+                                       address=flow_meter_node,
+                                       baudrate=flow_meter_baudrate)
+        flow_meter_serial_number = flow_meter.readParameter(92)
+        print(f'Connected to flow meter {flow_meter_serial_number} on {flow_meter_port}')
+        time.sleep(1)  # Wait for the connection to establish
+        print(f'Connected to flow meter on {flow_meter_port}')
+    else:
+        raise SystemError('Flow meter not found')
 
     # Record the start time
     start_time = datetime.datetime.now(datetime.timezone.utc)
@@ -59,35 +77,45 @@ if __name__ == '__main__':
     finished_received = False
     loop_start_time = time.time()
 
+    print('Starting experiment...')
+
     while True:
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
-        # Ask the Arduino for a single pressure readout
-        ser.write('?PRESSURE\n'.encode())
-        if ser.in_waiting > 0:
-            pressure_value = ser.readline().decode('utf-8').rstrip()
-            # TODO: Read out flow meter from serial
-            flow_meter_value = 0
-            readings.append((elapsed_time, pressure_value, flow_meter_value))
-
-        # After 2 seconds, send a command to the Arduino to open the valve
-        if not valve_opened and elapsed_time >= before_time:
-            ser.write(f'OPEN {duration_ms}\n'.encode())
-            valve_opened = True
-
-        # See if the Arduino has sent a command "!FINISHED"
+        # Listen for commands from the Arduino
         if ser.in_waiting > 0:
             response = ser.readline().decode('utf-8').rstrip()
-            if response == "!FINISHED":
+            if response == "!":
+                print('Valve closed')
                 finished_received = True
                 finished_time = current_time
+            else:
+                # Assume it's a pressure value
+                pressure_value = response
 
-        # Continue the loop for an additional time after receiving "!FINISHED"
-        if finished_received and (current_time - finished_time) >= after_time:
+                # Read the flow meter value
+                flow_meter_value = flow_meter.readParameter(8)
+                print(f'{elapsed_time:.2f}s - Pressure: {pressure_value} bar, Flow rate: {flow_meter_value} a.u.')
+
+                readings.append((elapsed_time, pressure_value, flow_meter_value))
+
+        # Ask the Arduino for a single pressure readout
+        ser.write('P?\n'.encode())
+
+        # After a set time, send a command to the Arduino to open the valve
+        if not valve_opened and elapsed_time >= (before_time_ms / 1000):
+            print('Opening valve...')
+            ser.write(f'O {duration_ms}\n'.encode())
+            valve_opened = True
+
+        # Continue the loop for an additional time after receiving "!"
+        if finished_received and (current_time - finished_time) >= (after_time_ms / 1000):
+            print('Experiment finished')
             break
 
     # Save the readings to a CSV file
+    print('Saving data...')
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
     filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
     with open(filename, 'w', newline='') as csvfile:
@@ -96,11 +124,10 @@ if __name__ == '__main__':
         csvwriter.writerow(['Experiment name', experiment_name])
         csvwriter.writerow(['Start time (UTC)', start_time])
         csvwriter.writerow(['Opening duration (ms)', duration_ms])
-        csvwriter.writerow(['Time before opening (s)', before_time])
-        csvwriter.writerow(['Time after closing (s)', after_time])
+        csvwriter.writerow(['Time before opening (ms)', before_time_ms])
+        csvwriter.writerow(['Time after closing (ms)', after_time_ms])
         csvwriter.writerow([])
-        csvwriter.writerow(['Elapsed time (s)', 'Pressure (bar)',
-                            'Flow rate (a.u.)'])
+        csvwriter.writerow(['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (a.u.)'])
 
         # Write the readings
         for reading in readings:

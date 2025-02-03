@@ -54,8 +54,8 @@ void loop() {
 }
 
 void handleCommand(String command) {
-  if (command.startsWith("OPEN")) {
-    duration = command.substring(5).toInt();
+  if (command.startsWith("O")) {
+    duration = command.substring(2).toInt();
     if (duration > 0) {
       openValve();
       currentState = OPENING;
@@ -63,12 +63,12 @@ void handleCommand(String command) {
       currentState = ERROR;
     }
 
-  } else if (command == "CLOSE") {
+  } else if (command == "C") {
     if (valveOpen) {
       currentState = CLOSING;
     }
 
-  } else if (command == "?PRESSURE") {
+  } else if (command == "P?") {
     readPressure();
 
   } else {
@@ -87,7 +87,7 @@ void closeValve() {
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
   valveOpen = false;
-  Serial.println("!FINISHED");
+  Serial.println("!");
 }
 
 void blinkError() {
