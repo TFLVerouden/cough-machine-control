@@ -101,6 +101,7 @@ void blinkError() {
 
 void readPressure() {
   // int pressureValue = analogRead(pressurePin);
+  // TODO: connect 4-20 mA board to read out sensor
   int pressureValue = 0;
   Serial.println(pressureValue);
 }

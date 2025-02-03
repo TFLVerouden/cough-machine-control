@@ -6,12 +6,14 @@ import datetime
 import csv
 import os
 
+
 # Find a connected serial device by description
 def find_serial_device(description):
     ports = list(serial.tools.list_ports.comports())
     ports.sort(key=lambda port: int(port.device.replace('COM', '')))
 
-    available_ports = [port.device for port in ports if description in port.description]
+    available_ports = [port.device for port in ports
+                       if description in port.description]
 
     if len(available_ports) == 1:
         return available_ports[0]
@@ -23,6 +25,7 @@ def find_serial_device(description):
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
 
+
 if __name__ == '__main__':
     # Create the data directory if it doesn't exist
     data_dir = 'data'
@@ -31,22 +34,27 @@ if __name__ == '__main__':
 
     # Get the experiment name
     experiment_name_default = "test"
-    experiment_name = input(f'Enter experiment name (press ENTER for "{experiment_name_default}"): ').strip() or experiment_name_default
+    experiment_name = (input(f'Enter experiment name (press ENTER for '
+                             f'"{experiment_name_default}"): ').strip()
+                       or experiment_name_default)
 
     # Get the duration of the valve opening
     duration_ms_default = 500
-    duration_ms = int(input(f'Enter valve opening duration (press ENTER for {duration_ms_default} ms): ').strip() or duration_ms_default)
+    duration_ms = int(input(f'Enter valve opening duration (press ENTER for '
+                            f'{duration_ms_default} ms): ').strip()
+                      or duration_ms_default)
 
     # Set the before and after times
     before_time_ms = 500
-    after_time_ms = 500
+    after_time_ms = 1000
 
     # Set up the Arduino serial connection
     arduino_port = find_serial_device(description='Adafruit')
     arduino_baudrate = 115200
 
     if arduino_port:
-        ser = serial.Serial(arduino_port, arduino_baudrate, timeout=1)
+        ser = serial.Serial(arduino_port, arduino_baudrate,
+                            timeout=0)  # Non-blocking mode
         time.sleep(1)  # Wait for the connection to establish
         print(f'Connected to Arduino on {arduino_port}')
     else:
@@ -62,9 +70,10 @@ if __name__ == '__main__':
                                        address=flow_meter_node,
                                        baudrate=flow_meter_baudrate)
         flow_meter_serial_number = flow_meter.readParameter(92)
-        print(f'Connected to flow meter {flow_meter_serial_number} on {flow_meter_port}')
         time.sleep(1)  # Wait for the connection to establish
-        print(f'Connected to flow meter on {flow_meter_port}')
+        print(
+                f'Connected to flow meter {flow_meter_serial_number} '
+                f'on {flow_meter_port}')
     else:
         raise SystemError('Flow meter not found')
 
@@ -80,6 +89,8 @@ if __name__ == '__main__':
     print('Starting experiment...')
 
     while True:
+        # TODO: Speed up while loop. Problem seems to be waiting for
+        #  an Arduino response
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
@@ -96,9 +107,8 @@ if __name__ == '__main__':
 
                 # Read the flow meter value
                 flow_meter_value = flow_meter.readParameter(8)
-                print(f'{elapsed_time:.2f}s - Pressure: {pressure_value} bar, Flow rate: {flow_meter_value} a.u.')
-
-                readings.append((elapsed_time, pressure_value, flow_meter_value))
+                readings.append(
+                        (elapsed_time, pressure_value, flow_meter_value))
 
         # Ask the Arduino for a single pressure readout
         ser.write('P?\n'.encode())
@@ -110,7 +120,10 @@ if __name__ == '__main__':
             valve_opened = True
 
         # Continue the loop for an additional time after receiving "!"
-        if finished_received and (current_time - finished_time) >= (after_time_ms / 1000):
+        if finished_received and (current_time - finished_time) >= (
+                after_time_ms / 1000):
+            # Todo: If, for whatever reason, no "!" is received, the loop
+            #  will continue indefinitely
             print('Experiment finished')
             break
 
@@ -127,7 +140,8 @@ if __name__ == '__main__':
         csvwriter.writerow(['Time before opening (ms)', before_time_ms])
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
         csvwriter.writerow([])
-        csvwriter.writerow(['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (a.u.)'])
+        csvwriter.writerow(
+                ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (a.u.)'])
 
         # Write the readings
         for reading in readings:
