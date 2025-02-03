@@ -129,6 +129,8 @@ if __name__ == '__main__':
 
     # Save the readings to a CSV file
     print('Saving data...')
+    flow_meter_calibration_value = 10 / 30000 #L/s at maximum capacity: 30.000 a.u. 
+    readings[2] = readings[2] * flow_meter_calibration_value  #now in L/s
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
     filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
     with open(filename, 'w', newline='') as csvfile:
@@ -141,7 +143,7 @@ if __name__ == '__main__':
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
         csvwriter.writerow([])
         csvwriter.writerow(
-                ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (a.u.)'])
+                ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (L/s)'])
 
         # Write the readings
         for reading in readings:
