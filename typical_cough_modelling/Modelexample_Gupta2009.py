@@ -62,14 +62,43 @@ PVT_E, CPFR_E, CEV_E = Gupta.estimator("Male",70, 1.89)
 
 cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
 
-plt.figure()
-plt.plot(Tau,cough_A,label= "Person A, lower bounds male", linestyle= "-")
-plt.plot(Tau,cough_B,label= "Person B, higher bounds male", linestyle= "--")
-plt.plot(Tau,cough_C,label= "Person C, lower bounds female",linestyle= "-.")
-plt.plot(Tau,cough_D,label= "Person D, higher bounds female",linestyle= ":")
-plt.plot(Tau,cough_E,label= "Me",c='orange', linestyle= ":", linewidth= 5)
+plt.subplots(1,2,figsize=(12,6))
+plt.subplot(1,2,1)
+plt.plot(Tau,cough_A,label= "LB (Lower bound) male", linestyle= "-")
+plt.plot(Tau,cough_B,label= "HB (higher bound) male", linestyle= "--")
+plt.plot(Tau,cough_C,label= "LB female",linestyle= "-.")
+plt.plot(Tau,cough_D,label= "HB female",linestyle= ":")
+plt.plot(Tau,cough_E,label= "Me", linestyle= ":", linewidth= 5)
 plt.xlabel(r"$\tau$")
 plt.ylabel("M")
 plt.legend()
+plt.subplot(1,2,2)
+plt.plot(Tau*PVT_A,cough_A*CPFR_A,label= "LB male", linestyle= "-")
+plt.plot(Tau*PVT_B,cough_B*CPFR_B,label= "HB male", linestyle= "--")
+plt.plot(Tau*PVT_C,cough_C*CPFR_C,label= "LB female",linestyle= "-.")
+plt.plot(Tau*PVT_D,cough_D*CPFR_D,label= "HB female",linestyle= ":")
+plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Me", linestyle= ":", linewidth= 5)
+plt.xlabel(r"Time (s)")
+plt.ylabel("Q (L/s)")
+
 plt.savefig(path+ "\Gupta2009_5modeledcases.png")
 
+####
+"""
+#Bernoulli law principle don't think it holds :-/
+
+p_atm = 1.01325E5 #Pascal
+pressure = np.linspace(p_atm,1.1*p_atm,100)
+rho_air = 1.204 #kg/m^3 
+A_trachea = 1E-2 * 2E-2 #m^2
+print(30*A_trachea*1E3) #Acccording to article, free stream velocity = 30 m/s. -> 6 L/s flow rate
+print(30**2 / 2 * rho_air)  #Gives dP = 542 Pa  ->Corresponds more or less to Bernouilli
+Q = np.sqrt(2*(pressure-p_atm)/rho_air)*A_trachea #m^3/s
+
+plt.figure()
+plt.plot((pressure-p_atm)*1E-5,Q*1E3)
+plt.xlabel(r"$\Delta$P (bar)")
+plt.ylabel("Q (L/s)")
+plt.grid()
+plt.show()
+"""
