@@ -6,6 +6,7 @@ import datetime
 import csv
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -97,7 +98,9 @@ if __name__ == '__main__':
         # Listen for commands from the Arduino
         if ser.in_waiting > 0:
             response = ser.readline().decode('utf-8').rstrip()
-            if response == "!":
+            if response == "":
+                continue
+            elif response == "!":
                 print('Valve closed')
                 finished_received = True
                 finished_time = current_time
@@ -108,7 +111,8 @@ if __name__ == '__main__':
                 # Read the flow meter value
                 flow_meter_value = float(flow_meter.readParameter(8))
 
-                readings = np.append(readings, [elapsed_time, pressure_value, flow_meter_value])
+                readings = np.append(readings, [elapsed_time,
+                                                pressure_value, flow_meter_value])
 
 
         # Ask the Arduino for a single pressure readout
@@ -130,8 +134,9 @@ if __name__ == '__main__':
 
     # Save the readings to a CSV file
     print('Saving data...')
-    flow_meter_calibration_value = 10 / 30000 #L/s at maximum capacity: 30.000 a.u.
+    flow_meter_calibration_value = float(10 / 30000) #L/s at maximum capacity: 30.000 a.u.
     readings = readings.reshape(-1,3)
+
     readings[:,2] = readings[:,2] * flow_meter_calibration_value  #now in L/s
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
     filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
@@ -150,3 +155,22 @@ if __name__ == '__main__':
         # Write the readings
         for reading in readings:
             csvwriter.writerow(reading)
+#### plotting
+    plotname = os.path.join(data_dir, f'{timestamp}_{experiment_name}.png')
+    plotdata= readings[8:,:]
+    dt = np.diff(plotdata[:,0])
+    mask = plotdata[:,2]>0 #finds the first time the flow rate is above 0
+    t0 = plotdata[mask,0][0]
+    peak_ind = np.argmax(plotdata[:,2])
+    PVT = plotdata[peak_ind,0] - t0 #Peak velocity time
+    CFPR = plotdata[peak_ind,2] #Critical flow pressure rate (L/s)
+    CEV = np.sum(dt * plotdata[1:,2]) #Cumulative expired volume
+    plotdata = plotdata[mask,:]
+    t = plotdata[:,0] - t0
+    fig, ax1 = plt.subplots()
+    ax1.plot(t, plotdata[:,2], 'b-')
+    ax1.set_xlabel('Time (s)')
+    ax1.set_ylabel('Flow rate (L/s)', color='b')
+    ax1.set_title(f'Experiment: {experiment_name}, open: {duration_ms} ms, CFPR: {CFPR:.2f} L/s, PVT: {PVT:.2f} s, CEV: {CEV:.2f} L')
+    ax1.grid()
+    plt.savefig(plotname)
