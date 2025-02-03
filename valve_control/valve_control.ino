@@ -20,7 +20,7 @@ void setup() {
   pinMode(pressurePin, INPUT);
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
 void loop() {
