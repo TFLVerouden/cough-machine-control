@@ -32,7 +32,10 @@ if __name__ == '__main__':
     data_dir = 'data'
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
-
+    # Ask if the user wants to save the data
+    save_default = "y"
+    save = (input('Do you want to save the data? (y/n): ').strip().lower()
+            or save_default)
     # Get the experiment name
     experiment_name_default = "test"
     experiment_name = (input(f'Enter experiment name (press ENTER for '
@@ -97,25 +100,36 @@ if __name__ == '__main__':
 
         # Listen for commands from the Arduino
         if ser.in_waiting > 0:
+            decoding_time = time.time_ns()
             response = ser.readline().decode('utf-8').rstrip()
             if response == "":
+                no_response_time = time.time_ns()
+                print(f"No response took {(no_response_time - decoding_time)} mseconds")
+
                 continue
             elif response == "!":
                 print('Valve closed')
                 finished_received = True
                 finished_time = current_time
+                closing_valve_time = time.time_ns()
+                print(f"Closing valve took {(closing_valve_time - decoding_time)} seconds")
+
             else:
                 # Assume it's a pressure value
                 pressure_value = float(response)
-
                 # Read the flow meter value
+                pre_flow_meter_time = time.time_ns()
                 flow_meter_value = float(flow_meter.readParameter(8))
-
+                flow_meter_time = time.time_ns()
                 readings = np.append(readings, [elapsed_time,
                                                 pressure_value, flow_meter_value])
-
-
+                pressure_value_time = time.time_ns()
+                print(f"reading all sensors"
+                      f" {(pressure_value_time - decoding_time)*1E-6} milliseconds")
+                print(f" Only Flow took"
+                      f" {(flow_meter_time - pre_flow_meter_time) * 1E-6} milliseconds")
         # Ask the Arduino for a single pressure readout
+
         ser.write('P?\n'.encode())
 
         # After a set time, send a command to the Arduino to open the valve
@@ -132,6 +146,7 @@ if __name__ == '__main__':
             print('Experiment finished')
             break
 
+if save == "y":
     # Save the readings to a CSV file
     print('Saving data...')
     flow_meter_calibration_value = float(10 / 30000) #L/s at maximum capacity: 30.000 a.u.
