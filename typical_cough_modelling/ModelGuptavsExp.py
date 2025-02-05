@@ -31,6 +31,28 @@ def sorting_legend(handles,labels,suffix= ""):
     sorted_labels = [f"{label} {suffix}" if label.isdigit() else label for label in sorted_labels]
 
     return sorted_handles,sorted_labels
+
+def data_processer(df):
+    """
+    Gets in a measurement as dataframe (Pandas)
+    calculates PVT, CFPR, CEV and sets the time index correct plus returns a time index.
+    Returns:
+        return df,t, PVT,CFPR, CEV
+
+    """
+    
+    dt = np.diff(df.index)
+    mask = df.loc[:,'Flow']>0 #finds the first time the flow rate is above 0
+    t0 = df.index[mask][0]
+    peak_ind = np.argmax(df.loc[:,'Flow'])
+   
+    PVT = df.index[peak_ind] - t0 #Peak velocity time
+    CFPR = df.iloc[peak_ind, 1] #Critical flow pressure rate (L/s)
+    CEV = np.sum(dt * df.iloc[1:,1]) #Cumulative expired volume
+    df = df[mask]
+    t = df.index - t0
+    return df,t, PVT,CFPR, CEV
+
 #initalizing
 plt.style.use('tableau-colorblind10')
 font = {'size'   : 14}
@@ -124,6 +146,73 @@ sorted_handles,sorted_labels = sorting_legend(handles,labels,suffix= "ms")
 # Add the legend outside of the plot area (e.g., upper left, outside)
 plt.legend(sorted_handles, sorted_labels, loc='upper right')
 ###
-plt.savefig(path+ "\Modelvsexp_openingtime.png")
-plt.show()
+#plt.savefig(path+ "\Modelvsexp_openingtime.png")
+#plt.show()
+plt.close()
 
+#####NOW for seperate times
+
+time_color = ["r","g","b"]
+pressure_linestyle = ["-", "--", "-.", ":",":"]
+opening_duration_series =  pd.Series([],dtype=float)
+pressure_series = pd.Series([],dtype=float)
+plt.figure()
+
+for i,csv_file in enumerate(csv_files):
+    csv_path = os.path.join(datapath,csv_file)
+    metadata = pd.read_csv(csv_path,nrows=5,header=None,index_col=0)
+    df = pd.read_csv(csv_path,skiprows=7,names=["Time", "Pressure", "Flow"],index_col=0,header=None)
+    
+    
+    wanted_opening = pd.Series([60,80,100])
+
+    exp_name = str(metadata.loc['Experiment name'].values)
+    
+    match = re.search(r'([0-9]*\.?[0-9]+)bar', exp_name)
+
+
+    
+    opening_duration = float(metadata.loc['Opening duration (ms)'].values)
+    if opening_duration in wanted_opening.values:
+        #The only this whole piece does is correctly coloring my lines
+        if opening_duration_series.empty:
+            opening_duration_series = pd.concat([opening_duration_series,pd.Series([opening_duration])],ignore_index=True)
+
+        elif not opening_duration_series.isin(pd.Series([opening_duration])).any():
+            opening_duration_series = pd.concat([opening_duration_series,pd.Series([opening_duration])],ignore_index=True)
+
+            
+        plot_color_mask = opening_duration_series.values == opening_duration
+
+        
+        plot_color_ind = list(opening_duration_series[plot_color_mask].index)[0]
+    #The next part the code only does give it a correct linestyle
+            # Check if a match was found and store the result
+        if match:
+            system_pressure = match.group(1)
+            print()
+        else:
+            system_pressure = None
+        if pressure_series.empty:
+            pressure_series = pd.concat([pressure_series,pd.Series([system_pressure])],ignore_index=True)
+
+        elif not pressure_series.isin(pd.Series([system_pressure])).any():
+            pressure_series = pd.concat([pressure_series,pd.Series([system_pressure])],ignore_index=True)
+
+            
+        plot_linestyle_mask = pressure_series.values == system_pressure
+
+        
+        plot_linestyle_ind = list(pressure_series[plot_linestyle_mask].index)[0]
+
+        #### From here it is just regular plotting
+        label = metadata.loc['Experiment name'].values[0]
+        df,t, PVT,CPFR,CEV = data_processer(df)
+        label = f"{label}"
+        plt.plot(t,df.loc[:,"Flow"],label= label,c= time_color[plot_color_ind],linestyle= pressure_linestyle[plot_linestyle_ind])
+plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Me", linestyle= ":",c="k", linewidth= 5)
+plt.grid()
+plt.legend(loc= 'upper right',fontsize=10)
+plt.savefig(path+ "\Modelvsexp_smallopeningtimes.png")
+
+   
