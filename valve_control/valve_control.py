@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     # Set up the flow meter serial connection
     flow_meter_port = find_serial_device(description='Bronkhorst')
-    flow_meter_baudrate = 38400
+    flow_meter_baudrate = 115200
     flow_meter_node = 3
 
     if flow_meter_port:
