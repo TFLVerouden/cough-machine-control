@@ -50,21 +50,23 @@ if __name__ == '__main__':
     
     # Do you want a secondary cough
     second_cough_default = "n"
-    second_cough = (input('Do you want a second cough? (y/n): ').strip().lower()
-            or second_cough_default)
+    second_cough = (input(f'Do you want a second cough?'
+                          f' (y/n): ').strip().lower() or second_cough_default)
 
     if second_cough == "y":
         #duration between coughs
         cough_pause_default = 500 #ms
-        cough_pause = (input(f'How long of a wait between coughs? (press ENTER for 
-                    {cough_pause_default} ms): )): ').strip()
-            or second_cough_default)
+        cough_pause = int(input(f'How long of a wait between coughs?'
+                             f' (press ENTER for '
+                             f'{cough_pause_default} ms): )): ').strip()
+            or cough_pause_default)
         
         #Second_opening_duration
         second_opening_duration_default = 500 #ms
-        second_opening_duration = (input(f'How long should the second opening take? (press ENTER for 
-                    {second_opening_duration_default} ms): )): ').strip()
-            or second_opening_duration_default)
+        second_opening_duration = int(input(f'How long should the second opening take?'
+                                         f' (press ENTER for {second_opening_duration_default}'
+                                         f' ms): )): ').strip() or
+                                   second_opening_duration_default)
         
         
         
@@ -88,7 +90,7 @@ if __name__ == '__main__':
 
     # Set up the flow meter serial connection
     flow_meter_port = find_serial_device(description='Bronkhorst')
-    flow_meter_baudrate = 38400
+    flow_meter_baudrate = 115200
     flow_meter_node = 3
 
     if flow_meter_port:
@@ -146,10 +148,10 @@ if __name__ == '__main__':
                 readings = np.append(readings, [current_time,
                                                 pressure_value, flow_meter_value])
                 pressure_value_time = time.time_ns()
-                print(f"reading all sensors"
-                      f" {(pressure_value_time - decoding_time)*1E-6} milliseconds")
-                print(f" Only Flow took"
-                      f" {(flow_meter_time - pre_flow_meter_time) * 1E-6} milliseconds")
+                # print(f"reading all sensors"
+                #       f" {(pressure_value_time - decoding_time)*1E-6} milliseconds")
+                # print(f" Only Flow took"
+                #       f" {(flow_meter_time - pre_flow_meter_time) * 1E-6} milliseconds")
         # Ask the Arduino for a single pressure readout
 
         ser.write('P?\n'.encode())
@@ -172,7 +174,8 @@ if __name__ == '__main__':
                 print('Experiment finished')
                 break
     if second_cough == "y":
-        
+        valve_opened = False
+        finished_received = False
         print("Second cough")
         while True:
             # TODO: Speed up while loop. Problem seems to be waiting for
@@ -217,7 +220,7 @@ if __name__ == '__main__':
 
             # After a set time, send a command to the Arduino to open the valve
             if not valve_opened and waiting_time >= (cough_pause / 1000):
-                opening_time = time.time()
+
                 print('Opening valve...')
                 ser.write(f'O {second_opening_duration}\n'.encode())
                 valve_opened = True
