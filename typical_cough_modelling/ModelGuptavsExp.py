@@ -212,6 +212,8 @@ for i,csv_file in enumerate(csv_files):
         plt.plot(t,df.loc[:,"Flow"],label= label,c= time_color[plot_color_ind],linestyle= pressure_linestyle[plot_linestyle_ind])
 plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Me", linestyle= ":",c="k", linewidth= 5)
 plt.grid()
+plt.xlabel('Time (s)')
+plt.ylabel('Flow rate (L/s)')
 plt.legend(loc= 'upper right',fontsize=10)
 plt.savefig(path+ "\Modelvsexp_smallopeningtimes.png")
 
