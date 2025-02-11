@@ -11,8 +11,9 @@ import sys
 
 current_dir = os.getcwd()
 parent_dir = os.path.dirname(current_dir)
-model_dir = os.path.join(parent_dir, 'cough-machine-control', 'typical_cough_modelling')
+model_dir = os.path.join(parent_dir, 'typical_cough_modelling')
 sys.path.append(model_dir)
+print(model_dir)
 import Gupta2009 as Gupta
 
 # Find a connected serial device by description
@@ -50,7 +51,7 @@ if __name__ == '__main__':
                        or experiment_name_default)
 
     # Get the duration of the valve opening
-    duration_ms_default = 500
+    duration_ms_default = 50
     duration_ms = int(input(f'Enter valve opening duration (press ENTER for '
                             f'{duration_ms_default} ms): ').strip()
                       or duration_ms_default)
@@ -194,9 +195,9 @@ if save == "y":
     CFPR = plotdata[peak_ind,2] #Critical flow pressure rate (L/s)
     CEV = np.sum(dt * plotdata[1:,2]) #Cumulative expired volume
     plotdata = plotdata[mask_opening,:]
-    t = plotdata[:,0]
+    t = plotdata[:,0] -t0
     fig, ax1 = plt.subplots()
-    ax1.plot(t, plotdata[:,2], 'b-',marker= 'o',label= "Measurement")
+    ax1.plot(t, plotdata[:,2], 'b-',label= "Measurement")
     if model == "y":
         #person E, me based on Gupta et al
         Tau = np.linspace(0,10,101)
@@ -204,7 +205,7 @@ if save == "y":
         PVT_E, CPFR_E, CEV_E = Gupta.estimator("Male",70, 1.89)
 
         cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
-        ax1.plot(t, plotdata[:,2], 'r:',label= "Model")
+        ax1.plot(Tau*PVT_E,cough_E* CPFR_E, 'r:',label= "Model")
     ax1.set_xlabel('Time (s)')
     ax1.legend()
     ax1.set_ylabel('Flow rate (L/s)')
