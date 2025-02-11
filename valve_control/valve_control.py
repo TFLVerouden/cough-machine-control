@@ -7,6 +7,13 @@ import csv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
+
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
+model_dir = os.path.join(parent_dir, 'cough-machine-control', 'typical_cough_modelling')
+sys.path.append(model_dir)
+import Gupta2009 as Gupta
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -47,6 +54,11 @@ if __name__ == '__main__':
     duration_ms = int(input(f'Enter valve opening duration (press ENTER for '
                             f'{duration_ms_default} ms): ').strip()
                       or duration_ms_default)
+    #Processing compare to model
+
+    model_default = "n"
+    model = (input('Do you want to include the model in the data? (y/n): ').strip().lower()
+            or model_default)
 
     # Set the before and after times
     before_time_ms = 500
@@ -183,9 +195,18 @@ if save == "y":
     plotdata = plotdata[mask,:]
     t = plotdata[:,0] - t0
     fig, ax1 = plt.subplots()
-    ax1.plot(t, plotdata[:,2], 'b-')
+    ax1.plot(t, plotdata[:,2], 'b-',marker= 'o',label= "Measurement")
+    if model == "y":
+        #person E, me based on Gupta et al
+        Tau = np.linspace(0,10,101)
+
+        PVT_E, CPFR_E, CEV_E = Gupta.estimator("Male",70, 1.89)
+
+        cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
+        ax1.plot(t, plotdata[:,2], 'r:',label= "Model")
     ax1.set_xlabel('Time (s)')
     ax1.set_ylabel('Flow rate (L/s)', color='b')
     ax1.set_title(f'Experiment: {experiment_name}, open: {duration_ms} ms, CFPR: {CFPR:.2f} L/s, PVT: {PVT:.2f} s, CEV: {CEV:.2f} L')
+    ax1.legend()
     ax1.grid()
     plt.savefig(plotname)
