@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import adafruit
 
+
 # Find a connected serial device by description
 def find_serial_device(description):
     ports = list(serial.tools.list_ports.comports())

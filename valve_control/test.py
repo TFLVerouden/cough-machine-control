@@ -6,7 +6,13 @@ import datetime
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+print(sht.temperature)
+print(sht.relative_humidity)
+import adafruit_sht4x
 
+sht = adafruit_sht4x.SHT4x(board.I2C())
+print(sht.temperature)
+print(sht.relative_humidity)
 # Find a connected serial device by description
 def find_serial_device(description):
     ports = list(serial.tools.list_ports.comports())
