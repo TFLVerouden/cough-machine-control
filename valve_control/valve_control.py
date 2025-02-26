@@ -13,7 +13,7 @@ current_dir = os.getcwd()
 parent_dir = os.path.dirname(current_dir)
 model_dir = os.path.join(parent_dir, 'typical_cough_modelling')
 sys.path.append(model_dir)
-print(model_dir)
+
 import Gupta2009 as Gupta
 
 # Find a connected serial device by description
@@ -197,7 +197,7 @@ if save == "y":
     plotdata = plotdata[mask_opening,:]
     t = plotdata[:,0] -t0
     fig, ax1 = plt.subplots()
-    ax1.plot(t, plotdata[:,2], 'b-',label= "Measurement")
+    ax1.plot(t, plotdata[:,2], 'b-',label= "Measurement",marker= "o",markeredgecolor= "k")
     if model == "y":
         #person E, me based on Gupta et al
         Tau = np.linspace(0,10,101)

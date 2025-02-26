@@ -2,10 +2,18 @@ import numpy as np
 import scipy as sc
 import matplotlib.pyplot as plt
 import os
-import Gupta2009 as Gupta
 import re
+import sys
 import pandas as pd
 
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
+model_dir = os.path.join(parent_dir, 'cough-machine-control','typical_cough_modelling')
+print(model_dir)
+sys.path.append(model_dir)
+#"C:\Users\sikke\Documents\GitHub\cough-machine-control\typical_cough_modelling\Gupta2009.py"
+
+import Gupta2009 as Gupta
 def sorting_legend(handles,labels,suffix= ""):
     
     # Separate numeric and non-numeric labels
@@ -76,10 +84,9 @@ print(f"Script is located in: {script_dir}")
 
 # Define the path for the new "results" folder
 path = os.path.join(script_dir, "results")
-datapath = os.path.join(script_dir, "data_experiments")
+datapath = os.path.join(script_dir, "data")
 
-csv_files = [f for f in os.listdir(datapath) if f.endswith('.csv')]
-extracted_parts = [re.search(r'[^_]+_[^_]+(?=\.csv)', f).group() for f in csv_files if re.search(r'[^_]+_[^_]+(?=\.csv)', f)]
+csv_files = [f for f in os.listdir(datapath) if f.endswith('first_test.csv')]
 
 
 
@@ -97,7 +104,7 @@ ax1.set_ylim(0, 8)
 for i,csv_file in enumerate(csv_files):
     csv_path = os.path.join(datapath,csv_file)
     metadata = pd.read_csv(csv_path,nrows=5,header=None,index_col=0)
-    df = pd.read_csv(csv_path,skiprows=7,names=["Time", "Pressure", "Flow"],index_col=0,header=None)
+    df = pd.read_csv(csv_path,skiprows=7,names=["Time", "Pressure", "Flow"],index_col=0,header=8,dtype=float)
 
     opening_duration = metadata.loc['Opening duration (ms)']
 
@@ -120,7 +127,7 @@ for i,csv_file in enumerate(csv_files):
   
 
     #Processing the data for future purposes
-
+    
     dt = np.diff(df.index)
     mask = df.loc[:,'Flow']>0 #finds the first time the flow rate is above 0
     t0 = df.index[mask][0]
@@ -132,8 +139,8 @@ for i,csv_file in enumerate(csv_files):
     df = df[mask]
     t = df.index - t0
 
-    ax1.plot(t, df.loc[:,'Flow'],color= colors[plot_ind],linestyle = linestyles[plot_ind],label=label)
-ax1.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Me", linestyle= ":", linewidth= 5)
+    ax1.plot(t, df.loc[:,'Flow'],color= colors[plot_ind],linestyle = linestyles[plot_ind],label=label,marker= "o",markeredgecolor= "k")
+ax1.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Model", linestyle= ":", linewidth= 5,c= "k")
 
 ax1.set_xlabel('Time (s)')
 ax1.set_ylabel('Flow rate (L/s)')
@@ -146,8 +153,8 @@ sorted_handles,sorted_labels = sorting_legend(handles,labels,suffix= "ms")
 # Add the legend outside of the plot area (e.g., upper left, outside)
 plt.legend(sorted_handles, sorted_labels, loc='upper right')
 ###
-#plt.savefig(path+ "\Modelvsexp_openingtime.png")
-#plt.show()
+plt.savefig(path+ "\\3bar_50ms.png")
+plt.show()
 plt.close()
 
 #####NOW for seperate times
@@ -215,7 +222,7 @@ plt.grid()
 plt.xlabel('Time (s)')
 plt.ylabel('Flow rate (L/s)')
 plt.legend(loc= 'upper right',fontsize=10)
-plt.show()
+
 #plt.savefig(path+ r"\Modelvsexp_smallopeningtimes.png")
 
    
