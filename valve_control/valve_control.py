@@ -34,6 +34,14 @@ def find_serial_device(description):
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
 
+def reading_temperature():
+    ser.write('T?\n'.encode())
+    time.sleep(0.1) #wait for the response
+    Temperature = ser.readline().decode('utf-8').rstrip()
+    RH= ser.readline().decode('utf-8').rstrip()
+    Temperature = Temperature.lstrip('T')
+    RH = RH.lstrip('RH')
+    return RH, Temperature
 
 if __name__ == '__main__':
     # Create the data directory if it doesn't exist
@@ -46,9 +54,10 @@ if __name__ == '__main__':
             or save_default)
     # Get the experiment name
     experiment_name_default = "test"
-    experiment_name = (input(f'Enter experiment name (press ENTER for '
-                             f'"{experiment_name_default}"): ').strip()
-                       or experiment_name_default)
+    if save == "y":
+        experiment_name = (input(f'Enter experiment name (press ENTER for '
+                                f'"{experiment_name_default}"): ').strip()
+                        or experiment_name_default)
 
     # Get the duration of the valve opening
     duration_ms_default = 50
@@ -56,10 +65,10 @@ if __name__ == '__main__':
                             f'{duration_ms_default} ms): ').strip()
                       or duration_ms_default)
     #Processing compare to model
-
-    model_default = "n"
-    model = (input('Do you want to include the model in the data? (y/n): ').strip().lower()
-            or model_default)
+    if save == "y":
+        model_default = "n"
+        model = (input('Do you want to include the model in the data? (y/n): ').strip().lower()
+                or model_default)
 
     # Set the before and after times
     before_time_ms = 500
@@ -94,30 +103,25 @@ if __name__ == '__main__':
     else:
         raise SystemError('Flow meter not found')
 
-    # Record the start time
-    start_time = datetime.datetime.now(datetime.timezone.utc)
     readings = np.array([],dtype=float)
-
     # Start the while loop
     valve_opened = False
     finished_received = False
+    #To make it easier to time with the camera
+    ready = (input('Ready to cough?'))
+    # Record the start time
+    start_time = datetime.datetime.now(datetime.timezone.utc)
 
     print('Starting experiment...')
     #We are going to send a command to the Arduino to measure the temperature
-    #and relative humidity of the environment
+    #and relative humidity of the environment.
     #These lines send the command to read Temperature to arduino
-    #It receives two responses. T0 make sure that we are not interfering anything
+    #It receives two responses. To make sure that we are not interfering anything
     #we are going to lstrip with their signature characters
-    ser.write('T?\n'.encode())
-    time.sleep(0.1) #wait for the response
-    Temperature = ser.readline().decode('utf-8').rstrip()
-    RH= ser.readline().decode('utf-8').rstrip()
-    Temperature = Temperature.lstrip('T')
-    RH = RH.lstrip('RH')
+
+    RH, Temperature = reading_temperature()
     loop_start_time = time.time()
     while True:
-        # TODO: Speed up while loop. Problem seems to be waiting for
-        #  an Arduino response
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
