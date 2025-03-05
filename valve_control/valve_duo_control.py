@@ -7,14 +7,8 @@ import csv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
+import adafruit
 
-current_dir = os.getcwd()
-parent_dir = os.path.dirname(current_dir)
-model_dir = os.path.join(parent_dir, 'typical_cough_modelling')
-sys.path.append(model_dir)
-
-import Gupta2009 as Gupta
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -34,14 +28,6 @@ def find_serial_device(description):
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
 
-def reading_temperature():
-    ser.write('T?\n'.encode())
-    time.sleep(0.1) #wait for the response
-    Temperature = ser.readline().decode('utf-8').rstrip()
-    RH= ser.readline().decode('utf-8').rstrip()
-    Temperature = Temperature.lstrip('T')
-    RH = RH.lstrip('RH')
-    return RH, Temperature
 
 if __name__ == '__main__':
     # Create the data directory if it doesn't exist
@@ -54,21 +40,39 @@ if __name__ == '__main__':
             or save_default)
     # Get the experiment name
     experiment_name_default = "test"
-    if save == "y":
-        experiment_name = (input(f'Enter experiment name (press ENTER for '
-                                f'"{experiment_name_default}"): ').strip()
-                        or experiment_name_default)
+    experiment_name = (input(f'Enter experiment name (press ENTER for '
+                             f'"{experiment_name_default}"): ').strip()
+                       or experiment_name_default)
 
     # Get the duration of the valve opening
-    duration_ms_default = 50
+    duration_ms_default = 500
     duration_ms = int(input(f'Enter valve opening duration (press ENTER for '
                             f'{duration_ms_default} ms): ').strip()
                       or duration_ms_default)
-    #Processing compare to model
-    if save == "y":
-        model_default = "n"
-        model = (input('Do you want to include the model in the data? (y/n): ').strip().lower()
-                or model_default)
+    
+    # Do you want a secondary cough
+    second_cough_default = "n"
+    second_cough = (input(f'Do you want a second cough?'
+                          f' (y/n): ').strip().lower() or second_cough_default)
+
+    if second_cough == "y":
+        #duration between coughs
+        cough_pause_default = 500 #ms
+        cough_pause = int(input(f'How long of a wait between coughs?'
+                             f' (press ENTER for '
+                             f'{cough_pause_default} ms): )): ').strip()
+            or cough_pause_default)
+        
+        #Second_opening_duration
+        second_opening_duration_default = 500 #ms
+        second_opening_duration = int(input(f'How long should the second opening take?'
+                                         f' (press ENTER for {second_opening_duration_default}'
+                                         f' ms): )): ').strip() or
+                                   second_opening_duration_default)
+        
+        
+        
+
 
     # Set the before and after times
     before_time_ms = 500
@@ -103,70 +107,141 @@ if __name__ == '__main__':
     else:
         raise SystemError('Flow meter not found')
 
+    # Record the start time
+    start_time = datetime.datetime.now(datetime.timezone.utc)
     readings = np.array([],dtype=float)
+
     # Start the while loop
     valve_opened = False
     finished_received = False
-    #To make it easier to time with the camera
-    ready = (input('Ready to cough?'))
-    # Record the start time
-    start_time = datetime.datetime.now(datetime.timezone.utc)
+    loop_start_time = time.time()
 
     print('Starting experiment...')
-    #We are going to send a command to the Arduino to measure the temperature
-    #and relative humidity of the environment.
-    #These lines send the command to read Temperature to arduino
-    #It receives two responses. To make sure that we are not interfering anything
-    #we are going to lstrip with their signature characters
 
-    RH, Temperature = reading_temperature()
-    loop_start_time = time.time()
     while True:
+        # TODO: Speed up while loop. Problem seems to be waiting for
+        #  an Arduino response
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
         # Listen for commands from the Arduino
         if ser.in_waiting > 0:
+            decoding_time = time.time_ns()
             response = ser.readline().decode('utf-8').rstrip()
             if response == "":
+                no_response_time = time.time_ns()
+                print(f"No response took {(no_response_time - decoding_time)} mseconds")
+
                 continue
             elif response == "!":
                 print('Valve closed')
                 finished_received = True
                 finished_time = current_time
+                closing_valve_time = time.time_ns()
+                print(f"Closing valve took {(closing_valve_time - decoding_time)} seconds")
+
             else:
                 # Assume it's a pressure value
                 pressure_value = float(response)
                 # Read the flow meter value
+                pre_flow_meter_time = time.time_ns()
                 flow_meter_value = float(flow_meter.readParameter(8))
+                flow_meter_time = time.time_ns()
                 readings = np.append(readings, [current_time,
                                                 pressure_value, flow_meter_value])
-
+                pressure_value_time = time.time_ns()
+                # print(f"reading all sensors"
+                #       f" {(pressure_value_time - decoding_time)*1E-6} milliseconds")
+                # print(f" Only Flow took"
+                #       f" {(flow_meter_time - pre_flow_meter_time) * 1E-6} milliseconds")
         # Ask the Arduino for a single pressure readout
 
         ser.write('P?\n'.encode())
 
         # After a set time, send a command to the Arduino to open the valve
         if not valve_opened and elapsed_time >= (before_time_ms / 1000):
+            opening_time = time.time()
             print('Opening valve...')
             ser.write(f'O {duration_ms}\n'.encode())
-            valve_opening_time = time.time()
             valve_opened = True
 
         # Continue the loop for an additional time after receiving "!"
-        if finished_received and (current_time - finished_time) >= (
-                after_time_ms / 1000):
-            # Todo: If, for whatever reason, no "!" is received, the loop
-            #  will continue indefinitely
-            print('Experiment finished')
-            break
+        if finished_received:
+            if second_cough == "y":
+                break
+            elif (current_time - finished_time) >= (
+                after_time_ms / 1000) and second_cough != "y":
+                # Todo: If, for whatever reason, no "!" is received, the loop
+                #  will continue indefinitely
+                print('Experiment finished')
+                break
+    if second_cough == "y":
+        valve_opened = False
+        finished_received = False
+        print("Second cough")
+        while True:
+            # TODO: Speed up while loop. Problem seems to be waiting for
+            #  an Arduino response
+            current_time = time.time()
+            waiting_time = current_time - finished_time
+            elapsed_time = current_time - loop_start_time
+
+            # Listen for commands from the Arduino
+            if ser.in_waiting > 0:
+                decoding_time = time.time_ns()
+                response = ser.readline().decode('utf-8').rstrip()
+                if response == "":
+                    no_response_time = time.time_ns()
+                    print(f"No response took {(no_response_time - decoding_time)} mseconds")
+
+                    continue
+                elif response == "!":
+                    print('Valve closed')
+                    finished_received = True
+                    finished_time = current_time
+                    closing_valve_time = time.time_ns()
+                    print(f"Closing valve took {(closing_valve_time - decoding_time)} seconds")
+
+                else:
+                    # Assume it's a pressure value
+                    pressure_value = float(response)
+                    # Read the flow meter value
+                    pre_flow_meter_time = time.time_ns()
+                    flow_meter_value = float(flow_meter.readParameter(8))
+                    flow_meter_time = time.time_ns()
+                    readings = np.append(readings, [current_time,
+                                                    pressure_value, flow_meter_value])
+                    pressure_value_time = time.time_ns()
+                    print(f"reading all sensors"
+                            f" {(pressure_value_time - decoding_time)*1E-6} milliseconds")
+                    print(f" Only Flow took"
+                            f" {(flow_meter_time - pre_flow_meter_time) * 1E-6} milliseconds")
+            # Ask the Arduino for a single pressure readout
+
+            ser.write('P?\n'.encode())
+
+            # After a set time, send a command to the Arduino to open the valve
+            if not valve_opened and waiting_time >= (cough_pause / 1000):
+
+                print('Opening valve...')
+                ser.write(f'O {second_opening_duration}\n'.encode())
+                valve_opened = True
+
+            # Continue the loop for an additional time after receiving "!"
+            if finished_received:
+                if (current_time - finished_time) >= (
+                    after_time_ms / 1000):
+                    # Todo: If, for whatever reason, no "!" is received, the loop
+                    #  will continue indefinitely
+                    print('Experiment finished')
+                    break
 
 if save == "y":
     # Save the readings to a CSV file
     print('Saving data...')
     flow_meter_calibration_value = float(10 / 30000) #L/s at maximum capacity: 30.000 a.u.
     readings = readings.reshape(-1,3)
-    readings[:,0] = readings[:,0] -valve_opening_time #time since the valve opened
+
     readings[:,2] = readings[:,2] * flow_meter_calibration_value  #now in L/s
     timestamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
     filename = os.path.join(data_dir, f'{timestamp}_{experiment_name}.csv')
@@ -178,8 +253,6 @@ if save == "y":
         csvwriter.writerow(['Opening duration (ms)', duration_ms])
         csvwriter.writerow(['Time before opening (ms)', before_time_ms])
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
-        csvwriter.writerow(['Ambient Temperature (Celsius)', Temperature])
-        csvwriter.writerow(['Relative Humidity (%)', RH])
         csvwriter.writerow([])
         csvwriter.writerow(
                 ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (L/s)'])
@@ -189,33 +262,20 @@ if save == "y":
             csvwriter.writerow(reading)
 #### plotting
     plotname = os.path.join(data_dir, f'{timestamp}_{experiment_name}.png')
-    plotdata= readings
+    plotdata= readings[8:,:]
     dt = np.diff(plotdata[:,0])
     mask = plotdata[:,2]>0 #finds the first time the flow rate is above 0
-    mask_opening = plotdata[:,0]>0 #finds the first time the valve is opened
     t0 = plotdata[mask,0][0]
     peak_ind = np.argmax(plotdata[:,2])
     PVT = plotdata[peak_ind,0] - t0 #Peak velocity time
     CFPR = plotdata[peak_ind,2] #Critical flow pressure rate (L/s)
     CEV = np.sum(dt * plotdata[1:,2]) #Cumulative expired volume
-    plotdata = plotdata[mask_opening,:]
-    t = plotdata[:,0] -t0
+    plotdata = plotdata[mask,:]
+    t = plotdata[:,0] - opening_time
     fig, ax1 = plt.subplots()
-    ax1.plot(t, plotdata[:,2], 'b-',label= "Measurement",marker= "o",markeredgecolor= "k")
-    if model == "y":
-        #person E, me based on Gupta et al
-        Tau = np.linspace(0,10,101)
-
-        PVT_E, CPFR_E, CEV_E = Gupta.estimator("Male",70, 1.89)
-
-        cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
-        ax1.plot(Tau*PVT_E,cough_E* CPFR_E, 'r:',label= "Model")
+    ax1.plot(t, plotdata[:,2], 'b-')
     ax1.set_xlabel('Time (s)')
-    ax1.legend()
-    ax1.set_ylabel('Flow rate (L/s)')
-    ax1.set_title(f'Exp: {experiment_name}, open: {duration_ms} ms \n'
-                  f' CFPR: {CFPR:.1f} L/s, PVT: {PVT:.2f} s, CEV: {CEV:.1f} L\n'
-                  f'T: {Temperature} C, RH: {RH} %')
+    ax1.set_ylabel('Flow rate (L/s)', color='b')
+    ax1.set_title(f'Experiment: {experiment_name}, open: {duration_ms} ms, CFPR: {CFPR:.2f} L/s, PVT: {PVT:.2f} s, CEV: {CEV:.2f} L')
     ax1.grid()
-    plt.tight_layout()
     plt.savefig(plotname)

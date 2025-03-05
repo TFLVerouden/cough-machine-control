@@ -1,9 +1,13 @@
+#include <Adafruit_SHT4x.h>
+
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
-const int powerPin = 5;  // Use pin 5 for 5.0V control
-const int pressurePin = A0;  // Placeholder pin for pressure reading
-int duration = 0;  // Variable to store the duration
-bool valveOpen = false;  // Flag to check if the valve is open
-unsigned long startTime = 0;  // Variable to store the start time
+const int powerPin = 5;          // Use pin 5 for 5.0V control
+const int pressurePin = A0;      // Placeholder pin for pressure reading
+int duration = 0;                // Variable to store the duration
+bool valveOpen = false;          // Flag to check if the valve is open
+unsigned long startTime = 0;     // Variable to store the start time
+
+Adafruit_SHT4x sht4;  // Declare the sensor object
 
 enum State {
   IDLE,
@@ -20,8 +24,18 @@ void setup() {
   pinMode(pressurePin, INPUT);
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
-  Serial.begin(9600);
-}
+  Serial.begin(115200);
+
+  // Initialize the SHT4x sensor
+  if (!sht4.begin()) {
+    Serial.println("Failed to find SHT4x sensor!");
+    while (1) delay(10);  // Halt execution if sensor is not found
+  }
+
+  // Set sensor precision and heater mode
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sht4.setHeater(SHT4X_NO_HEATER);
+} 
 
 void loop() {
   if (Serial.available() > 0) {
@@ -54,8 +68,8 @@ void loop() {
 }
 
 void handleCommand(String command) {
-  if (command.startsWith("OPEN")) {
-    duration = command.substring(5).toInt();
+  if (command.startsWith("O")) {
+    duration = command.substring(2).toInt();
     if (duration > 0) {
       openValve();
       currentState = OPENING;
@@ -63,14 +77,16 @@ void handleCommand(String command) {
       currentState = ERROR;
     }
 
-  } else if (command == "CLOSE") {
+  } else if (command == "C") {
     if (valveOpen) {
       currentState = CLOSING;
     }
 
-  } else if (command == "?PRESSURE") {
+  } else if (command == "P?") {
     readPressure();
 
+  } else if (command == "T?") {
+    readTemperature();
   } else {
     currentState = ERROR;
   }
@@ -87,7 +103,7 @@ void closeValve() {
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
   valveOpen = false;
-  Serial.println("!FINISHED");
+  Serial.println("!");
 }
 
 void blinkError() {
@@ -100,7 +116,21 @@ void blinkError() {
 }
 
 void readPressure() {
-  // int pressureValue = analogRead(pressurePin);
+  // TODO: connect 4-20 mA board to read out sensor
   int pressureValue = 0;
   Serial.println(pressureValue);
+}
+
+void readTemperature() {
+  // Reads Temperature and RH on command;
+  sensors_event_t humidity, temp;
+  
+  // Read temperature and humidity
+  sht4.getEvent(&humidity, &temp);
+  
+  Serial.print("T");
+  Serial.println(temp.temperature);
+  
+  Serial.print("RH");
+  Serial.println(humidity.relative_humidity);
 }
