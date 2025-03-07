@@ -11,10 +11,19 @@ import sys
 
 current_dir = os.getcwd()
 parent_dir = os.path.dirname(current_dir)
-model_dir = os.path.join(parent_dir, 'typical_cough_modelling')
-sys.path.append(model_dir)
-
+print(parent_dir)
+function_dir = os.path.join(parent_dir, 'cough-machine-control')
+function_dir = os.path.join(function_dir,'functions')
+print(function_dir)
+sys.path.append(function_dir)
 import Gupta2009 as Gupta
+import pumpy 
+from Ximea import Ximea
+
+
+####Finished loading Modules
+
+
 
 # Find a connected serial device by description
 def find_serial_device(description):
@@ -48,7 +57,17 @@ if __name__ == '__main__':
     data_dir = 'data'
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
+
+    # Show Ximea cam live
+    try:
+        cam = Ximea(export_folder = data_dir)
+        cam.set_param(exposure=100)
+        cam.live_view(before=True)
+    except Exception as e:
+        print("Ximea not found")
+    
     # Ask if the user wants to save the data
+
     save_default = "y"
     save = (input('Do you want to save the data? (y/n): ').strip().lower()
             or save_default)
@@ -221,3 +240,8 @@ if save == "y":
     ax1.grid()
     plt.tight_layout()
     plt.savefig(plotname)
+
+try:
+    cam.live_view(before=False)
+except Exception as e:
+        print("Ximea not found")

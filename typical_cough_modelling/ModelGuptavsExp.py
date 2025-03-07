@@ -2,10 +2,18 @@ import numpy as np
 import scipy as sc
 import matplotlib.pyplot as plt
 import os
-import Gupta2009 as Gupta
+
 import re
 import pandas as pd
-
+import sys
+current_dir = os.getcwd()
+parent_dir = os.path.dirname(current_dir)
+print(parent_dir)
+model_dir = os.path.join(parent_dir, 'cough-machine-control')
+model_dir = os.path.join(model_dir,'functions')
+print(model_dir)
+sys.path.append(model_dir)
+import Gupta2009 as Gupta
 def sorting_legend(handles,labels,suffix= ""):
     
     # Separate numeric and non-numeric labels
