@@ -108,8 +108,10 @@ if __name__ == '__main__':
     valve_opened = False
     finished_received = False
     #To make it easier to time with the camera
+    time.sleep(0.5)
     ready = (input('Ready to cough?'))
     # Record the start time
+    time.sleep(0.5)
     start_time = datetime.datetime.now(datetime.timezone.utc)
 
     print('Starting experiment...')
