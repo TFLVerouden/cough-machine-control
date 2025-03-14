@@ -1,34 +1,24 @@
-#include <SPI.h>
+#include <Arduino.h>
+#include "MIKROE_4_20mA_RT_Click.h"
 
-#define CS_PIN 10  // Chip Select pin (adjust if needed)
+// The cable select pin of the R Click
+const uint8_t PIN_R_CLICK = 10;
+
+// Adjust the calibration parameters as needed
+R_Click R_click(PIN_R_CLICK, RT_Click_Calibration{4.03, 19.93, 832, 3999});
 
 void setup() {
-  Serial.begin(115200);
-  SPI.begin();                // Initialize SPI
-  pinMode(CS_PIN, OUTPUT);
-  digitalWrite(CS_PIN, HIGH); // Deselect the Click board
-}
-
-uint16_t readSensorData() {
-  digitalWrite(CS_PIN, LOW); // Select Click board
-  delayMicroseconds(10);     // Short delay for stability
-
-  uint16_t data = SPI.transfer16(0x0000); // Read 16-bit data from Click board
-
-  digitalWrite(CS_PIN, HIGH); // Deselect Click board
-  return data;
+  Serial.begin(9600);
+  R_click.begin();
 }
 
 void loop() {
-  uint16_t sensorData = readSensorData();
-  Serial.print("Raw Sensor Data: ");
-  Serial.println(sensorData);
+  uint32_t now = millis();
+  static uint32_t tick = now;
 
-  // Convert raw data to pressure based on sensor scaling
-  float pressure = (sensorData / 65535.0) * 10.0; // Example conversion
-  Serial.print("Pressure: ");
-  Serial.print(pressure);
-  Serial.println(" bar");
-
-  delay(500);
+  // Report readings over serial every 0.1 sec
+  if (now - tick > 100) {
+    tick = now;
+    Serial.println(R_click.read_mA());
+  }
 }
