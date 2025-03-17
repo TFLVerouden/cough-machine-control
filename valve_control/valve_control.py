@@ -9,11 +9,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
-current_dir = os.getcwd()
-parent_dir = os.path.dirname(current_dir)
+cwd = os.path.abspath(os.path.dirname(__file__))
+
+parent_dir = os.path.dirname(cwd)
 print(parent_dir)
-function_dir = os.path.join(parent_dir, 'cough-machine-control')
-function_dir = os.path.join(function_dir,'functions')
+#function_dir = os.path.join(parent_dir, 'cough-machine-control')
+function_dir = os.path.join(parent_dir,'functions')
 print(function_dir)
 sys.path.append(function_dir)
 import Gupta2009 as Gupta
