@@ -3,6 +3,7 @@ from daltonlens import simulate
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 
 # Set of functions to check whether Tommie can distinguish the lines in your
 # plot. Based on the DaltonLens-Python library, tested on the mpl_colorcycle.png
@@ -23,6 +24,7 @@ import matplotlib.pyplot as plt
 # Monochrome weights: https://en.wikipedia.org/wiki/Grayscale
 # BW-conversion: https://digital-photography-school.com/black-and-white-conversions-an-introduction-to-luminosity/
 # Colorcycle: https://matplotlib.org/stable/gallery/color/color_cycle_default.html#
+# More info: https://www.tableau.com/blog/examining-data-viz-rules-dont-use-red-green-together
 
 
 def simulate_cvd(image_array, deficiency="PROTAN", severity=0.6):
@@ -56,7 +58,7 @@ def simulate_cvd(image_array, deficiency="PROTAN", severity=0.6):
 
 
 def simulate_cvd_on_file(file_path, deficiency="PROTAN", severity=0.6,
-                         suffix="_cvd"):
+                         suffix="_cvdsim"):
     """
     Simulates colorblindness on an image file and saves the result with a
     suffix. Not tested on filetypes that are not png.
@@ -92,49 +94,66 @@ def simulate_cvd_on_file(file_path, deficiency="PROTAN", severity=0.6,
     return f"{base}{suffix}{ext}"
 
 
-def adjust_mpl_color_cycle(do_reset=False, do_print=False):
+def set_cvd_friendly_colors(style="adjusted", do_reset=False, do_print=False):
     """
-    Adjusts the default Matplotlib color cycle to skip green, purple, brown,
-    and pink. Moves grey to last position because it is the most iffy one. Can
-    also reset to the default color cycle.
+    Sets the Matplotlib color cycle and colormap for color vision deficiency
+    (CVD) friendliness. Can reset to default settings or use the
+    'tableau-colorblind10' style.
 
-    :param do_reset: If True, resets the color cycle to the default.
-    :param do_print: If True, prints the current color cycle.
+    :param style: Style to use ('adjusted' or 'tableau-colorblind10').
+        Default is 'adjusted'.
+    :param do_reset: If True, resets the settings to the default.
+    :param do_print: If True, prints the current color cycle and colormap.
     """
     if do_reset:
-        plt.rcParams['axes.prop_cycle'] = plt.cycler(
-            color=plt.rcParamsDefault['axes.prop_cycle'].by_key()['color']
-        )
+        # Reset only the parameters changed by this function
+        plt.rcParams['axes.prop_cycle'] = matplotlib.rcParamsDefault['axes.prop_cycle']
+        plt.rcParams['image.cmap'] = matplotlib.rcParamsDefault['image.cmap']
     else:
-        # Default Matplotlib color cycle
-        default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        # Set the colormap to Cividis
+        plt.rcParams['image.cmap'] = 'cividis'
 
-        # Colors to skip
-        skip_colors = {'#2ca02c',  # Green
-                       '#9467bd',  # Purple
-                       '#8c564b',  # Brown
-                       '#e377c2'}  # Pink
+        if style == "adjusted":
+            # Default Matplotlib color cycle
+            default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-        # Filter out the colors to skip
-        adjusted_colors = [color for color in default_colors
-                           if color not in skip_colors]
+            # Colors to skip
+            skip_colors = {'#2ca02c',  # Green
+                           '#9467bd',  # Purple
+                           '#8c564b',  # Brown
+                           '#e377c2'}  # Pink
 
-        # Add grey to the end of the list
-        grey_color = '#7f7f7f'  # Grey
-        adjusted_colors.remove(grey_color)
-        adjusted_colors.append(grey_color)
+            # Filter out the colors to skip
+            adjusted_colors = [color for color in default_colors
+                               if color not in skip_colors]
 
-        # Update Matplotlib's color cycle
-        plt.rcParams['axes.prop_cycle'] = plt.cycler(color=adjusted_colors)
+            # Add grey to the end of the list
+            grey_color = '#7f7f7f'  # Grey
+            adjusted_colors.remove(grey_color)
+            adjusted_colors.append(grey_color)
 
-    # Print the current color cycle
+            # Update Matplotlib's color cycle
+            plt.rcParams['axes.prop_cycle'] = plt.cycler(color=adjusted_colors)
+        elif style == "tableau-colorblind10":
+            # Set the style to tableau-colorblind10
+            plt.style.use('tableau-colorblind10')
+
+    # Print the updated settings if requested
     if do_print:
         current_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        current_cmap = plt.rcParams['image.cmap']
         print("Current color cycle:", current_colors)
+        print("Current colormap:", current_cmap)
 
 
 if __name__ == "__main__":
     # Define a function to plot the color cycle
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import TABLEAU_COLORS
+
+
     def plot_color_cycle(output_path, title="Colors in the property cycle"):
         """
         Plots the current Matplotlib color cycle with TABLEAU_COLORS names and saves the figure.
@@ -142,11 +161,10 @@ if __name__ == "__main__":
         :param output_path: Path to save the output image.
         :param title: Title of the plot.
         """
-        from matplotlib.colors import TABLEAU_COLORS, same_color
 
-        def f(x, a):
+        def f(xi, a):
             """A sigmoid-like parametrized curve."""
-            return 0.85 * a * (1 / (1 + np.exp(-x)) + 0.2)
+            return 0.85 * a * (1 / (1 + np.exp(-xi)) + 0.2)
 
         fig, ax = plt.subplots(figsize=(8, 6))
         ax.axis('off')
@@ -156,10 +174,10 @@ if __name__ == "__main__":
         colors = prop_cycle.by_key()['color']
         x = np.linspace(-4, 4, 200)
 
-        # Filter TABLEAU_COLORS to match the current color cycle
+        # Match colors with TABLEAU_COLORS names
         tableau_colors = {color: name for name, color in TABLEAU_COLORS.items()}
-        matched_colors = [tableau_colors[color] for color in colors if
-                          color in tableau_colors]
+        matched_colors = [tableau_colors.get(color, "unnamed") for color in
+                          colors]
 
         # Calculate dynamic y-spacing to center the lines
         num_colors = len(colors)
@@ -172,15 +190,15 @@ if __name__ == "__main__":
                     va="center")
             ax.bar(9, 1, width=2, bottom=pos - 0.5, color=color)
 
-        # Check if output path exists, if not create it
+        # Ensure the output directory exists
         output_dir = os.path.dirname(output_path)
-        os.makedirs(output_dir) if not os.path.exists(output_dir) else None
+        os.makedirs(output_dir, exist_ok=True)
 
         fig.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close(fig)
 
     # Path to the mpl_colorcycle.png file
-    cvd_check_image = "cvd_check/mpl_colorcycle.png"
+    cvd_check_image = "cvd_check/color_cycle.png"
 
     # Generate the default color cycle plot
     plot_color_cycle(cvd_check_image,
@@ -194,10 +212,16 @@ if __name__ == "__main__":
     print(f"Colorblindness simulation and monochrome image saved.")
 
     # Adjust the color cycle and generate the adjusted plot
-    adjusted_image = "cvd_check/adj_colorcycle.png"
-    adjust_mpl_color_cycle(do_print=True)
+    adjusted_image = "cvd_check/color_cycles/removed_colors.png"
+    set_cvd_friendly_colors(do_print=True)
     plot_color_cycle(adjusted_image,
                      title="Colors in the adjusted property cycle")
 
+    # Also make a version using the tableau-colorblind10 colors
+    adjusted_image2 = "cvd_check/color_cycles/tableau-colorblind10.png"
+    set_cvd_friendly_colors(style="tableau-colorblind10", do_print=True)
+    plot_color_cycle(adjusted_image2,
+                     title="Colors in the tableau_colorblind10 property cycle")
+
     # Reset the color cycle to default and print it
-    adjust_mpl_color_cycle(do_reset=True, do_print=True)
+    set_cvd_friendly_colors(do_reset=True, do_print=True)
