@@ -181,6 +181,8 @@ if __name__ == '__main__':
     # Read out the lift height
     if lift_port:
         height = lift.get_height()
+    else:
+        height = '-'
 
     # Set up the readings array
     readings = np.array([],dtype=float)
@@ -262,10 +264,7 @@ if save == "y":
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
         csvwriter.writerow(['Ambient temperature (°C)', Temperature])
         csvwriter.writerow(['Relative humidity (%)', RH])
-        if lift_port:
-            csvwriter.writerow(['SprayTec lift height (mm)', height])
-        else:
-            csvwriter.writerow(['SprayTec lift height (mm)', '-'])
+        csvwriter.writerow(['SprayTec lift height (mm)', height])
         csvwriter.writerow([])
         csvwriter.writerow(
                 ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (L/s)'])
@@ -301,8 +300,15 @@ if save == "y":
     ax1.set_ylabel('Flow rate (L/s)')
     ax1.set_title(f'Exp: {experiment_name}, open: {duration_ms} ms \n'
                   f' CFPR: {CFPR:.1f} L/s, PVT: {PVT:.2f} s, CEV: {CEV:.1f} L\n'
-                  f'T: {Temperature} C, RH: {RH} %')
+                  f'T: {Temperature} °C, RH: {RH} %, lift: {height} mm')
     ax1.grid()
+
+    ax2 = ax1.twinx()
+    ax2.plot(t, plotdata[:,1], 'g-',label= "Pressure")
+    ax2.set_ylabel('Pressure (bar)')
+    ax2.tick_params(axis='y', labelcolor='g')
+    ax2.set_ylim(bottom=0)
+
     plt.tight_layout()
     plt.savefig(plotname)
 
