@@ -24,7 +24,7 @@ from Ximea import Ximea
 
 ####Finished loading Modules
 
-def find_serial_device(description):
+def find_serial_device(description, continue_on_error=False):
     ports = list(serial.tools.list_ports.comports())
     ports.sort(key=lambda port: int(port.device.replace('COM', '')))
 
@@ -40,20 +40,52 @@ def find_serial_device(description):
         choice = input(f'Select the device number for "{description}": ')
         return matching_ports[int(choice) - 1]
     else:
-        print('No matching devices found.')
-        print('Available devices:')
+        if continue_on_error:
+            return None
+        print('No matching devices found. Available devices:')
         for port in ports:
             print(f'{port.device} - {port.description}')
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
-def reading_temperature():
+
+def reading_temperature(verbose=False):
     ser.write('T?\n'.encode())
     time.sleep(0.1) #wait for the response
     Temperature = ser.readline().decode('utf-8').rstrip()
     RH= ser.readline().decode('utf-8').rstrip()
     Temperature = Temperature.lstrip('T')
     RH = RH.lstrip('RH')
+
+    if verbose:
+        print(f'Temperature: {Temperature} °C; relative humidity: {RH} %')
     return RH, Temperature
+
+class SprayTecLift(serial.Serial):
+    def __init__(self, port, baudrate=9600, timeout=1):
+        super().__init__(port=port, baudrate=baudrate, timeout=timeout)
+        time.sleep(1)  # Allow time for the connection to establish
+        print(f"Connected to SprayTec lift on {port}")
+
+    def get_height(self):
+        """Send a command to get the platform height and parse the response."""
+        try:
+            self.write(b'?\n')  # Send the status command
+            response = self.readlines()
+            for line in response:
+                if line.startswith(b'  Platform height [mm]: '):
+                    height = line.split(b': ')[1].strip().decode('utf-8')
+                    return float(height)
+            print('Warning: No valid response containing "Platform height [mm]" was found.')
+            return None
+        except Exception as e:
+            print(f"Error while reading lift height: {e}")
+            return None
+
+    def close_connection(self):
+        """Close the serial connection."""
+        self.close()
+        # print("Lift connection closed.")
+
 
 if __name__ == '__main__':
     # Create the data directory if it doesn't exist
@@ -125,10 +157,13 @@ if __name__ == '__main__':
     else:
         raise SystemError('Flow meter not found')
 
-    readings = np.array([],dtype=float)
-    # Start the while loop
-    valve_opened = False
-    finished_received = False
+    # Readout SprayTec lift height; if not found, give warning message but continue
+    lift_port = find_serial_device(description='Mega', continue_on_error=True)
+    if lift_port:
+        lift = SprayTecLift(lift_port)
+    else:
+        print('Warning: SprayTec lift not found; height will not be recorded.')
+
     #To make it easier to time with the camera
     time.sleep(0.5)
     ready = (input('Ready to cough?'))
@@ -136,15 +171,26 @@ if __name__ == '__main__':
     time.sleep(0.5)
     start_time = datetime.datetime.now(datetime.timezone.utc)
 
-    print('Starting experiment...')
     #We are going to send a command to the Arduino to measure the temperature
     #and relative humidity of the environment.
     #These lines send the command to read Temperature to arduino
     #It receives two responses. To make sure that we are not interfering anything
     #we are going to lstrip with their signature characters
+    RH, Temperature = reading_temperature(verbose=True)
 
-    RH, Temperature = reading_temperature()
+    # Read out the lift height
+    if lift_port:
+        height = lift.get_height()
+
+    # Set up the readings array
+    readings = np.array([],dtype=float)
+
+    # Start the while loop
+    valve_opened = False
+    finished_received = False
     loop_start_time = time.time()
+    print('Starting experiment...')
+
     while True:
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
@@ -188,6 +234,15 @@ if __name__ == '__main__':
             print('Experiment finished')
             break
 
+# Close the serial connections
+    ser.close()
+    if lift_port:
+        lift.close_connection()
+    # Todo: close serial port of flow_meter
+    # if flow_meter_port:
+    #     flow_meter.close()
+    print('Connections closed')
+
 if save == "y":
     # Save the readings to a CSV file
     print('Saving data...')
@@ -205,8 +260,12 @@ if save == "y":
         csvwriter.writerow(['Opening duration (ms)', duration_ms])
         csvwriter.writerow(['Time before opening (ms)', before_time_ms])
         csvwriter.writerow(['Time after closing (ms)', after_time_ms])
-        csvwriter.writerow(['Ambient Temperature (Celsius)', Temperature])
-        csvwriter.writerow(['Relative Humidity (%)', RH])
+        csvwriter.writerow(['Ambient temperature (°C)', Temperature])
+        csvwriter.writerow(['Relative humidity (%)', RH])
+        if lift_port:
+            csvwriter.writerow(['SprayTec lift height (mm)', height])
+        else:
+            csvwriter.writerow(['SprayTec lift height (mm)', '-'])
         csvwriter.writerow([])
         csvwriter.writerow(
                 ['Elapsed time (s)', 'Pressure (bar)', 'Flow rate (L/s)'])
