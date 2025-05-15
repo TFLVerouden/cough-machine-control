@@ -24,26 +24,28 @@ from Ximea import Ximea
 
 ####Finished loading Modules
 
-
-
-# Find a connected serial device by description
 def find_serial_device(description):
     ports = list(serial.tools.list_ports.comports())
     ports.sort(key=lambda port: int(port.device.replace('COM', '')))
 
-    available_ports = [port.device for port in ports
-                       if description in port.description]
+    # Filter ports where the description contains the provided keyword
+    matching_ports = [port.device for port in ports if description in port.description]
 
-    if len(available_ports) == 1:
-        return available_ports[0]
+    if len(matching_ports) == 1:
+        return matching_ports[0]
+    elif len(matching_ports) > 1:
+        print('Multiple matching devices found:')
+        for idx, port in enumerate(ports):
+            print(f'{idx+1}. {port.device} - {port.description}')
+        choice = input(f'Select the device number for "{description}": ')
+        return matching_ports[int(choice) - 1]
     else:
+        print('No matching devices found.')
         print('Available devices:')
         for port in ports:
             print(f'{port.device} - {port.description}')
-
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
-
 def reading_temperature():
     ser.write('T?\n'.encode())
     time.sleep(0.1) #wait for the response
@@ -60,12 +62,12 @@ if __name__ == '__main__':
         os.makedirs(data_dir)
 
     # Show Ximea cam live
-    try:
-        cam = Ximea(export_folder = data_dir)
-        cam.set_param(exposure=100)
-        cam.live_view(before=True)
-    except Exception as e:
-        print("Ximea not found")
+    #try:
+    #    cam = Ximea(export_folder = data_dir)
+    #    cam.set_param(exposure=1000)
+    #    cam.live_view(before=True)
+    #except Exception as e:
+    #    print("Ximea not found")
     
     # Ask if the user wants to save the data
 
@@ -95,7 +97,7 @@ if __name__ == '__main__':
     after_time_ms = 1000
 
     # Set up the Arduino serial connection
-    arduino_port = find_serial_device(description='Adafruit')
+    arduino_port = find_serial_device(description='ItsyBitsy')
     arduino_baudrate = 115200
 
     if arduino_port:
@@ -158,14 +160,17 @@ if __name__ == '__main__':
                 finished_time = current_time
             else:
                 # Assume it's a pressure value
-                pressure_value = float(response)
+                if response == '':
+                    pressure_value = np.nan
+                else:
+                    pressure_value = float(response[1:])
+
                 # Read the flow meter value
                 flow_meter_value = float(flow_meter.readParameter(8))
                 readings = np.append(readings, [current_time,
                                                 pressure_value, flow_meter_value])
 
         # Ask the Arduino for a single pressure readout
-
         ser.write('P?\n'.encode())
 
         # After a set time, send a command to the Arduino to open the valve
@@ -242,7 +247,7 @@ if save == "y":
     plt.tight_layout()
     plt.savefig(plotname)
 
-try:
-    cam.live_view(before=False)
-except Exception as e:
-        print("Ximea not found")
+# try:
+#     cam.live_view(before=False)
+# except Exception as e:
+#         print("Ximea not found")
