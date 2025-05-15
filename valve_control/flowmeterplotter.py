@@ -10,7 +10,11 @@ current_dir = os.getcwd()
 parent_dir = os.path.dirname(current_dir)
 model_dir = os.path.join(parent_dir, 'cough-machine-control','typical_cough_modelling')
 print(model_dir)
-sys.path.append(model_dir)
+cwd = os.path.abspath(os.path.dirname(__file__))
+
+parent_dir = os.path.dirname(cwd)
+function_dir = os.path.join(parent_dir,'functions')
+sys.path.append(function_dir)
 #"C:\Users\sikke\Documents\GitHub\cough-machine-control\typical_cough_modelling\Gupta2009.py"
 
 import Gupta2009 as Gupta
@@ -154,7 +158,7 @@ sorted_handles,sorted_labels = sorting_legend(handles,labels,suffix= "ms")
 plt.legend(sorted_handles, sorted_labels, loc='upper right')
 ###
 plt.savefig(path+ "\\3bar_50ms.png")
-plt.show()
+#plt.show()
 plt.close()
 
 #####NOW for seperate times
