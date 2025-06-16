@@ -106,6 +106,9 @@ if __name__ == '__main__':
     save_default = "y"
     save = (input('Do you want to save the data? (y/n): ').strip().lower()
             or save_default)
+
+    # TODO: No need to contact the flow meter and lift if no
+
     # Get the experiment name
     experiment_name_default = "test"
     if save == "y":
@@ -182,7 +185,7 @@ if __name__ == '__main__':
     if lift_port:
         height = lift.get_height()
     else:
-        height = '-'
+        height = np.nan
 
     # Set up the readings array
     readings = np.array([],dtype=float)
@@ -206,9 +209,9 @@ if __name__ == '__main__':
                 print('Valve closed')
                 finished_received = True
                 finished_time = current_time
-            else:
+            elif response[0] == "P":
                 # Assume it's a pressure value
-                if response == '':
+                if response[1:] == '':
                     pressure_value = np.nan
                 else:
                     pressure_value = float(response[1:])

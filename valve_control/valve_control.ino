@@ -131,7 +131,8 @@ void readPressure() {
   // Reads out R-click board and converts to pressure
   R_click.poll_EMA();
   Serial.print("P");
-  Serial.println(0.6249*R_click.get_EMA_mA() - 2.4882);
+  Serial.print(0.6249*R_click.get_EMA_mA() - 2.4882);
+  Serial.println()
 }
 
 void readTemperature() {
