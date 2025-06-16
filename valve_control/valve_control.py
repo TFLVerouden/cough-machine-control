@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
             print('Experiment finished')
             break
-        if (current_time-finished_time) >= 5*(before_time_ms/1000 +after_time_ms/1000):
+        if (elapsed_time) >= 5*(before_time_ms/1000 + after_time_ms/1000):
             #If, for whatever reason, no "!" is received, the loop
             #  will continue indefinitely
             #fixed after 5 times the before and after time it stops anyway
@@ -283,8 +283,13 @@ if save == "y":
 #### plotting
     plotname = os.path.join(data_dir, f'{timestamp}_{experiment_name}.png')
     plotdata= readings
+    print(readings)
+    print(readings.shape)
     dt = np.diff(plotdata[:,0])
     mask = plotdata[:,2]>0 #finds the first time the flow rate is above 0
+    if np.sum(mask) == 0:
+        print("No flow rate data found. Exiting.")
+        sys.exit(1)
     mask_opening = plotdata[:,0]>0 #finds the first time the valve is opened
     t0 = plotdata[mask,0][0]
     peak_ind = np.argmax(plotdata[:,2])
