@@ -103,7 +103,7 @@ if __name__ == '__main__':
     
     # Ask if the user wants to save the data
 
-    save_default = "y"
+    save_default = "n"
     save = (input('Do you want to save the data? (y/n): ').strip().lower()
             or save_default)
 
@@ -142,7 +142,7 @@ if __name__ == '__main__':
         print(f'Connected to Arduino on {arduino_port}')
     else:
         raise SystemError('Arduino not found')
-
+    
     # Set up the flow meter serial connection
     flow_meter_port = find_serial_device(description='Bronkhorst')
     flow_meter_baudrate = 115200
@@ -167,13 +167,10 @@ if __name__ == '__main__':
     else:
         print('Warning: SprayTec lift not found; height will not be recorded.')
 
-    #To make it easier to time with the camera
-    time.sleep(0.5)
-    ready = (input('Ready to cough?'))
-    # Record the start time
-    time.sleep(0.5)
-    start_time = datetime.datetime.now(datetime.timezone.utc)
 
+    ready = (input('Ready to cough?'))
+
+    
     #We are going to send a command to the Arduino to measure the temperature
     #and relative humidity of the environment.
     #These lines send the command to read Temperature to arduino
@@ -193,6 +190,8 @@ if __name__ == '__main__':
     # Start the while loop
     valve_opened = False
     finished_received = False
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+
     loop_start_time = time.time()
     print('Starting experiment...')
 
@@ -200,6 +199,8 @@ if __name__ == '__main__':
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
+        # Ask the Arduino for a single pressure readout
+        ser.write('P?\n'.encode())
         # Listen for commands from the Arduino
         if ser.in_waiting > 0:
             response = ser.readline().decode('utf-8').rstrip()
@@ -221,8 +222,7 @@ if __name__ == '__main__':
                 readings = np.append(readings, [current_time,
                                                 pressure_value, flow_meter_value])
 
-        # Ask the Arduino for a single pressure readout
-        ser.write('P?\n'.encode())
+
 
         # After a set time, send a command to the Arduino to open the valve
         if not valve_opened and elapsed_time >= (before_time_ms / 1000):
@@ -234,9 +234,14 @@ if __name__ == '__main__':
         # Continue the loop for an additional time after receiving "!"
         if finished_received and (current_time - finished_time) >= (
                 after_time_ms / 1000):
-            # Todo: If, for whatever reason, no "!" is received, the loop
-            #  will continue indefinitely
+
             print('Experiment finished')
+            break
+        if (current_time-finished_time) >= 5*(before_time_ms/1000 +after_time_ms/1000):
+            #If, for whatever reason, no "!" is received, the loop
+            #  will continue indefinitely
+            #fixed after 5 times the before and after time it stops anyway
+            print('Experiment finished as the code seems to be in a loop')
             break
 
 # Close the serial connections
