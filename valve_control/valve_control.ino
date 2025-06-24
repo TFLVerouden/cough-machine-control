@@ -132,7 +132,7 @@ void readPressure() {
   R_click.poll_EMA();
   Serial.print("P");
   Serial.print(0.6249*R_click.get_EMA_mA() - 2.4882);
-  Serial.println()
+  Serial.println();
 }
 
 void readTemperature() {
