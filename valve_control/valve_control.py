@@ -128,7 +128,7 @@ if __name__ == '__main__':
                 or model_default)
 
     # Set the before and after times
-    before_time_ms = 500
+    before_time_ms = 0
     after_time_ms = 1000
 
     # Set up the Arduino serial connection
