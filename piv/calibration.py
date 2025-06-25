@@ -3,93 +3,113 @@ import cv2 as cv
 from scipy import spatial
 import pickle
 
-
 def all_distances(points):
-    # Check points are in the right shape
     if points.ndim != 2 or points.shape[1] != 2:
         raise ValueError("Input points must be a 2D array with shape (n_points, 2)")
-
-    # Calculate the distance between all points
     return spatial.distance.cdist(points, points, 'euclidean')
 
+def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
+                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=4):
+    """
+    Calculate resolution from a grid.
 
-# Set variables
-path = '/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/calibration/250624_calibration_PIV_500micron.tif'
-# path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
-spacing = 1  # mm
-roi = [50, 725, 270, 375]  # [y_start, y_end, x_start, x_end]
-binary_thresh = 100
+    Parameters:
+        path (str): Path to the image file.
+        spacing (float): Real-world spacing between grid points in millimeters.
+        roi (list): Region to crop to (y_start, y_end, x_start, x_end).
+                    If None, the entire image is used.
+        init_grid (tuple): Initial grid size (columns, rows).
+        binary_thr (int): Threshold value for binarising the image.
+        blur_ker (tuple): Kernel size for Gaussian blur (width, height).
+        open_ker (tuple): Kernel size for morphological open (width, height).
+        print_prec (int): Number of decimal places for printing resolution.
 
-# Import image, convert to grayscale, 8-bit (for blob detector) image
-img = cv.imread(path, cv.IMREAD_UNCHANGED)
-img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-img = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+    Returns:
+        res_avg (float): Average (weighted) resolution from all dot pairs.
+        res_std (float): Standard deviation (weighted) in the resolution.
+    """
 
-# Crop only the area containing dots
-img = img[roi[0]:roi[1], roi[2]:roi[3]]
+    # Load the image and convert it to grayscale
+    img = cv.imread(path, cv.IMREAD_UNCHANGED)
+    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+    img = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
 
-# Opening up image to get rid of lines
-kernel = np.ones((3, 3), np.uint8)
-img = cv.morphologyEx(img, cv.MORPH_OPEN, kernel)
+    # Crop the image to the specified region of interest (ROI)
+    if roi is None:
+        roi = [0, img.shape[0], 0, img.shape[1]]
+    img = img[roi[0]:roi[1], roi[2]:roi[3]]
 
-# Gaussian blur
-img = cv.GaussianBlur(img, (3, 3), 0)
+    # Apply morphological opening and Gaussian blur to preprocess the image
+    img = cv.morphologyEx(img, cv.MORPH_OPEN, np.ones(open_ker, np.uint8))
+    img = cv.GaussianBlur(img, blur_ker, 0)
 
-# Set all pixels above threshold to white
-img = np.where(img > binary_thresh, 255, img)
+    # Binarize the image using the specified threshold
+    img = np.where(img > binary_thr, 255, img)
 
-# Initialize grid size
-grid_size = [4, 4]  # [columns, rows]
-max_columns_found = False
+    # Initialize grid size and flag for maximum columns found
+    grid_size = list(init_grid)
+    max_columns_found = False
 
-# Loop to find the largest fitting grid size
-while True:
-    grid_found, centres = cv.findCirclesGrid(
-        img, tuple(grid_size), flags=cv.CALIB_CB_SYMMETRIC_GRID)
-
-    if grid_found and not max_columns_found:
-        # Increase the number of columns if the maximum hasn't been reached
-        grid_size[0] += 1
-    elif not grid_found and not max_columns_found:
-        # Fix the number of columns and start increasing rows
-        max_columns_found = True
-        grid_size[0] -= 1  # Revert to the last successful column count
-        grid_size[1] += 1
-    elif max_columns_found:
-        # Only increase the number of rows
+    # Loop to find the largest fitting grid size
+    while True:
         grid_found, centres = cv.findCirclesGrid(
             img, tuple(grid_size), flags=cv.CALIB_CB_SYMMETRIC_GRID)
-        if grid_found:
+
+        if grid_found and not max_columns_found:
+            # Increase the number of columns if the maximum hasn't been reached
+            grid_size[0] += 1
+        elif not grid_found and not max_columns_found:
+            # Fix the number of columns and start increasing rows
+            max_columns_found = True
+            grid_size[0] -= 1
             grid_size[1] += 1
-        else:
-            grid_size[1] -= 1
-            break  # Exit the loop if no grid is found with the current size
+        elif max_columns_found:
+            # Only increase the number of rows
+            grid_found, centres = cv.findCirclesGrid(
+                img, tuple(grid_size), flags=cv.CALIB_CB_SYMMETRIC_GRID)
+            if grid_found:
+                grid_size[1] += 1
+            else:
+                # Revert to the last successful row count and exit the loop
+                grid_size[1] -= 1
+                break
 
-print(f"Grid size found: {grid_size}")
+    print(f"Grid found: {grid_size[0]} cols ᳵ {grid_size[1]} rows")
 
-# Reshape centers to match grid size
-centres = centres.reshape(-1, 2)
+    # Reshape the detected centers and generate grid points in real-world units
+    centres = centres.reshape(-1, 2)
+    grid_points = np.array([[x, y] for y in range(grid_size[1])
+                            for x in range(grid_size[0])]) * spacing
 
-# Generate all the grid point coordinates in real space units (img xy flipped)
-grid_points = np.array([[x, y] for y in range(grid_size[1]) for x in range(grid_size[0])])
+    # Calculate pairwise distances in real-world and pixel units
+    dist_real = all_distances(grid_points)
+    dist_pixel = all_distances(centres)
 
-# Calculate the distances in pixel space and real space
-dist_real = all_distances(grid_points)
-dist_pixel = all_distances(centres)
+    # Compute resolution and standard deviation
+    with np.errstate(divide='ignore', invalid='ignore'):
+        all_res = dist_real / dist_pixel
 
-# Divide for resolutions (ignore divide by zero warning)
-with np.errstate(divide='ignore', invalid='ignore'):
-    all_res = dist_real / dist_pixel
+    mask = np.eye(*dist_pixel.shape, dtype=bool).__invert__()
+    res_avg = np.average(all_res[mask], weights=dist_pixel[mask])
+    res_std = np.sqrt(np.average((all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
 
-# Calculate avg and std; mask diagonal to avoid division by zero
-mask = np.eye(*dist_pixel.shape, dtype=bool).__invert__()
-res_avg = np.average(all_res[mask], weights=dist_pixel[mask])
-res_std = np.sqrt(
-        np.average((all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
+    print(f"Resolution (+- std): {res_avg:.{print_prec}f} +- {res_std:.{print_prec}f} mm/px")
 
-# Print the results
-print(f"Resolution (+- std): {res_avg:.4f} +- {res_std:.4f} mm/px")
+    # Save the resolution and standard deviation to a file
+    with open(path.replace('.tif', '_res_std.pkl'), 'wb') as f:
+        pickle.dump([res_avg, res_std], f)
+    print("Resolution saved to disk.")
 
-# Save resolution to disk with the same name as the original image
-with open(path.replace('.tif', '_res_std.pkl'), 'wb') as f:
-    pickle.dump([res_avg, res_std], f)
+    return res_avg, res_std
+
+
+if __name__ == "__main__":
+    # Define the path to the image and other parameters
+    cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
+                'piv/calibration/250624_calibration_PIV_500micron.tif')
+    # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
+    cal_spacing = 1  # mm
+    cal_roi = [50, 725, 270, 375]
+
+    # Run the calibration function
+    calibrate_grid(cal_path, cal_spacing, roi=cal_roi)
