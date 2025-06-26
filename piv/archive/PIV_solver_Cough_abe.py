@@ -11,7 +11,8 @@ import cv2
 from scipy import signal
 from scipy import datasets
 import glob
-path = r"D:\Experiments\PIV\250624_1323_80ms_3"
+# path = r"D:\Experiments\PIV\250624_1323_80ms_3"
+path = '/Volumes/Data/Data/250623 PIV/250624_1115_thirdtest'
 file_names = glob.glob(f"{path}\\*.tif")
 file_names = file_names[500:505]
 
