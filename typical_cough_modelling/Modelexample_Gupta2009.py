@@ -72,11 +72,11 @@ cough_E = Gupta.M_model(Tau,PVT_E,CPFR_E,CEV_E)
 
 plt.subplots(1,2,figsize=(12,6))
 plt.subplot(1,2,1)
-plt.plot(Tau,cough_A,label= "LB (Lower bound) male", linestyle= "-")
-plt.plot(Tau,cough_B,label= "HB (higher bound) male", linestyle= "--")
+plt.plot(Tau,cough_A,label= "Lower bound (LB) male", linestyle= "-")
+plt.plot(Tau,cough_B,label= "Higher bound (HB) male", linestyle= "--")
 plt.plot(Tau,cough_C,label= "LB female",linestyle= "-.")
 plt.plot(Tau,cough_D,label= "HB female",linestyle= ":")
-plt.plot(Tau,cough_E,label= "Me", linestyle= ":", linewidth= 5)
+plt.plot(Tau,cough_E,label= "Our testcase", linestyle= ":", linewidth= 5)
 plt.xlabel(r"$\tau$")
 plt.ylabel("M")
 plt.grid()
@@ -88,15 +88,29 @@ plt.plot(Tau*PVT_A,cough_A*CPFR_A,label= "LB male", linestyle= "-")
 plt.plot(Tau*PVT_B,cough_B*CPFR_B,label= "HB male", linestyle= "--")
 plt.plot(Tau*PVT_C,cough_C*CPFR_C,label= "LB female",linestyle= "-.")
 plt.plot(Tau*PVT_D,cough_D*CPFR_D,label= "HB female",linestyle= ":")
-plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Me", linestyle= ":", linewidth= 5)
+plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Our testcase ", linestyle= ":", linewidth= 5)
 plt.legend()
 plt.xlabel(r"Time (s)")
 plt.ylabel("Q (L/s)")
 plt.grid()
 
-plt.savefig(path+ "\Gupta2009_5modeledcases.png")
+plt.savefig(path+ "\\Gupta2009_5modeledcases.png")
+plt.figure(figsize=(6,6))
+plt.xlim(0, 1.1)
+plt.ylim(0, 9)
+plt.plot(Tau*PVT_A,cough_A*CPFR_A,label= "Male minimum cough", linestyle= "-")
+plt.plot(Tau*PVT_B,cough_B*CPFR_B,label= "Male maximum cough", linestyle= "--")
+plt.plot(Tau*PVT_C,cough_C*CPFR_C,label= "Female minimum cough",linestyle= "-.")
+plt.plot(Tau*PVT_D,cough_D*CPFR_D,label= "Female maximum cough",linestyle= ":")
+plt.plot(Tau*PVT_E,cough_E* CPFR_E,label= "Our test case ", linestyle= ":", linewidth= 5)
+plt.legend()
+plt.xlabel(r"Time (s)")
+plt.ylabel("Q (L/s)")
+plt.grid()
+plt.savefig(path+ "\\Gupta2009_modeledcasesphysicalparam.png")
 
-####
+
+
 """
 #Bernoulli law principle don't think it holds :-/
 
@@ -110,7 +124,7 @@ Q = np.sqrt(2*(pressure-p_atm)/rho_air)*A_trachea #m^3/s
 
 plt.figure()
 plt.plot((pressure-p_atm)*1E-5,Q*1E3)
-plt.xlabel(r"$\Delta$P (bar)")
+plt.xlabel(r"$\\Delta$P (bar)")
 plt.ylabel("Q (L/s)")
 plt.grid()
 plt.show()
