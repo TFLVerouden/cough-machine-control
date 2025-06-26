@@ -199,6 +199,7 @@ if __name__ == '__main__':
         current_time = time.time()
         elapsed_time = current_time - loop_start_time
 
+        ### Probably the before time makes it less reliable, then just immediately starting it
         # Ask the Arduino for a single pressure readout
         ser.write('P?\n'.encode())
         # Listen for commands from the Arduino
