@@ -266,6 +266,7 @@ def shift_displaced_image(images, displacement, axis=1):
                                               -displacement)
 
             # Zero the pixels that were shifted out of the image
+            # ISSUE: this introduces a high-frequency component at the edge
             if displacement > 0:
                 images_shifted[1, :, -displacement:] = 0
             else:
