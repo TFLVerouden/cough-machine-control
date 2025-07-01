@@ -106,11 +106,13 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 
 if __name__ == "__main__":
     # Define the path to the image and other parameters
-    current_dir = os.getcwd()
-    parent_dir = os.path.dirname(current_dir)
+    # Get the directory containing the file
+    current_file_path = os.path.abspath(__file__)
+
+    current_dir = os.path.dirname(current_file_path)
    
-    path = "cough-machine-control/piv/calibration/250624_calibration_PIV_500micron.tif"
-    cal_path = parent_dir + "\\" + path
+    path = "\\calibration\\250624_calibration_PIV_500micron.tif"
+    cal_path = current_dir + "\\" + path
 
     # cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
     #             'piv/calibration/250624_calibration_PIV_500micron.tif')
