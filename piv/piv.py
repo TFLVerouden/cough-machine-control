@@ -153,13 +153,14 @@ if __name__ == "__main__":
 
     current_dir = os.path.dirname(current_file_path)
    
-    cal_endpath = "\\calibration/250624_calibration_PIV_500micron_res_std.pkl'"
+    cal_endpath = "\\calibration/250624_calibration_PIV_500micron_res_std.pkl"
     cal_path = current_dir + "\\" + cal_endpath
+
     if user != "sikke":
         data_path = '/Volumes/Data/Data/250623 PIV/250624_1333_80ms_whand'
     else: 
-        data_path="D:\Experiments\PIV\250624_1444_80ms_nozzlepress05bar_cough04bar"
-        
+        data_path="D:\\Experiments\\PIV\\250624_1444_80ms_nozzlepress05bar_cough04bar"
+      
     # data_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
     #         'test_pair')
 
