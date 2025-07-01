@@ -108,10 +108,12 @@ if __name__ == "__main__":
     # Define the path to the image and other parameters
     current_dir = os.getcwd()
     parent_dir = os.path.dirname(current_dir)
-    path = "piv/calibration/250624_calibration_PIV_500micron.tif"
-    cal_path = 'piv/calibration/250624_calibration_PIV_500micron.tif'
-    cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
-                'piv/calibration/250624_calibration_PIV_500micron.tif')
+   
+    path = "cough-machine-control/piv/calibration/250624_calibration_PIV_500micron.tif"
+    cal_path = parent_dir + "\\" + path
+
+    # cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
+    #             'piv/calibration/250624_calibration_PIV_500micron.tif')
     # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
     cal_spacing = 0.001  # m
     cal_roi = [50, 725, 270, 375]

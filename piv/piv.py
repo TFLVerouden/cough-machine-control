@@ -165,7 +165,8 @@ if __name__ == "__main__":
     num_peaks = 10  # Number of peaks to find in first pass correlation map
 
     # Read calibration data
-    res_avg, _ = np.load(cal_path)
+    res_avg, _ = np.load(cal_path)  #average resolution mm/pix
+    print(f"resolution : {res_avg} m/pix")
 
     # Convert max velocities to max displacements in px
     d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
