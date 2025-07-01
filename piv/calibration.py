@@ -2,6 +2,7 @@ import numpy as np
 import cv2 as cv
 from scipy import spatial
 import pickle
+import os
 
 def all_distances(points):
     if points.ndim != 2 or points.shape[1] != 2:
@@ -105,6 +106,10 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 
 if __name__ == "__main__":
     # Define the path to the image and other parameters
+    current_dir = os.getcwd()
+    parent_dir = os.path.dirname(current_dir)
+    path = "piv/calibration/250624_calibration_PIV_500micron.tif"
+    cal_path = 'piv/calibration/250624_calibration_PIV_500micron.tif'
     cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
                 'piv/calibration/250624_calibration_PIV_500micron.tif')
     # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
