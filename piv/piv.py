@@ -246,10 +246,10 @@ if __name__ == "__main__":
     plt.xlabel('Time (ms)')
     plt.ylabel('vx (m/s)')
     plt.legend(loc='upper right', fontsize='small', framealpha=1)
-    plt.show()
 
     # Save plot as pdf
     plt.savefig(os.path.join(proc_path, 'disp1_vx_t.pdf'), bbox_inches='tight')
+    plt.show()
 
     print()
     # map1 = sig.correlate(downsample(imgs[1], factor=8), downsample(imgs[0], factor=8), method='fft')
