@@ -1,8 +1,8 @@
 import numpy as np
 import cv2 as cv
 from scipy import spatial
-import pickle
 import os
+
 
 def all_distances(points):
     if points.ndim != 2 or points.shape[1] != 2:
@@ -10,7 +10,7 @@ def all_distances(points):
     return spatial.distance.cdist(points, points, 'euclidean')
 
 def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
-                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=8):
+                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=8, plot=False):
     """
     Calculate resolution from a grid.
 
@@ -101,24 +101,24 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
         np.savetxt(f,[res_avg, res_std])
     print("Resolution saved to disk.")
 
+    # TODO: Optionally plot the results
+    if plot:
+        print("Plotting is not implemented in this function.")
+
     return res_avg, res_std
 
 
 if __name__ == "__main__":
-    # Define the path to the image and other parameters
-    current_dir = os.getcwd()
-    parent_dir = os.path.dirname(current_dir)
-   
-    path = "cough-machine-control/piv/calibration/250624_calibration_PIV_500micron.tif"
-    cal_path = parent_dir + "\\" + path
+    # Get the directory containing the file
+    current_file_path = os.path.abspath(__file__)
+    current_dir = os.path.dirname(current_file_path)
+    cal_path = os.path.join(current_dir, "calibration", "250624_calibration_PIV_500micron.tif")
 
-    # cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
-    #             'piv/calibration/250624_calibration_PIV_500micron.tif')
-    # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
+    # Define calibration parameters
     cal_spacing = 0.001  # m
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
-    calibrate_grid(cal_path, cal_spacing, roi=cal_roi)
+    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, plot=True)
 
     # Resolution (+- std): 0.0508 +- 0.0001 mm/px
