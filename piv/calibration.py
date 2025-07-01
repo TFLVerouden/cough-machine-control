@@ -10,13 +10,13 @@ def all_distances(points):
     return spatial.distance.cdist(points, points, 'euclidean')
 
 def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
-                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=4):
+                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=8):
     """
     Calculate resolution from a grid.
 
     Parameters:
         path (str): Path to the image file.
-        spacing (float): Real-world spacing between grid points in millimeters.
+        spacing (float): Real-world spacing between grid points [m].
         roi (list): Region to crop to (y_start, y_end, x_start, x_end).
                     If None, the entire image is used.
         init_grid (tuple): Initial grid size (columns, rows).
@@ -94,11 +94,11 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
     res_avg = np.average(all_res[mask], weights=dist_pixel[mask])
     res_std = np.sqrt(np.average((all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
 
-    print(f"Resolution (+- std): {res_avg:.{print_prec}f} +- {res_std:.{print_prec}f} mm/px")
+    print(f"Resolution (+- std): {res_avg:.{print_prec}f} +- {res_std:.{print_prec}f} m/px")
 
     # Save the resolution and standard deviation to a file
-    with open(path.replace('.tif', '_res_std.pkl'), 'wb') as f:
-        pickle.dump([res_avg, res_std], f)
+    with open(path.replace('.tif', '_res_std.txt'), 'wb') as f:
+        np.savetxt(f,[res_avg, res_std])
     print("Resolution saved to disk.")
 
     return res_avg, res_std
@@ -113,8 +113,10 @@ if __name__ == "__main__":
     cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
                 'piv/calibration/250624_calibration_PIV_500micron.tif')
     # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
-    cal_spacing = 1  # mm
+    cal_spacing = 0.001  # m
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
     calibrate_grid(cal_path, cal_spacing, roi=cal_roi)
+
+    # Resolution (+- std): 0.0508 +- 0.0001 mm/px
