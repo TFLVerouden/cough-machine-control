@@ -62,7 +62,7 @@ def split_image(imgs, nr_windows, overlap=0):
     for img_idx in range(n_img):
         for i, y in enumerate(y_indices):
             for j, x in enumerate(x_indices):
-                windows[img_idx, i, j] = imgs[img_idx, y:y + size_y, x:x + size_x]
+                windows[img_idx, i, j] = imgs[img_idx, y:(y + size_y), x:(x + size_x)]
 
     return windows, centres
 
@@ -92,12 +92,14 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
 
 
 
-def subpixel(corr_map, peak):
-    # Use a Gaussian fit to refine the peak coordinates
 
-    def three_point_gauss(array):
-        return (0.5 * (np.log(array[0]) - np.log(array[2])) /
-                ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+
+def three_point_gauss(array):
+    # Use a Gaussian fit to refine the peak coordinates
+    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
+            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+
+def subpixel(corr_map, peak):
 
     # Fit along both axes
     y_corr = three_point_gauss(corr_map[peak[0]-1:peak[0]+2, peak[1]])
