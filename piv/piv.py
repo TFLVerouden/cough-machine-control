@@ -10,7 +10,9 @@ from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import getpass
 
+user = getpass.getuser()
 
 def downsample(img, factor):
     """Downsample a 2D image by summing non-overlapping blocks
@@ -147,14 +149,22 @@ def remove_outliers(coords, y_max, x_max, strip=True):
 
 if __name__ == "__main__":
     # Set variables
-    data_path = '/Volumes/Data/Data/250623 PIV/250624_1333_80ms_whand'
+    current_file_path = os.path.abspath(__file__)
+
+    current_dir = os.path.dirname(current_file_path)
+   
+    cal_endpath = "\\calibration/250624_calibration_PIV_500micron_res_std.pkl'"
+    cal_path = current_dir + "\\" + cal_endpath
+    if user != "sikke":
+        data_path = '/Volumes/Data/Data/250623 PIV/250624_1333_80ms_whand'
+    else: 
+        data_path="D:\Experiments\PIV\250624_1444_80ms_nozzlepress05bar_cough04bar"
+        
     # data_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
     #         'test_pair')
-    cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
-                'calibration/250624_calibration_PIV_500micron_res_std.pkl')
 
     # In the current directory, create a folder named the same as the final part of the data_path
-    proc_path = os.path.join(os.getcwd(), 'processed', os.path.basename(data_path))
+    proc_path = os.path.join(current_dir, 'processed', os.path.basename(data_path))
     if not os.path.exists(proc_path):
         os.makedirs(proc_path)
 
