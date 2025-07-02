@@ -110,8 +110,7 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 
 if __name__ == "__main__":
     # Get the directory containing the file
-    current_file_path = os.path.abspath(__file__)
-    current_dir = os.path.dirname(current_file_path)
+    current_dir = os.path.dirname(os.path.abspath(__file__))
     cal_path = os.path.join(current_dir, "calibration", "250624_calibration_PIV_500micron.tif")
 
     # Define calibration parameters

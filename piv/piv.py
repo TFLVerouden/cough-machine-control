@@ -7,8 +7,10 @@ from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import getpass
 
 
+# TODO: Move functions to a separate file and import them here
 def downsample(img, factor):
     """Downsample a 2D image by summing non-overlapping blocks
      of size (block_size, block_size)."""
@@ -174,37 +176,45 @@ def remove_outliers(coords, y_max, x_max, strip=True):
     return coords
 
 if __name__ == "__main__":
-    # Set variables
+    # Set experimental parameters
     test_mode = True
-    data_path = '/Volumes/Data/Data/250623 PIV/250624_1333_80ms_whand'
-    # data_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
-    #         'test_pair')
-    cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
-                'calibration/250624_calibration_PIV_500micron_res_std.pkl')
+    meas_name = '250624_1333_80ms_whand'  # Name of the measurement
+    frame_nrs = [930, 931] if test_mode else list(range(1, 6000))
+    dt = 1/40000 # [s]
 
-    # In the current directory, create a folder named the same as the final part of the data_path
-    proc_path = os.path.join(os.getcwd(), 'processed', os.path.basename(data_path))
+    # Data processing settings
+    v_max = [15, 150] # [m/s]
+    downs_fac = 4  # First pass downsampling factor
+    num_peaks = 10  # Number of peaks to find in first pass correlation map
+
+    # File handling
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    cal_path = os.path.join(current_dir, "calibration",
+                            "250624_calibration_PIV_500micron_res_std.txt")
+    user = getpass.getuser()
+    if user == "tommieverouden":
+        data_path = os.path.join("/Volumes/Data/Data/250623 PIV/", meas_name)
+    elif user == "sikke":
+        data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
+
+    # In the current directory, create a folder for processed data
+    # named the same as the final part of the data_path
+    proc_path = os.path.join(current_dir, 'processed', os.path.basename(data_path))
     if not os.path.exists(proc_path) and not test_mode:
         os.makedirs(proc_path)
 
-    frame_nrs = [930, 931] if test_mode else list(range(1, 6000))
-    dt = 1/40000 # s
-    v_max = [15, 150] # m/s
-    downs_fac = 4  # First pass downsampling
-    num_peaks = 10  # Number of peaks to find in first pass correlation map
-
     # Read calibration data
-    res_avg, _ = np.load(cal_path)
+    res_avg, _ = np.loadtxt(cal_path)
 
     # Convert max velocities to max displacements in px
     d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
 
 
-    # FIRST PASS: Full frame correlation
+    #%% FIRST PASS: Full frame correlation =====================================
     # Shortcut: if a disp1.npz file already exists, load it
     disp1_path = os.path.join(proc_path, 'disp1.npz')
     if os.path.exists(disp1_path) and not test_mode:
-        with np.load(disp1_path, allow_pickle=True) as data:
+        with np.load(disp1_path) as data:
             disp1 = data['disp1']
             disp1_unf = data['disp1_unf']
             time = data['time']
