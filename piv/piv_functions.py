@@ -1,0 +1,231 @@
+import os
+
+import cv2 as cv
+import numpy as np
+from matplotlib import pyplot as plt
+from natsort import natsorted
+from skimage.feature import peak_local_max
+from tqdm import tqdm
+
+
+def load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True):
+    """
+    Load selected .tif images from a directory into a 3D numpy array.
+
+    Args:
+        data_path (str): Path to the directory containing .tif images.
+        frame_nrs (list of int): List of frame numbers to load.
+        type (str): File extension to load.
+        lead_0 (int): Number of leading zeros in the file names.
+        timing (bool): If True, show a progress bar while loading images.
+
+    Returns:
+        imgs (np.ndarray): 3D array of images (image_index, y, x).
+        files (list of str): List of loaded file names.
+    """
+
+    # List all files in the directory
+    files = natsorted(
+            [f for f in os.listdir(data_path) if f.endswith('.' + type)])
+
+    # Filter files to include only those that match the specified frame numbers
+    files = [f for f in files if any(f.endswith(f"{nr:0{lead_0}d}.tif") for nr
+                                     in frame_nrs) and not f.startswith('.')]
+    if not files:
+        raise FileNotFoundError(f"No files found in {data_path} matching "
+                                f"frame numbers {frame_nrs} with type '"
+                                f"{type}'.")
+
+    # Read images into a 3D numpy array
+    imgs = np.array([cv.imread(os.path.join(data_path, f), cv.IMREAD_GRAYSCALE)
+                     for f in tqdm(files, desc='Reading images', disable=not
+        timing)],
+                    dtype=np.uint64)
+    return imgs
+
+
+def downsample(img, factor):
+    """Downsample a 2D image by summing non-overlapping blocks
+     of size (block_size, block_size).
+
+     Args:
+        img (np.ndarray): 2D array of image values.
+        factor (int): Size of the blocks to sum over.
+
+    Returns:
+            np.ndarray: Downsampled image as a 2D array.
+         """
+    h, w = img.shape
+    assert h % factor == 0 and w % factor == 0, \
+        "Image dimensions must be divisible by block_size"
+
+    # Reshape the image into blocks and sum over the blocks
+    return img.reshape(h // factor, factor,
+                       w // factor, factor).sum(axis=(1, 3))
+
+
+def split_image(imgs, nr_windows, overlap=0, shift=(0, 0), shift_mode='before',
+                plot=False):
+    """
+    Split a 3D image array (n_img, y, x) into (overlapping) windows,
+    with optional edge cut-off for shifted images.
+
+    Parameters:
+        imgs (np.ndarray): 3D array of image values (image_index, y, x).
+        nr_windows (tuple): Number of windows in (y, x) direction.
+        overlap (float): Fractional overlap between windows (0 = no overlap).
+        shift (tuple): (dx, dy) shift in pixels - can be (0, 0).
+        shift_mode (str): 'before' or 'after' - which frame is considered?
+        plot (bool): If True, plot the windows on the first image.
+
+    Returns:
+        windows (np.ndarray): 5D array of image windows
+            (image_index, window_y_idx, window_x_idx, y, x).
+        centres (np.ndarray): 3D array of window centres
+            (window_y_idx, window_x_idx, 2).
+    """
+    n_img, img_y, img_x = imgs.shape
+    n_y, n_x = nr_windows
+    dy, dx = shift
+
+    # Calculate window size including overlap
+    size_y = min(int(img_y // n_y * (1 + overlap)), img_y)
+    size_x = min(int(img_x // n_x * (1 + overlap)), img_x)
+
+    # Get the top-left corner of each window
+    y_indices = np.linspace(0, img_y - size_y, num=n_y, dtype=int)
+    x_indices = np.linspace(0, img_x - size_x, num=n_x, dtype=int)
+
+    # Create grid of window coordinates
+    grid = np.stack(np.meshgrid(y_indices, x_indices, indexing="ij"), axis=-1)
+
+    # Compute centres (window_y_idx, window_x_idx, 2)
+    centres = np.stack((grid[:, :, 0] + size_y / 2,
+                        grid[:, :, 1] + size_x / 2), axis=-1)
+
+    # Determine cut-off direction: +1 for 'before', -1 for 'after'
+    mode_sign = 1 if shift_mode == 'before' else -1
+
+    # Calculate cut-off for each direction
+    cut_y0 = max(0, mode_sign * dy);
+    cut_y1 = max(0, -mode_sign * dy)
+    cut_x0 = max(0, mode_sign * dx);
+    cut_x1 = max(0, -mode_sign * dx)
+
+    # Show windows and centres on the first image if requested
+    if plot:
+        fig, ax = plt.subplots()
+        ax.imshow(imgs[0].astype(float) / imgs[0].max() * 255, cmap='gray')
+    # Pre-allocate and fill the windows
+    windows = np.empty((n_img, n_y, n_x,
+                        size_y - abs(dy), size_x - abs(dx)), dtype=imgs.dtype)
+    for img_idx in range(n_img):
+        for i, y in enumerate(y_indices):
+            for j, x in enumerate(x_indices):
+                y0 = y + cut_y0;
+                y1 = y + size_y - cut_y1
+                x0 = x + cut_x0;
+                x1 = x + size_x - cut_x1
+                windows[img_idx, i, j] = imgs[img_idx, y0:y1, x0:x1]
+
+                if plot:
+                    color = ['orange', 'blue'][(i + j) % 2]
+                    rect = plt.Rectangle((x + cut_x0, y + cut_y0),
+                                         x + size_x - cut_x1 - (x + cut_x0),
+                                         y + size_y - cut_y1 - (y + cut_y0),
+                                         edgecolor=color, facecolor='none',
+                                         linewidth=1.5)
+                    ax.add_patch(rect)
+                    ax.scatter(centres[i, j, 1], centres[i, j, 0], c=color,
+                               marker='x', s=40)
+
+    # Finish plot
+    if plot:
+        plt.xlim(-20, img_x + 20)
+        plt.ylim(-20, img_y + 20)  # Invert y-axis for image coordinates??
+        plt.show()
+
+    return windows, centres
+
+
+def find_peaks(corr_map, num_peaks=1, min_distance=5):
+    """
+    Find peaks in a correlation map.
+
+    Parameters:
+        corr_map (np.ndarray): 2D array of correlation values.
+        num_peaks (int): Number of peaks to find.
+        min_distance (int): Minimum distance between peaks in pixels.
+
+    Returns:
+        peaks (np.ndarray): Array of peak coordinates shaped (num_peaks, 2)
+        intensities (np.ndarray): Intensities of the found peaks.
+    """
+
+    # Todo: peaks should not be at the edge of the correlation map
+    if num_peaks == 1:
+        # Find the single peak
+        peaks = np.argwhere(np.amax(corr_map) == corr_map)
+    else:
+        # Find multiple peaks using peak_local_max
+        peaks = peak_local_max(corr_map, min_distance=min_distance,
+                               num_peaks=num_peaks)
+
+    return peaks, corr_map[peaks[:, 0], peaks[:, 1]]
+
+
+def three_point_gauss(array):
+    # Fit a Gaussian to three points
+    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
+            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+
+
+def subpixel(corr_map, peak):
+    # Use a Gaussian fit to refine the peak coordinates
+    y_corr = three_point_gauss(corr_map[peak[0] - 1:peak[0] + 2, peak[1]])
+    x_corr = three_point_gauss(corr_map[peak[0], peak[1] - 1:peak[1] + 2])
+
+    # Add subpixel correction to the peak coordinates
+    return peak.astype(np.float64) + np.array([y_corr, x_corr])
+
+
+def remove_outliers(coords, y_max, x_max, strip=True):
+    """
+    Remove outliers:
+    - For x < 0: keep only points inside a semicircle of radius y_max
+    centered at (0,0)
+    - For x >= 0: keep only points inside a rectangle [-0.5, x_max] x [
+    -y_max, y_max]
+    """
+
+    # Coords might be an 3D array. Reshape it to 2D for processing
+    orig_shape = coords.shape
+    coords = coords.reshape(-1, coords.shape[-1])
+
+    # Set all non-valid coordinates to NaN
+    mask = (((coords[:, 1] < 0) &
+             (coords[:, 1] ** 2 + coords[:, 0] ** 2 <= y_max ** 2))
+            | ((coords[:, 1] >= 0) & (coords[:, 1] <= x_max)
+               & (np.abs(coords[:, 0]) <= y_max)))
+    coords[~mask] = np.array([np.nan, np.nan])
+
+    # Reshape back to original shape
+    coords = coords.reshape(orig_shape)
+
+    # If needed, reduce the array to 2D by taking only the first non-NaN
+    # coordinate
+    if strip and coords.ndim > 2:
+        coords_stripped = np.full([coords.shape[0], 2], np.nan,
+                                  dtype=np.float64)
+        for i in range(coords.shape[0]):
+            for j in range(coords.shape[1]):
+                if ~np.any(coords[i, j, :] == np.nan):
+                    # If there are non NaNs, save these coordinates
+                    coords_stripped[i, :] = coords[i, j, :]
+                    break
+                elif j == coords.shape[1] - 1:
+                    # If all coordinates are NaN, set to NaN
+                    coords_stripped[i, :] = np.array([np.nan, np.nan])
+        coords = coords_stripped
+
+    return coords
