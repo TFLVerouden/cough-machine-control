@@ -39,29 +39,28 @@ def load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True):
     # Read images into a 3D numpy array
     imgs = np.array([cv.imread(os.path.join(data_path, f), cv.IMREAD_GRAYSCALE)
                      for f in tqdm(files, desc='Reading images', disable=not
-        timing)],
-                    dtype=np.uint64)
+        timing)], dtype=np.uint64)
     return imgs
 
 
-def downsample(img, factor):
+def downsample(imgs, factor):
     """Downsample a 2D image by summing non-overlapping blocks
      of size (block_size, block_size).
 
      Args:
-        img (np.ndarray): 2D array of image values.
+        imgs (np.ndarray): 3D array of images (image_index, y, x).
         factor (int): Size of the blocks to sum over.
 
     Returns:
             np.ndarray: Downsampled image as a 2D array.
          """
-    h, w = img.shape
+    n, h, w = imgs.shape
     assert h % factor == 0 and w % factor == 0, \
         "Image dimensions must be divisible by block_size"
 
     # Reshape the image into blocks and sum over the blocks
-    return img.reshape(h // factor, factor,
-                       w // factor, factor).sum(axis=(1, 3))
+    return imgs.reshape(n, h // factor, factor,
+                       w // factor, factor).sum(axis=(2, 4))
 
 
 def split_image(imgs, nr_windows, overlap=0, shift=(0, 0), shift_mode='before',

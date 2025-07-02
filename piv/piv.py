@@ -18,7 +18,7 @@ dt = 1/40000 # [s]
 
 # Data processing settings
 v_max = [15, 150] # [m/s]
-downs_fac = 4  # First pass downsampling factor
+ds_fac = 4  # First pass downsampling factor
 num_peaks = 10  # Number of peaks to find in first pass correlation map
 
 # File handling
@@ -75,13 +75,13 @@ else:
     time = np.linspace((frame_nrs[0] - 1) * dt, (frame_nrs[0] - 1 + n_frames - 1) * dt, n_frames)
 
     for i in tqdm(range(n_frames), desc='First pass'):
-        img1 = piv.downsample(imgs[i + 1], downs_fac)
-        img0 = piv.downsample(imgs[i], downs_fac)
+        img1 = piv.downsample(imgs[i + 1], ds_fac)
+        img0 = piv.downsample(imgs[i], ds_fac)
         corr_map = sig.correlate(img1, img0, method='fft')
         peaks, int_unf = piv.find_peaks(corr_map, num_peaks=num_peaks, min_distance=5)
 
         # Calculate velocities for all peaks
-        disp1[i, :, :] = (peaks - np.array(corr_map.shape) // 2) * downs_fac  # shape (n_found, 2)
+        disp1[i, :, :] = (peaks - np.array(corr_map.shape) // 2) * ds_fac  # shape (n_found, 2)
 
     # Save unfiltered displacements
     disp1_unf = disp1.copy()
