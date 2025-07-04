@@ -64,40 +64,38 @@ def downsample(imgs, factor):
                         w // factor, factor).sum(axis=(2, 4))
 
 
-def split_image(imgs, nr_windows, overlap=0, shift=(0, 0), shift_mode='before',
-                plot=False):
+def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
+                  shift_mode='before', plot=False):
     """
-    Split a 3D image array (n_img, y, x) into (overlapping) windows,
+    Split a 2D image array (y, x) into (overlapping) windows,
     with optional edge cut-off for shifted images.
 
     Args:
-        imgs (np.ndarray): 3D array of image values (image_index, y, x).
-        nr_windows (tuple): Number of windows in (y, x) direction.
+        img (np.ndarray): 2D array of image values (y, x).
+        n_windows (tuple): Number of windows in (y, x) direction.
         overlap (float): Fractional overlap between windows (0 = no overlap).
-        shift (tuple): (dx, dy) shift in pixels - can be (0, 0).
-        shift_mode (str): 'before' or 'after' - which frame is considered?
-        plot (bool): If True, plot the windows on the first image.
+        shift (tuple): (dy, dx) shift in pixels - can be (0, 0).
+        shift_mode (str): 'before' or 'after' shift: which frame is considered?
+        plot (bool): If True, plot the windows on the image.
 
     Returns:
-        windows (np.ndarray): 5D array of image windows
-            (image_index, window_y_idx, window_x_idx, y, x).
+        windows (np.ndarray): 4D array of image windows
+            (window_y_idx, window_x_idx, y, x).
         centres (np.ndarray): 3D array of window centres
             (window_y_idx, window_x_idx, 2).
     """
     # Get dimensions
-    n_img, h, w = imgs.shape
-    n_y, n_x = nr_windows
-    dy, dx = shift
+    h, w = img.shape
+    n_y, n_x = n_windows
+    dy, dx = shift.astype(int)
 
     # Calculate window size including overlap
     size_y = min(int(h // n_y * (1 + overlap)), h)
     size_x = min(int(w // n_x * (1 + overlap)), w)
 
-    # Get the top-left corner of each window
+    # Get the top-left corner of each window to create grid of window coords
     y_indices = np.linspace(0, h - size_y, num=n_y, dtype=int)
     x_indices = np.linspace(0, w - size_x, num=n_x, dtype=int)
-
-    # Create grid of window coordinates
     grid = np.stack(np.meshgrid(y_indices, x_indices, indexing="ij"), axis=-1)
 
     # Compute centres (window_y_idx, window_x_idx, 2)
@@ -107,44 +105,44 @@ def split_image(imgs, nr_windows, overlap=0, shift=(0, 0), shift_mode='before',
     # Determine cut-off direction: +1 for 'before', -1 for 'after'
     mode_sign = 1 if shift_mode == 'before' else -1
 
+    # Show windows and centres on the image if requested
+    if plot:
+        fig, ax = plt.subplots()
+        ax.imshow(img.astype(float) / img.max() * 255, cmap='gray')
+
+    # Pre-allocate and fill the windows
+    windows = np.empty((n_y, n_x,
+                        size_y - abs(dy), size_x - abs(dx)),
+                        dtype=img.dtype)
     # Calculate cut-off for each direction
     cut_y0 = max(0, mode_sign * dy)
     cut_y1 = max(0, -mode_sign * dy)
     cut_x0 = max(0, mode_sign * dx)
     cut_x1 = max(0, -mode_sign * dx)
 
-    # Show windows and centres on the first image if requested
-    if plot:
-        fig, ax = plt.subplots()
-        ax.imshow(imgs[0].astype(float) / imgs[0].max() * 255, cmap='gray')
+    for i, y in enumerate(y_indices):
+        for j, x in enumerate(x_indices):
+            y0 = y + cut_y0
+            y1 = y + size_y - cut_y1
+            x0 = x + cut_x0
+            x1 = x + size_x - cut_x1
+            windows[i, j] = img[y0:y1, x0:x1]
 
-    # Pre-allocate and fill the windows
-    windows = np.empty((n_img, n_y, n_x,
-                        size_y - abs(dy), size_x - abs(dx)), dtype=imgs.dtype)
-    for img_idx in range(n_img):
-        for i, y in enumerate(y_indices):
-            for j, x in enumerate(x_indices):
-                y0 = y + cut_y0;
-                y1 = y + size_y - cut_y1
-                x0 = x + cut_x0;
-                x1 = x + size_x - cut_x1
-                windows[img_idx, i, j] = imgs[img_idx, y0:y1, x0:x1]
-
-                if plot:
-                    color = ['orange', 'blue'][(i + j) % 2]
-                    rect = plt.Rectangle((x + cut_x0, y + cut_y0),
-                                         x + size_x - cut_x1 - (x + cut_x0),
-                                         y + size_y - cut_y1 - (y + cut_y0),
-                                         edgecolor=color, facecolor='none',
-                                         linewidth=1.5)
-                    ax.add_patch(rect)
-                    ax.scatter(centres[i, j, 1], centres[i, j, 0], c=color,
-                               marker='x', s=40)
+            if plot:
+                color = ['orange', 'blue'][(i + j) % 2]
+                rect = plt.Rectangle((x + cut_x0, y + cut_y0),
+                                     x + size_x - cut_x1 - (x + cut_x0),
+                                     y + size_y - cut_y1 - (y + cut_y0),
+                                     edgecolor=color, facecolor='none',
+                                     linewidth=1.5)
+                ax.add_patch(rect)
+                ax.scatter(centres[i, j, 1], centres[i, j, 0], c=color,
+                           marker='x', s=40)
 
     # Finish plot
     if plot:
         plt.xlim(-20, w + 20)
-        plt.ylim(-20, h + 20)  # Invert y-axis for image coordinates??
+        plt.ylim(-20, h + 20)
         plt.show()
 
     return windows, centres
@@ -164,54 +162,26 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
         intensities (np.ndarray): Intensities of the found peaks.
     """
 
-    # Todo: peaks should not be at the edge of the correlation map
     if num_peaks == 1:
         # Find the single peak
-        peaks = np.argwhere(np.amax(corr_map) == corr_map)
+        peaks = np.argwhere(np.amax(corr_map) == corr_map).astype(np.float64)
     else:
         # Find multiple peaks using peak_local_max
         peaks = peak_local_max(corr_map, min_distance=min_distance,
-                               num_peaks=num_peaks)
+                               num_peaks=num_peaks, exclude_border=True).astype(np.float64)
 
-    return peaks, corr_map[peaks[:, 0], peaks[:, 1]]
+    # If a smaller number of peaks is found, pad with NaNs
+    if peaks.shape[0] < num_peaks:
+        peaks = np.pad(peaks, ((0, num_peaks - peaks.shape[0]), (0, 0)),
+                       mode='constant', constant_values=np.nan)
 
+    # Calculate the intensities of the peaks
+    if np.all(np.isnan(peaks)):
+        intensities = np.array([np.nan] * num_peaks)
+    else:
+        intensities = corr_map[peaks[:, 0].astype(int), peaks[:, 1].astype(int)]
 
-def three_point_gauss(array):
-    """
-    Fit a Gaussian to three points.
-
-    Args:
-        array (np.ndarray): 1D array of three points, peak in the middle.
-    Returns:
-        float: Subpixel correction value.
-    """
-
-    # Check if the input is a 1D array
-    if array.ndim != 1 or array.shape[0] != 3:
-        raise ValueError("Input must be a 1D array with exactly three elements.")
-
-    # Calculate the subpixel correction using the Gaussian fit formula
-    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
-            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
-
-
-def subpixel(corr_map, peak):
-    """
-    Use a Gaussian fit to refine the peak coordinates.
-
-    Args:
-        corr_map (np.ndarray): 2D array of correlation values.
-        peak (np.ndarray): Coordinates of the peak (y, x).
-    Returns:
-        np.ndarray: Refined peak coordinates with subpixel correction.
-    """
-
-    # Apply three-point Gaussian fit to peak coordinates in two directions
-    y_corr = three_point_gauss(corr_map[peak[0] - 1:peak[0] + 2, peak[1]])
-    x_corr = three_point_gauss(corr_map[peak[0], peak[1] - 1:peak[1] + 2])
-
-    # Add subpixel correction to the peak coordinates
-    return peak.astype(np.float64) + np.array([y_corr, x_corr])
+    return peaks, intensities
 
 
 def remove_outliers(coords, y_max, x_max, strip=True):
@@ -261,3 +231,41 @@ def remove_outliers(coords, y_max, x_max, strip=True):
         coords = coords_stripped
 
     return coords
+
+
+def three_point_gauss(array):
+    """
+    Fit a Gaussian to three points.
+
+    Args:
+        array (np.ndarray): 1D array of three points, peak in the middle.
+    Returns:
+        float: Subpixel correction value.
+    """
+
+    # Check if the input is a 1D array
+    if array.ndim != 1 or array.shape[0] != 3:
+        raise ValueError("Input must be a 1D array with exactly three elements.")
+
+    # Calculate the subpixel correction using the Gaussian fit formula
+    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
+            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+
+
+def subpixel(corr_map, peak):
+    """
+    Use a Gaussian fit to refine the peak coordinates.
+
+    Args:
+        corr_map (np.ndarray): 2D array of correlation values.
+        peak (np.ndarray): Coordinates of the peak (y, x).
+    Returns:
+        np.ndarray: Refined peak coordinates with subpixel correction.
+    """
+
+    # Apply three-point Gaussian fit to peak coordinates in two directions
+    y_corr = three_point_gauss(corr_map[peak[0] - 1:peak[0] + 2, peak[1]])
+    x_corr = three_point_gauss(corr_map[peak[0], peak[1] - 1:peak[1] + 2])
+
+    # Add subpixel correction to the peak coordinates
+    return peak.astype(np.float64) + np.array([y_corr, x_corr])
