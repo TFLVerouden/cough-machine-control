@@ -103,7 +103,7 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
                         grid[:, :, 1] + size_x / 2), axis=-1)
 
     # Determine cut-off direction: +1 for 'before', -1 for 'after'
-    mode_sign = 1 if shift_mode == 'before' else -1
+    mode_sign = 1 if shift_mode == 'after' else -1
 
     # Show windows and centres on the image if requested
     if plot:
@@ -200,7 +200,7 @@ def remove_outliers(coords, y_max, x_max, strip=True):
                       non-NaN coordinate.
     """
 
-    # Coords might be an 3D array. Reshape it to 2D for processing
+    # Coords might be an ND array. Reshape it to 2D for processing
     orig_shape = coords.shape
     coords = coords.reshape(-1, coords.shape[-1])
 
@@ -214,21 +214,41 @@ def remove_outliers(coords, y_max, x_max, strip=True):
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
 
-    # If needed, reduce the array to 2D by taking only the first non-NaN
-    # coordinate
-    if strip and coords.ndim > 2:
-        coords_stripped = np.full([coords.shape[0], 2], np.nan,
-                                  dtype=np.float64)
-        for i in range(coords.shape[0]):
-            for j in range(coords.shape[1]):
-                if ~np.any(coords[i, j, :] == np.nan):
-                    # If there are non NaNs, save these coordinates
-                    coords_stripped[i, :] = coords[i, j, :]
-                    break
-                elif j == coords.shape[1] - 1:
-                    # If all coordinates are NaN, set to NaN
-                    coords_stripped[i, :] = np.array([np.nan, np.nan])
-        coords = coords_stripped
+    # If needed, reduce the second-to-last axis to 1 by taking only the first non-NaN coordinate
+    if strip:
+        # Define a function to get the first valid coordinate along the second-to-last axis
+        def first_valid(arr):
+            for c in arr:
+                if not np.any(np.isnan(c)):
+                    return c
+            return np.nan
+
+        # # Reduce axis
+        # orig_shape = orig_shape[:-2] + (coords.shape[-1],)
+
+        # Get the first valid coordinate along the second-to-last axis
+        coords = np.apply_along_axis(first_valid, -2, coords)
+
+
+
+    # # Reshape back to original shape (with reduced axis if stripped)
+    # coords = coords.reshape(orig_shape)
+
+    # # If needed, reduce the array to 2D by taking only the first non-NaN
+    # # coordinate
+    # if strip and coords.ndim > 2:
+    #     coords_stripped = np.full([coords.shape[0], 2], np.nan,
+    #                               dtype=np.float64)
+    #     for i in range(coords.shape[0]):
+    #         for j in range(coords.shape[1]):
+    #             if ~np.any(coords[i, j, :] == np.nan):
+    #                 # If there are non NaNs, save these coordinates
+    #                 coords_stripped[i, :] = coords[i, j, :]
+    #                 break
+    #             elif j == coords.shape[1] - 1:
+    #                 # If all coordinates are NaN, set to NaN
+    #                 coords_stripped[i, :] = np.array([np.nan, np.nan])
+    #     coords = coords_stripped
 
     return coords
 

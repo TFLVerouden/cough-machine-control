@@ -10,16 +10,16 @@ from tqdm import tqdm
 import piv_functions as piv
 
 # Set experimental parameters
-test_mode = True
-meas_name = '250624_1333_80ms_whand'  # Name of the measurement
-frame_nrs = list(range(500, 550)) if test_mode else list(range(1, 6000))
+test_mode = False
+meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'  # Name of the measurement
+frame_nrs = list(range(1600, 1625)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings
 v_max = [15, 150]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
-n_peaks2 = 3
+n_peaks2 = 5
 n_windows2 = (8, 1)  # Number of windows in second pass (rows, cols)
 
 # File handling
@@ -80,13 +80,14 @@ else:
 
     # Go through all frames and calculate the correlation map
     for i in tqdm(range(n_corrs), desc='First pass'):
-        corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i], method='fft')
+        corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
+                                 method='fft', mode='same')
 
         # TODO: Any processing of the correlation map happens here
         #  (i.e. blacking out pixels or something)
 
         # Find peaks in the correlation map
-        peaks, int_unf = piv.find_peaks(corr_map, num_peaks=n_peaks1,
+        peaks, int1_unf = piv.find_peaks(corr_map, num_peaks=n_peaks1,
                                         min_distance=5)
 
         # Calculate displacements for all peaks
@@ -104,7 +105,7 @@ else:
     # Save the displacements to a file
     if not test_mode:
         np.savez(os.path.join(proc_path, 'disp1'), time=time, disp1=disp1,
-                 disp1_unf=disp1_unf, int_unf=int_unf)
+                 disp1_unf=disp1_unf, int1_unf=int1_unf)
 
 # Interpolate data to smooth out the x_displacement in time
 disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 1])],
@@ -115,7 +116,7 @@ disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
 # Calculate velocities for plot
 vel1_unf = disp1_unf * res_avg / dt
 vel1 = disp1 * res_avg / dt
-vel1x_spl = disp1_spl[:,0] * res_avg / dt
+vel1x_spl = disp1_spl[:, 1] * res_avg / dt
 
 # Scatter plot vx(t)
 plt.figure()
@@ -132,7 +133,7 @@ plt.xlabel('Time (ms)')
 plt.ylabel('vx (m/s)')
 plt.legend(loc='upper right', fontsize='small', framealpha=1)
 
-# Save plot as pdf
+# Save plot as pdf and save data
 if not test_mode:
     plt.savefig(os.path.join(proc_path, 'disp1_vx_t.pdf'),
                 bbox_inches='tight')
@@ -145,13 +146,14 @@ disp2_path = os.path.join(proc_path, 'disp2.npz')
 if os.path.exists(disp2_path) and not test_mode:
     with np.load(disp2_path) as data:
         disp2 = data['disp2']
+        disp2_unf = data['disp2_unf']
+        time = data['time']
     print("Loaded existing disp2.npz file.")
 
 # Otherwise, start from scratch
 else:
     # Pre-allocate array for all peaks: (frame idx, window idx, peak idx, 2)
     disp2_unf = np.full((n_corrs, n_windows2[0], n_peaks2, 2), np.nan)
-    corr_maps2 = []
 
     for i in tqdm(range(n_corrs), desc='Second pass'):
 
@@ -161,22 +163,22 @@ else:
                                           shift=disp1_spl[i, :],
                                           shift_mode='before')
         wnd1, _ = piv.split_n_shift(imgs[i + 1], n_windows2,
-                                    shift=disp1_spl[i, :], shift_mode='after')
+                                    shift=disp1_spl[i, :],
+                                    shift_mode='after')
 
-        # Correlate the windows
-        corr_maps2.append(np.array([[sig.correlate(window[1], window[0],
-                                              method='fft')
-                          for window in zip(wnd0, wnd1)]]))
-
-        # Find peaks in the correlation maps
         for j in range(n_windows2[0]):
-            peaks, int_unf2 = piv.find_peaks(corr_maps2[i][0, j, 0, ...],
-                                             num_peaks=n_peaks2,
+            # Calculate the correlation map for each window pair
+            # (i.e. the first window of frame i with the first window of frame i+1)
+            corr_map = sig.correlate(wnd1[j, 0], wnd0[j, 0],
+                                     method='fft', mode='same')
+
+            # Find peaks in the correlation maps
+            peaks, int2_unf = piv.find_peaks(corr_map, num_peaks=n_peaks2,
                                             min_distance=5)
 
             # Calculate displacements for all peaks
-            disp2_unf[i, j, :, :] = (peaks - np.array(corr_maps2[i].shape[-2:]) // 2
-                                 + disp1_spl[i, :])
+            disp2_unf[i, j, :, :] = (disp1_spl[i, :] + peaks
+                                     - (np.array(corr_map.shape) // 2))
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
@@ -184,6 +186,38 @@ else:
     # Outlier removal
     disp2 = piv.remove_outliers(disp2, y_max=d_max[0], x_max=d_max[1],
                                 strip=True)
+    disp2_show = piv.remove_outliers(disp2_unf, y_max=d_max[0], x_max=d_max[1],
+                                     strip=False)
+
+    # Save the displacements to a file
+    if not test_mode:
+        np.savez(os.path.join(proc_path, 'disp2'), time=time, disp1=disp2,
+                 disp2_unf=disp2_unf, int2_unf=int2_unf)
+
+    # # For each frame, plot the velocity vectors at the window centres
+    # vel2_show = disp2_show * res_avg / dt
+    # vel2 = disp2 * res_avg / dt
+    #
+    # for i in range(n_corrs):
+    #     plt.figure()
+    #     for j in range(n_peaks2):
+    #         plt.scatter(vel2_show[i, :, j, 0], centres[:, 0, 0] * res_avg *
+    #                     1000, c='gray', s=2)
+    #         plt.scatter(vel2_show[i, :, j, 1], centres[:, 0, 0] * res_avg *
+    #                     1000, c='gray', s=2)
+    #     plt.plot(vel2[i, :, 0], centres[:, 0, 0] * res_avg * 1000, label='vy')
+    #     plt.plot(vel2[i, :, 1], centres[:, 0, 0] * res_avg * 1000, label='vx')
+    #     plt.title(f'Frame {i + 1} velocity vectors')
+    #     plt.xlabel('v (m/s)')
+    #     plt.ylabel('y (mm)')
+    #     plt.xlim([-5, 60])
+    #     plt.legend(loc='upper right', fontsize='small', framealpha=1)
+    #
+    #     # Save plot as pdf
+    #     if not test_mode:
+    #         plt.savefig(os.path.join(proc_path, f'disp2_vx_t_{i + 1}.pdf'),
+    #                     bbox_inches='tight')
+    #     plt.show()
 
 
 # # Todo: outliers (see step 3 in PIV book page 148)
