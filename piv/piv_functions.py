@@ -8,14 +8,14 @@ from skimage.feature import peak_local_max
 from tqdm import tqdm
 
 
-def load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True):
+def load_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     """
     Load selected .tif images from a directory into a 3D numpy array.
 
     Args:
         data_path (str): Path to the directory containing .tif images.
         frame_nrs (list of int): List of frame numbers to load.
-        type (str): File extension to load.
+        format (str): File extension to load.
         lead_0 (int): Number of leading zeros in the file names.
         timing (bool): If True, show a progress bar while loading images.
 
@@ -25,7 +25,7 @@ def load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True):
 
     # List all files in the directory
     files = natsorted(
-            [f for f in os.listdir(data_path) if f.endswith('.' + type)])
+            [f for f in os.listdir(data_path) if f.endswith('.' + format)])
 
     # Filter files to include only those that match the specified frame numbers
     files = [f for f in files if any(f.endswith(f"{nr:0{lead_0}d}.tif") for nr
@@ -33,7 +33,7 @@ def load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True):
     if not files:
         raise FileNotFoundError(f"No files found in {data_path} matching "
                                 f"frame numbers {frame_nrs} with type '"
-                                f"{type}'.")
+                                f"{format}'.")
 
     # Read images into a 3D numpy array
     imgs = np.array([cv.imread(os.path.join(data_path, f), cv.IMREAD_GRAYSCALE)
@@ -180,6 +180,8 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
         intensities = np.array([np.nan] * num_peaks)
     else:
         intensities = corr_map[peaks[:, 0].astype(int), peaks[:, 1].astype(int)]
+    # Line above gives "RuntimeWarning: invalid value encountered in cast" in
+    # one case
 
     return peaks, intensities
 
@@ -289,3 +291,33 @@ def subpixel(corr_map, peak):
 
     # Add subpixel correction to the peak coordinates
     return peak.astype(np.float64) + np.array([y_corr, x_corr])
+
+
+def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
+    """
+    Save the current matplotlib figure to a file.
+
+    Args:
+        directory (str): Directory to save the figure.
+        filename (str): Name of the file to save the figure as.
+        format (str): File format to save the figure in (e.g., 'pdf', 'png').
+        test_mode (bool): If True, do not save the figure.
+        verbose (bool): If True, print a message when saving the figure.
+    """
+
+    # Only run when not in test mode
+    if not test_mode:
+        # Set directory and file format
+        filename = f"{filename}.{format}"
+        path = os.path.join(directory, filename)
+
+        # Save the figure
+        plt.savefig(path, transparent=True, bbox_inches='tight',
+                    format=format)
+        if verbose:
+            print(f"Figure saved to {path}")
+
+    # Show the figure
+    plt.show()
+
+    return path

@@ -24,7 +24,8 @@ elif user == "sikke":
     data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
 
 
-imgs = piv.load_images(data_path, frame_nrs, type='tif', lead_0=5, timing=True)
+imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
+                       timing=True)
 imgs_ds = piv.downsample(imgs, ds_fac)
 
 print()
