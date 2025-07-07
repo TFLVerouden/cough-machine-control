@@ -1,17 +1,28 @@
-import os
 import getpass
+import os
+
+import numpy as np
+from matplotlib import pyplot as plt
+from matplotlib import animation as ani
+from scipy import signal as sig
+from scipy.interpolate import make_smoothing_spline
+from tqdm import tqdm
 
 import piv_functions as piv
 
+
 # Set experimental parameters
-meas_name = '250624_1333_80ms_whand'  # Name of the measurement
-frame_nrs = [930, 931]
-dt = 1/40000 # [s]
+test_mode = True
+meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
+frame_nrs = list(range(1500, 1574)) if test_mode else list(range(1, 6000))
+dt = 1 / 40000  # [s] 
 
 # Data processing settings
-v_max = [15, 150] # [m/s]
+v_max = [15, 100]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
-num_peaks = 10  # Number of peaks to find in first pass correlation map
+n_peaks1 = 10  # Number of peaks to find in first pass correlation map
+n_peaks2 = 5
+n_windows2 = (8, 1)  # Number of windows in second pass (rows, cols)
 
 # File handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,9 +34,19 @@ if user == "tommieverouden":
 elif user == "sikke":
     data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
 
+# Data saving settings
+disp1_var_names = ['time', 'disp1', 'disp1_unf', 'disp1_spl', 'int1_unf', 'n_corrs']
 
-imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
-                       timing=True)
-imgs_ds = piv.downsample(imgs, ds_fac)
+# In the current directory, create a folder for processed data
+# named the same as the final part of the data_path
+proc_path = os.path.join(current_dir, 'processed', os.path.basename(data_path))
 
-print()
+
+# Load data
+bckp1_loaded, loaded_vars = piv.backup("load", proc_path, "pass1.npz", disp1_var_names, test_mode)
+
+if bckp1_loaded:
+    # Extract loaded variables using the same names as defined in disp1_var_names
+    for var_name in disp1_var_names:
+        globals()[var_name] = loaded_vars.get(var_name)
+    print("Loaded existing backup data.")

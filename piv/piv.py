@@ -10,10 +10,11 @@ from tqdm import tqdm
 
 import piv_functions as piv
 
+
 # Set experimental parameters
 test_mode = True
-meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'  # Name of the measurement
-frame_nrs = list(range(500, 574)) if test_mode else list(range(1500, 1574))
+meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
+frame_nrs = list(range(1500, 1574)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
@@ -51,7 +52,7 @@ res_avg, _ = np.loadtxt(cal_path)
 d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
 
 
-# %% FIRST PASS: Full frame correlation =======================================
+# FIRST PASS: Full frame correlation ===========================================
 bckp1_loaded, loaded_vars = piv.backup("load", proc_path, "pass1.npz", disp1_var_names, test_mode)
 
 if bckp1_loaded:
@@ -76,8 +77,9 @@ if not bckp1_loaded:
     # Downsample a copy of the images
     imgs_ds = piv.downsample(imgs.copy(), ds_fac)
 
-    # Pre-allocate array for all peaks: (n_frames, num_peaks, 2) [vy, vx]
+    # Pre-allocate arrays for all peaks: (n_frames, num_peaks, 2) [vy, vx]
     disp1_unf = np.full((n_corrs, n_peaks1, 2), np.nan)
+    int1_unf = np.full((n_corrs, n_peaks1), np.nan)  # Intensities of peaks
 
     # Define time arrays beforehand
     time = np.linspace((frame_nrs[0] - 1) * dt,
@@ -92,7 +94,7 @@ if not bckp1_loaded:
         #  (i.e. blacking out pixels or something)
 
         # Find peaks in the correlation map
-        peaks, int1_unf = piv.find_peaks(corr_map, num_peaks=n_peaks1,
+        peaks, int1_unf[i, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1,
                                         min_distance=5)
 
         # Calculate displacements for all peaks
@@ -102,10 +104,10 @@ if not bckp1_loaded:
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
 
-    # Outlier removal
-    # TODO: Do something with the intensities of the peaks?
-    disp1 = piv.remove_outliers(disp1, y_max=d_max[0], x_max=d_max[1],
-                                strip=True)
+    # Outlier removal using the new modular functions
+    disp1 = piv.filter_outliers(disp1, mode='semicircle_rect', a=d_max[0], b=d_max[1],
+                                intensities=int1_unf, int_thr=0)
+    disp1 = piv.strip_peaks(disp1, mode='first_valid')
 
     # Interpolate data to smooth out the x_displacement in time
     disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 1])],
@@ -140,17 +142,37 @@ ax0.legend(loc='upper right', fontsize='small', framealpha=1)
 
 piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
 
+# Scatter plot vy(t)
+fig0b, ax0b = plt.subplots()
+ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
+             c='gray', s=2, label='Other peaks')
+ax0b.scatter(1000 * time, vel1_unf[:, 0, 0], c='blue', s=10,
+             label='Most prominent peak')
+ax0b.scatter(1000 * time, vel1[:, 0], c='orange', s=4,
+             label='After outlier removal')
+ax0b.set_ylim([-5, 70])
+ax0b.set_xlabel('Time (ms)')
+ax0b.set_ylabel('vy (m/s)')
+ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
+
+piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+
 # Plot all velocities vy(vx)
 fig1, ax1 = plt.subplots()
 ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
 ax1.set_xlabel('vx (m/s)')
 ax1.set_ylabel('vy (m/s)')
-
 piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 
+# Plot intensity distribution histogram
+fig2, ax2 = plt.subplots()
+ax2.hist(int1_unf[~np.isnan(int1_unf)], bins=100, log=True)
+ax2.set_xlabel('Intensity')
+ax2.set_ylabel('Count')
 
-# # %% SECOND PASS: Split image into windows and correlate =======================
-#
+
+# SECOND PASS: Split image into windows and correlate ==========================
+
 # # Shortcut: if a disp2.npz file already exists, load it
 # disp2_path = os.path.join(proc_path, 'disp2.npz')
 # if os.path.exists(disp2_path) and not test_mode:
@@ -194,11 +216,11 @@ piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 # # Save unfiltered displacements
 # disp2 = disp2_unf.copy()
 #
-# # Outlier removal
-# disp2 = piv.remove_outliers(disp2, y_max=d_max[0], x_max=d_max[1],
-#                             strip=True)
-# disp2_show = piv.remove_outliers(disp2_unf, y_max=d_max[0], x_max=d_max[1],
-#                                  strip=False)
+# # Outlier removal using the new modular functions
+# disp2 = piv.filter_outliers(disp2, mode='semicircle_rect', a=d_max[0], b=d_max[1])
+# disp2 = piv.strip_peaks(disp2, mode='first_valid')
+# disp2_show = piv.filter_outliers(disp2_unf, mode='semicircle_rect', a=d_max[0], b=d_max[1])
+# # disp2_show keeps all peaks (no stripping) for visualization
 #
 # # Save the displacements to a file
 # if not test_mode:
@@ -237,4 +259,6 @@ piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 # #
 # # # # Todo: outliers (see step 3 in PIV book page 148)
 # # print()
-# %%
+
+# Finally, show all figures
+plt.show()

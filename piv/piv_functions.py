@@ -244,82 +244,192 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
                        mode='constant', constant_values=np.nan)
 
     # Calculate the intensities of the peaks
-    if np.all(np.isnan(peaks)):
-        intensities = np.array([np.nan] * num_peaks)
-    else:
-        intensities = corr_map[peaks[:, 0].astype(int), peaks[:, 1].astype(int)]
-    # Line above gives "RuntimeWarning: invalid value encountered in cast" in
-    # one case
+    intensities = np.full(num_peaks, np.nan)
+    
+    # Only calculate intensities for valid (non-NaN) peaks
+    valid_mask = ~np.isnan(peaks).any(axis=1)
+    if np.any(valid_mask):
+        valid_peaks = peaks[valid_mask]
+        intensities[valid_mask] = corr_map[valid_peaks[:, 0].astype(int), valid_peaks[:, 1].astype(int)]
 
     return peaks, intensities
 
 
-def remove_outliers(coords, y_max, x_max, strip=True):
+def filter_outliers(coords, mode, a=None, b=None, intensities=None, int_thr=0):
     """
-    Remove outliers from a list of coordinates based on specified limits.
-    - For x < 0: keep only points inside a semicircle of radius y_max
-    centered at (0,0)
-    - For x >= 0: keep only points inside a rectangle [-0.5, x_max] x [
-    -y_max, y_max]
-
+    Filter outliers from coordinates based on spatial and intensity criteria.
+    
     Args:
-        coords (np.ndarray): 2D or 3D array of coordinates (y, x).
-        y_max (float): Maximum y-coordinate for the semicircle.
-        x_max (float): Maximum x-coordinate for the rectangle.
-        strip (bool): If True, reduce the array to 2D by taking only the first
-                      non-NaN coordinate.
+        coords (np.ndarray): N-D array where last dimension is (y, x) coordinates.
+        mode (str): Filtering mode. Options:
+            - 'semicircle_rect': For x < 0: semicircle of radius a; For x >= 0: rectangle [-0.5, b] x [-a, a]
+            - 'circle': Circle of radius a centered at origin
+        a (float): First parameter (y-direction limit or radius)
+        b (float): Second parameter (x-direction limit)
+        intensities (np.ndarray): Intensity values corresponding to coordinates
+        int_thr (float): Minimum intensity threshold for valid coordinates
+    
+    Returns:
+        np.ndarray: Filtered coordinates with invalid points set to NaN
     """
-
-    # Coords might be an ND array. Reshape it to 2D for processing
+    
+    # Store original shape and flatten for processing
     orig_shape = coords.shape
     coords = coords.reshape(-1, coords.shape[-1])
-
-    # Set all non-valid coordinates to NaN
-    mask = (((coords[:, 1] < 0) &
-             (coords[:, 1] ** 2 + coords[:, 0] ** 2 <= y_max ** 2))
-            | ((coords[:, 1] >= 0) & (coords[:, 1] <= x_max)
-               & (np.abs(coords[:, 0]) <= y_max)))
+    
+    if mode == 'semicircle_rect':
+        # Current implementation: semicircle for x < 0, rectangle for x >= 0
+        mask = (((coords[..., 1] < 0) &
+                 (coords[..., 1] ** 2 + coords[:, 0] ** 2 <= a ** 2))
+                | ((coords[:, 1] >= 0) & (coords[:, 1] <= b)
+                   & (np.abs(coords[:, 0]) <= a)))
+    
+    elif mode == 'circle':
+        # TODO: Test circular filtering
+        mask = (coords[:, 0] ** 2 + coords[:, 1] ** 2 <= a ** 2)
+    
+    else:
+        raise ValueError(f"Unknown filtering mode: {mode}")
+    
+    # Apply spatial filtering
     coords[~mask] = np.array([np.nan, np.nan])
-
+    
+    # Apply intensity filtering if provided
+    if intensities is not None:
+        # TODO: Implement intensity filtering
+        # Reshape intensities to match flattened coords
+        intensities_flat = intensities.reshape(-1)
+        low_intensity_mask = intensities_flat < int_thr
+        coords[low_intensity_mask] = np.array([np.nan, np.nan])
+    
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
+    
+    return coords
 
-    # If needed, reduce the second-to-last axis to 1 by taking only the first non-NaN coordinate
-    if strip:
-        # Define a function to get the first valid coordinate along the second-to-last axis
+
+def filter_outliers_local(coords, mode='temporal', window_size=3, threshold=2.0):
+    """
+    Filter outliers based on local consistency (temporal or spatial).
+    
+    Args:
+        coords (np.ndarray): Coordinate array
+        mode (str): Local filtering mode:
+            - 'temporal': Compare with previous/next timesteps
+            - 'spatial': Compare with neighboring windows
+            - 'peer_peaks': Use other candidate peaks for validation
+        window_size (int): Size of the local window for comparison
+        threshold (float): Threshold for outlier detection (in standard deviations)
+    
+    Returns:
+        np.ndarray: Filtered coordinates with outliers set to NaN
+    """
+    # TODO: Implement local filtering modes
+    
+    if mode == 'temporal':
+        # TODO: Implement temporal consistency filtering
+        # Could use rolling window statistics or interpolation-based detection
+        raise NotImplementedError("Temporal filtering not yet implemented")
+    
+    elif mode == 'spatial':
+        # TODO: Implement spatial consistency filtering
+        # Compare with neighboring windows in the same frame
+        raise NotImplementedError("Spatial filtering not yet implemented")
+    
+    elif mode == 'peer_peaks':
+        # TODO: Implement peer peak validation
+        # Use other candidate peaks to validate the primary peak
+        raise NotImplementedError("Peer peak filtering not yet implemented")
+    
+    else:
+        raise ValueError(f"Unknown local filtering mode: {mode}")
+    
+    return coords
+
+
+def strip_peaks(coords, mode='first_valid'):
+    """
+    Reduce array dimensionality by selecting peaks along the second-to-last axis.
+    
+    Args:
+        coords (np.ndarray): N-D array where second-to-last axis represents different peaks
+        mode (str): Peak selection mode:
+            - 'first_valid': Take first non-NaN peak
+            - 'best_intensity': Take peak with highest intensity (requires intensities)
+            - 'median': Take median of valid peaks
+            - 'mean': Take mean of valid peaks
+    
+    Returns:
+        np.ndarray: Array with second-to-last axis reduced
+    """
+    if coords.ndim < 3:
+        return coords  # Nothing to strip
+    
+    if mode == 'first_valid':
+        # Current implementation
         def first_valid(arr):
             for c in arr:
                 if not np.any(np.isnan(c)):
                     return c
-            return np.nan
+            return np.full(arr.shape[-1], np.nan)
+        
+        return np.apply_along_axis(first_valid, -2, coords)
+    
+    elif mode == 'best_intensity':
+        # TODO: Implement intensity-based peak selection
+        # Would need intensities as additional parameter
+        raise NotImplementedError("Intensity-based peak selection not yet implemented")
+    
+    elif mode == 'median':
+        # TODO: Implement median peak selection
+        raise NotImplementedError("Median peak selection not yet implemented")
+    
+    elif mode == 'mean':
+        # TODO: Implement mean peak selection
+        raise NotImplementedError("Mean peak selection not yet implemented")
+    
+    else:
+        raise ValueError(f"Unknown peak selection mode: {mode}")
 
-        # # Reduce axis
-        # orig_shape = orig_shape[:-2] + (coords.shape[-1],)
 
-        # Get the first valid coordinate along the second-to-last axis
-        coords = np.apply_along_axis(first_valid, -2, coords)
-
-
-
-    # # Reshape back to original shape (with reduced axis if stripped)
-    # coords = coords.reshape(orig_shape)
-
-    # # If needed, reduce the array to 2D by taking only the first non-NaN
-    # # coordinate
-    # if strip and coords.ndim > 2:
-    #     coords_stripped = np.full([coords.shape[0], 2], np.nan,
-    #                               dtype=np.float64)
-    #     for i in range(coords.shape[0]):
-    #         for j in range(coords.shape[1]):
-    #             if ~np.any(coords[i, j, :] == np.nan):
-    #                 # If there are non NaNs, save these coordinates
-    #                 coords_stripped[i, :] = coords[i, j, :]
-    #                 break
-    #             elif j == coords.shape[1] - 1:
-    #                 # If all coordinates are NaN, set to NaN
-    #                 coords_stripped[i, :] = np.array([np.nan, np.nan])
-    #     coords = coords_stripped
-
+def smooth_temporal(coords, method='spline', **kwargs):
+    """
+    Apply temporal smoothing to coordinate time series.
+    
+    Args:
+        coords (np.ndarray): 2D array of coordinates (time, coordinate)
+        method (str): Smoothing method:
+            - 'spline': Smoothing spline (current implementation)
+            - 'gaussian': Gaussian filter
+            - 'median': Median filter
+            - 'savgol': Savitzky-Golay filter
+        **kwargs: Method-specific parameters
+    
+    Returns:
+        np.ndarray: Smoothed coordinates
+    """
+    # TODO: Implement different smoothing methods
+    
+    if method == 'spline':
+        # TODO: Move spline smoothing from piv.py here
+        # Would use scipy.interpolate.make_smoothing_spline
+        raise NotImplementedError("Spline smoothing not yet implemented")
+    
+    elif method == 'gaussian':
+        # TODO: Implement Gaussian smoothing
+        raise NotImplementedError("Gaussian smoothing not yet implemented")
+    
+    elif method == 'median':
+        # TODO: Implement median filtering
+        raise NotImplementedError("Median filtering not yet implemented")
+    
+    elif method == 'savgol':
+        # TODO: Implement Savitzky-Golay filtering
+        raise NotImplementedError("Savitzky-Golay filtering not yet implemented")
+    
+    else:
+        raise ValueError(f"Unknown smoothing method: {method}")
+    
     return coords
 
 
@@ -374,7 +484,11 @@ def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
     """
 
     # Only run when not in test mode
-    if not test_mode:
+    if test_mode:
+        return
+    
+    # Othrwise, save figure
+    else:
         # Set directory and file format
         filename = f"{filename}.{format}"
         filepath = os.path.join(directory, filename)
