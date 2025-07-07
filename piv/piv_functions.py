@@ -8,6 +8,70 @@ from skimage.feature import peak_local_max
 from tqdm import tqdm
 
 
+def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
+    """
+    Load or save a backup file from/to the specified path.
+
+    Args:
+        mode (str): 'load' or 'save' to specify the operation.
+        proc_path (str): Path to the directory containing the backup file.
+        filename (str): Name of the backup file to load/save.
+        test_mode (bool): If True, do not load/save the file.
+        var_names (list): List of variable names to load (for load mode).
+        **kwargs: Variables to save (for save mode). Use as: backup("save", path, file, var1=value1, var2=value2, ...)
+
+    Returns:
+        For load mode: loaded_vars (dict)
+        For save mode: success (bool)
+    """
+    # If in test mode, return appropriate values
+    if test_mode:
+        return False, {}
+
+    # Load mode
+    elif mode == 'load':
+        # Check if the file exists
+        filepath = os.path.join(proc_path, filename)
+        if not os.path.exists(filepath):
+            print(f"Warning: backup file {filename} not found in {proc_path}.")
+            return False, {}
+
+        # Load the data from the .npz file
+        else:
+            loaded_vars = {}
+            with np.load(filepath) as data:
+                if var_names is None:
+                    # Load all variables in the file
+                    for k in data.files:
+                        loaded_vars[k] = data[k]
+                else:
+                    # Load only requested variables
+                    for k in var_names:
+                        if k in data:
+                            loaded_vars[k] = data[k]
+                        else:
+                            print(f"Warning: {k} not found in {filepath}")
+            print(f"Loaded data from {filepath}")
+            return True, loaded_vars
+
+    # Save mode
+    elif mode == 'save':
+        if not kwargs:
+            print("Warning: No variables provided for saving.")
+            return False, {}
+        
+        # Save the variables to a .npz file
+        filepath = os.path.join(proc_path, filename)
+        np.savez(filepath, **kwargs)
+        print(f"Saved data to {filepath}")
+        return True, {}
+
+    # If mode is not recognized, return False
+    else:
+        print(f"Error: Unrecognized mode '{mode}'. Use 'load' or 'save'.")
+        return False
+
+
 def load_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     """
     Load selected .tif images from a directory into a 3D numpy array.
@@ -22,6 +86,10 @@ def load_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     Returns:
         imgs (np.ndarray): 3D array of images (image_index, y, x).
     """
+
+    # Check if the directory exists
+    if not os.path.exists(data_path):
+        raise FileNotFoundError(f"Data directory not found: {data_path}")
 
     # List all files in the directory
     files = natsorted(
@@ -309,15 +377,15 @@ def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
     if not test_mode:
         # Set directory and file format
         filename = f"{filename}.{format}"
-        path = os.path.join(directory, filename)
+        filepath = os.path.join(directory, filename)
 
         # Save the figure
-        plt.savefig(path, transparent=True, bbox_inches='tight',
+        plt.savefig(filepath, transparent=True, bbox_inches='tight',
                     format=format)
         if verbose:
-            print(f"Figure saved to {path}")
+            print(f"Figure saved to {filepath}")
 
-    # Show the figure
-    plt.show()
+    # # Show the figure
+    # plt.show()
 
-    return path
+    return

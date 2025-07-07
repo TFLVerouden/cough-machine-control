@@ -11,11 +11,10 @@ from tqdm import tqdm
 import piv_functions as piv
 
 # Set experimental parameters
-test_mode = False
-from_disk = True  # If True, load data from disk instead of processing it
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'  # Name of the measurement
-frame_nrs = list(range(500, 574)) if test_mode else list(range(500, 574))
-dt = 1 / 40000  # [s]
+frame_nrs = list(range(500, 574)) if test_mode else list(range(1500, 1574))
+dt = 1 / 40000  # [s] 
 
 # Data processing settings
 v_max = [15, 100]  # [m/s]
@@ -35,8 +34,7 @@ elif user == "sikke":
     data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
 
 # Data saving settings
-disp1_save = ['time', 'disp1', 'disp1_unf', 'disp1_spl', 'int1_unf',
-              'n_corrs']
+disp1_var_names = ['time', 'disp1', 'disp1_unf', 'disp1_spl', 'int1_unf', 'n_corrs']
 
 # In the current directory, create a folder for processed data
 # named the same as the final part of the data_path
@@ -45,26 +43,25 @@ if not os.path.exists(proc_path) and not test_mode:
     os.makedirs(proc_path)
 
 # Read calibration data
+if not os.path.exists(cal_path):
+    raise FileNotFoundError(f"Calibration file not found: {cal_path}")
 res_avg, _ = np.loadtxt(cal_path)
 
 # Convert max velocities to max displacements in px
 d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
 
-# # %% FIRST PASS: Full frame correlation ========================================
-# Shortcut: if data is saved on disk, load it
-if from_disk and not test_mode:
-    disp1_path = os.path.join(proc_path, 'pass1.npz')
 
-    with np.load(disp1_path) as data:
-        for k in disp1_save:
-            if k in data:
-                locals()[k] = data[k]
-            else:
-                print(f"Warning: {k} not found in {disp1_path}")
-    print(f"Loaded data from {disp1_path}")
+# %% FIRST PASS: Full frame correlation =======================================
+bckp1_loaded, loaded_vars = piv.backup("load", proc_path, "pass1.npz", disp1_var_names, test_mode)
 
-# Otherwise, start from scratch with loading images
-else:
+if bckp1_loaded:
+    # Extract loaded variables using the same names as defined in disp1_var_names
+    for var_name in disp1_var_names:
+        globals()[var_name] = loaded_vars.get(var_name)
+    print("Loaded existing backup data.")
+
+if not bckp1_loaded:
+    # Load images from disk    
     imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
                            timing=True)
 
@@ -73,6 +70,7 @@ else:
     #  low-pass filter to remove camera noise?
     #  mind increase in measurement uncertainty -> PIV book page 140)
 
+    # Calculate the number of correlation frames
     n_corrs = len(imgs) - 1
 
     # Downsample a copy of the images
@@ -115,40 +113,41 @@ else:
     disp1_spl = disp1_spl(time).astype(int)
     disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
 
-    if not test_mode:
-        # Save data to a file
-        save_dict = {k: locals()[k] for k in disp1_save if k in locals()}
-        np.savez(os.path.join(proc_path, 'pass1'), **save_dict)
+    # Save the displacements to a backup file
+    piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
+               time=time, disp1=disp1, disp1_unf=disp1_unf, disp1_spl=disp1_spl,
+               int1_unf=int1_unf, n_corrs=n_corrs)
 
-    # Calculate velocities for plot
-    vel1_unf = disp1_unf * res_avg / dt
-    vel1 = disp1 * res_avg / dt
-    vel1x_spl = disp1_spl[:, 1] * res_avg / dt
+# Calculate velocities for plot
+vel1_unf = disp1_unf * res_avg / dt
+vel1 = disp1 * res_avg / dt
+vel1x_spl = disp1_spl[:, 1] * res_avg / dt
 
-    # Scatter plot vx(t)
-    fig0, ax0 = plt.subplots()
-    ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
-                c='gray', s=2, label='Other peaks')
-    ax0.scatter(1000 * time, vel1_unf[:, 0, 1], c='blue', s=10,
-                label='Most prominent peak')
-    ax0.scatter(1000 * time, vel1[:, 1], c='orange', s=4,
-                label='After outlier removal')
-    ax0.plot(1000 * time, vel1x_spl, color='red',
-             label='Displacement to be used\n in 2nd pass (smoothed)')
-    ax0.set_ylim([-5, 70])
-    ax0.set_xlabel('Time (ms)')
-    ax0.set_ylabel('vx (m/s)')
-    ax0.legend(loc='upper right', fontsize='small', framealpha=1)
+# Scatter plot vx(t)
+fig0, ax0 = plt.subplots()
+ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
+            c='gray', s=2, label='Other peaks')
+ax0.scatter(1000 * time, vel1_unf[:, 0, 1], c='blue', s=10,
+            label='Most prominent peak')
+ax0.scatter(1000 * time, vel1[:, 1], c='orange', s=4,
+            label='After outlier removal')
+ax0.plot(1000 * time, vel1x_spl, color='red',
+            label='Displacement to be used\n in 2nd pass (smoothed)')
+ax0.set_ylim([-5, 70])
+ax0.set_xlabel('Time (ms)')
+ax0.set_ylabel('vx (m/s)')
+ax0.legend(loc='upper right', fontsize='small', framealpha=1)
 
-    piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
+piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
 
-    # Plot all velocities vy(vx)
-    fig1, ax1 = plt.subplots()
-    ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
-    ax1.set_xlabel('vx (m/s)')
-    ax1.set_ylabel('vy (m/s)')
+# Plot all velocities vy(vx)
+fig1, ax1 = plt.subplots()
+ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
+ax1.set_xlabel('vx (m/s)')
+ax1.set_ylabel('vy (m/s)')
 
-    piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+
 
 # # %% SECOND PASS: Split image into windows and correlate =======================
 #
@@ -238,3 +237,4 @@ else:
 # #
 # # # # Todo: outliers (see step 3 in PIV book page 148)
 # # print()
+# %%
