@@ -1,296 +1,264 @@
+import getpass
 import os
-import pickle
 
-import cv2 as cv
 import numpy as np
-from natsort import natsorted
-from pygments.styles.dracula import background
+from matplotlib import pyplot as plt
+from matplotlib import animation as ani
 from scipy import signal as sig
 from scipy.interpolate import make_smoothing_spline
-from skimage.feature import peak_local_max
 from tqdm import tqdm
-import matplotlib.pyplot as plt
+
+import piv_functions as piv
 
 
-def downsample(img, factor):
-    """Downsample a 2D image by summing non-overlapping blocks
-     of size (block_size, block_size)."""
-    h, w = img.shape
-    assert h % factor == 0 and w % factor == 0, \
-        "Image dimensions must be divisible by block_size"
-    return img.reshape(h // factor, factor,
-                       w // factor, factor).sum(axis=(1, 3))
+# Set experimental parameters
+test_mode = True
+meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
+frame_nrs = list(range(1500, 1574)) if test_mode else list(range(1, 6000))
+dt = 1 / 40000  # [s] 
+
+# Data processing settings
+v_max = [15, 100]  # [m/s]
+ds_fac = 4  # First pass downsampling factor
+n_peaks1 = 10  # Number of peaks to find in first pass correlation map
+n_peaks2 = 5
+n_windows2 = (8, 1)  # Number of windows in second pass (rows, cols)
+
+# File handling
+current_dir = os.path.dirname(os.path.abspath(__file__))
+cal_path = os.path.join(current_dir, "calibration",
+                        "250624_calibration_PIV_500micron_res_std.txt")
+user = getpass.getuser()
+if user == "tommieverouden":
+    data_path = os.path.join("/Volumes/Data/Data/250623 PIV/", meas_name)
+elif user == "sikke":
+    data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
+
+# Data saving settings
+disp1_var_names = ['time', 'disp1', 'disp1_unf', 'disp1_spl', 'int1_unf', 'n_corrs']
+
+# In the current directory, create a folder for processed data
+# named the same as the final part of the data_path
+proc_path = os.path.join(current_dir, 'processed', os.path.basename(data_path))
+if not os.path.exists(proc_path) and not test_mode:
+    os.makedirs(proc_path)
+
+# Read calibration data
+if not os.path.exists(cal_path):
+    raise FileNotFoundError(f"Calibration file not found: {cal_path}")
+res_avg, _ = np.loadtxt(cal_path)
+
+# Convert max velocities to max displacements in px
+d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
 
 
-def split_image(imgs, nr_windows, overlap=0):
-    """
-    Split a 3D image array (n_img, y, x) into (overlapping) windows. Windows should all have the same size.
+# FIRST PASS: Full frame correlation ===========================================
+bckp1_loaded, loaded_vars = piv.backup("load", proc_path, "pass1.npz", disp1_var_names, test_mode)
 
-    Parameters:
-        imgs (np.ndarray): 3D array of image values (image_index, y, x).
-        nr_windows (tuple): Number of windows in (y, x) direction.
-        overlap (float): Fractional overlap between windows (0 = no overlap).
-            E.g. a value of 0.5 means that the window extends to the centre of the neighbouring windows.
+if bckp1_loaded:
+    # Extract loaded variables using the same names as defined in disp1_var_names
+    for var_name in disp1_var_names:
+        globals()[var_name] = loaded_vars.get(var_name)
+    print("Loaded existing backup data.")
 
-    Returns:
-        windows (np.ndarray): 5D array of image windows
-            (image_index, window_y_idx, window_x_idx, y, x).
-        centres (np.ndarray): 3D array of window centres
-            (window_y_idx, window_x_idx, 2).
-    """
-    n_img, img_y, img_x = imgs.shape
-    n_y, n_x = nr_windows
+if not bckp1_loaded:
+    # Load images from disk    
+    imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
+                           timing=True)
 
-    # Calculate window size including overlap
-    size_y = min(int(img_y // n_y * (1 + overlap)), img_y)
-    size_x = min(int(img_x // n_x * (1 + overlap)), img_x)
+    # TODO: Pre-process images (background subtraction? thresholding?
+    #  binarisation to reduce relative influence of bright particles?
+    #  low-pass filter to remove camera noise?
+    #  mind increase in measurement uncertainty -> PIV book page 140)
 
-    # Get the top-left corner of each window
-    y_indices = np.linspace(0, img_y - size_y, num=n_y, dtype=int)
-    x_indices = np.linspace(0, img_x - size_x, num=n_x, dtype=int)
+    # Calculate the number of correlation frames
+    n_corrs = len(imgs) - 1
 
-    # Create grid of window coordinates
-    grid = np.stack(np.meshgrid(y_indices, x_indices, indexing="ij"), axis=-1)
+    # Downsample a copy of the images
+    imgs_ds = piv.downsample(imgs.copy(), ds_fac)
 
-    # Compute centres (window_y_idx, window_x_idx, 2)
-    centres = np.stack(
-        (grid[:, :, 0] + size_y / 2, grid[:, :, 1] + size_x / 2), axis=-1
-    )
+    # Pre-allocate arrays for all peaks: (n_frames, num_peaks, 2) [vy, vx]
+    disp1_unf = np.full((n_corrs, n_peaks1, 2), np.nan)
+    int1_unf = np.full((n_corrs, n_peaks1), np.nan)  # Intensities of peaks
 
-    # Allocate output array
-    windows = np.empty((n_img, n_y, n_x, size_y, size_x), dtype=imgs.dtype)
-    for img_idx in range(n_img):
-        for i, y in enumerate(y_indices):
-            for j, x in enumerate(x_indices):
-                windows[img_idx, i, j] = imgs[img_idx, y:(y + size_y), x:(x + size_x)]
+    # Define time arrays beforehand
+    time = np.linspace((frame_nrs[0] - 1) * dt,
+                       (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
-    return windows, centres
+    # Go through all frames and calculate the correlation map
+    for i in tqdm(range(n_corrs), desc='First pass'):
+        corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
+                                 method='fft', mode='same')
 
-def find_peaks(corr_map, num_peaks=1, min_distance=5):
-    """
-    Find peaks in a correlation map.
+        # TODO: Any processing of the correlation map happens here
+        #  (i.e. blacking out pixels or something)
 
-    Parameters:
-        corr_map (np.ndarray): 2D array of correlation values.
-        num_peaks (int): Number of peaks to find.
-        min_distance (int): Minimum distance between peaks in pixels.
+        # Find peaks in the correlation map
+        peaks, int1_unf[i, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1,
+                                        min_distance=5)
 
-    Returns:
-        peaks (np.ndarray): Array of peak coordinates shaped (num_peaks, 2)
-        intensities (np.ndarray): Intensities of the found peaks.
-    """
+        # Calculate displacements for all peaks
+        disp1_unf[i, :, :] = (peaks - np.array(
+                corr_map.shape) // 2) * ds_fac  # shape (n_found, 2)
 
-    # Todo: peaks should not be at the edge of the correlation map
-    if num_peaks == 1:
-        # Find the single peak
-        peaks = np.argwhere(np.amax(corr_map) == corr_map)
-    else:
-        # Find multiple peaks using peak_local_max
-        peaks = peak_local_max(corr_map, min_distance=min_distance, num_peaks=num_peaks)
+    # Save unfiltered displacements
+    disp1 = disp1_unf.copy()
 
-    return peaks, corr_map[peaks[:, 0], peaks[:, 1]]
-
-
-
-
-
-def three_point_gauss(array):
-    # Use a Gaussian fit to refine the peak coordinates
-    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
-            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
-
-def subpixel(corr_map, peak):
-
-    # Fit along both axes
-    y_corr = three_point_gauss(corr_map[peak[0]-1:peak[0]+2, peak[1]])
-    x_corr = three_point_gauss(corr_map[peak[0], peak[1]-1:peak[1]+2])
-
-    # Add subpixel correction to the peak coordinates
-    return peak.astype(np.float64) + np.array([y_corr, x_corr])
-
-def remove_outliers(coords, y_max, x_max, strip=True):
-    """
-    Remove outliers:
-    - For x < 0: keep only points inside a semi-circle of radius y_max centered at (0,0)
-    - For x >= 0: keep only points inside a rectangle [-0.5, x_max] x [-y_max, y_max]
-    """
-
-    # Coords might be an 3D array. Reshape it to 2D for processing
-    orig_shape = coords.shape
-    coords = coords.reshape(-1, coords.shape[-1])
-
-    # Set all non-valid coordinates to NaN
-    mask = (((coords[:, 1] < 0) &
-             (coords[:, 1]**2 + coords[:, 0]**2 <= y_max**2))
-            | ((coords[:, 1] >= 0) & (coords[:, 1] <= x_max)
-               & (np.abs(coords[:, 0]) <= y_max)))
-    coords[~mask] = np.array([np.nan, np.nan])
-
-    # Reshape back to original shape
-    coords = coords.reshape(orig_shape)
-
-    # If needed, reduce the array to 2D by taking only the first non-NaN coordinate
-    if strip and coords.ndim > 2:
-        coords_stripped = np.full([coords.shape[0], 2], np.nan, dtype=np.float64)
-        for i in range(coords.shape[0]):
-            for j in range(coords.shape[1]):
-                if ~np.any(coords[i, j, :] == np.nan):
-                    # If there are non NaNs, save these coordinates
-                    coords_stripped[i, :] = coords[i, j, :]
-                    break
-                elif j == coords.shape[1] - 1:
-                    # If all coordinates are NaN, set to NaN
-                    coords_stripped[i, :] = np.array([np.nan, np.nan])
-        coords = coords_stripped
-
-    return coords
-
-if __name__ == "__main__":
-    # Set variables
-    data_path = '/Volumes/Data/Data/250623 PIV/250624_1333_80ms_whand'
-    # data_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
-    #         'test_pair')
-    cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/piv/'
-                'calibration/250624_calibration_PIV_500micron_res_std.pkl')
-
-    # In the current directory, create a folder named the same as the final part of the data_path
-    proc_path = os.path.join(os.getcwd(), 'processed', os.path.basename(data_path))
-    if not os.path.exists(proc_path):
-        os.makedirs(proc_path)
-
-    frame_nrs = list(range(1, 6000))  # Frame numbers to compare (eg 930 931)
-    dt = 1/40000 # s
-    v_max = [15, 150] # m/s
-    downs_fac = 4  # First pass downsampling
-    num_peaks = 10  # Number of peaks to find in first pass correlation map
-
-    # Read calibration data
-    res_avg, _ = np.load(cal_path)  #average resolution mm/pix
-    print(f"resolution : {res_avg} m/pix")
-
-    # Convert max velocities to max displacements in px
-    d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
-
-
-    # FIRST PASS: Full frame correlation
-    # Shortcut: if a disp1.npz file already exists, load it
-    disp1_path = os.path.join(proc_path, 'disp1.npz')
-    if os.path.exists(disp1_path):
-        with np.load(disp1_path, allow_pickle=True) as data:
-            disp1 = data['disp1']
-            disp1_unf = data['disp1_unf']
-            time = data['time']
-        print("Loaded existing disp1.npz file.")
-    else:
-
-        # List all images in folder; filter for .tif files; sort; get specific frames
-        files = natsorted([f for f in os.listdir(data_path) if f.endswith('.tif')])
-        files = [f for f in files if any(f.endswith(f"{nr:05d}.tif") for nr in
-                                         frame_nrs) and not f.startswith('.')]
-
-        # Import images into 3D numpy array (image_index, y, x)
-        imgs = np.array([cv.imread(os.path.join(data_path, f), cv.IMREAD_GRAYSCALE)
-                         for f in tqdm(files, desc='Reading images')],
-                        dtype=np.uint64)
-
-        # TODO: Pre-process images (background subtraction? thresholding?
-        #  binarisation to reduce relative influence of bright particles?
-        #  low-pass filter to remove camera noise?
-        #  mind increase in measurement uncertainty -> PIV book page 140)
-
-        # print(f"Image stack size: {imgs.shape}")
-
-        n_frames = len(imgs) - 1
-
-        # Pre-allocate array for all peaks: (n_frames, num_peaks, 2) [vy, vx]
-        disp1 = np.full((n_frames, num_peaks, 2), np.nan)
-
-        # Define time arrays beforehand
-        time = np.linspace((frame_nrs[0] - 1) * dt, (frame_nrs[0] - 1 + n_frames - 1) * dt, n_frames)
-
-        for i in tqdm(range(n_frames), desc='First pass'):
-            img1 = downsample(imgs[i + 1], downs_fac)
-            img0 = downsample(imgs[i], downs_fac)
-            corr_map = sig.correlate(img1, img0, method='fft')
-            peaks, _ = find_peaks(corr_map, num_peaks=num_peaks, min_distance=5)
-
-            # Calculate velocities for all peaks
-            disp1[i, :, :] = (peaks - np.array(corr_map.shape) // 2) * downs_fac  # shape (n_found, 2)
-
-        # Save unfiltered displacements
-        disp1_unf = disp1.copy()
-
-        # Outlier removal
-        disp1 = remove_outliers(disp1, y_max=d_max[0], x_max=d_max[1], strip=True)
-
-        # Save the displacements to a file
-        np.savez(os.path.join(proc_path, 'disp1'), time=time, disp1=disp1, disp1_unf=disp1_unf)
+    # Outlier removal using the new modular functions
+    disp1 = piv.filter_outliers(disp1, mode='semicircle_rect', a=d_max[0], b=d_max[1],
+                                intensities=int1_unf, int_thr=0)
+    disp1 = piv.strip_peaks(disp1, mode='first_valid')
 
     # Interpolate data to smooth out the x_displacement in time
     disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 1])],
                                       disp1[~np.isnan(disp1[:, 1]), 1], lam=5e-7)
     disp1_spl = disp1_spl(time).astype(int)
+    disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
 
-    # Calculate velocities for plot
-    vel1_unf = disp1_unf * res_avg / dt
-    vel1 = disp1 * res_avg / dt
-    vel1x_spl = disp1_spl * res_avg / dt
+    # Save the displacements to a backup file
+    piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
+               time=time, disp1=disp1, disp1_unf=disp1_unf, disp1_spl=disp1_spl,
+               int1_unf=int1_unf, n_corrs=n_corrs)
 
-    # Scatter plot vx(t)
-    plt.figure()
-    plt.scatter(np.tile(1000*time[:, None], (1, num_peaks)), vel1_unf[..., 1],
-                c='gray', s=2, label='Other peaks')
-    plt.scatter(1000*time, vel1_unf[:, 0, 1], c='blue', s=10,
-                label='Most prominent peak')
-    plt.scatter(1000*time, vel1[:, 1], c='orange', s=4,
-                label='After outlier removal')
-    plt.plot(1000*time, vel1x_spl, label='Displacement to be used\n in 2nd pass (smoothed)', color='red')
-    plt.ylim([-15, 150])
-    plt.xlabel('Time (ms)')
-    plt.ylabel('vx (m/s)')
-    plt.legend(loc='upper right', fontsize='small', framealpha=1)
+# Calculate velocities for plot
+vel1_unf = disp1_unf * res_avg / dt
+vel1 = disp1 * res_avg / dt
+vel1x_spl = disp1_spl[:, 1] * res_avg / dt
 
-    # Save plot as pdf
-    plt.savefig(os.path.join(proc_path, 'disp1_vx_t.pdf'), bbox_inches='tight')
-    plt.show()
+# Scatter plot vx(t)
+fig0, ax0 = plt.subplots()
+ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
+            c='gray', s=2, label='Other peaks')
+ax0.scatter(1000 * time, vel1_unf[:, 0, 1], c='blue', s=10,
+            label='Most prominent peak')
+ax0.scatter(1000 * time, vel1[:, 1], c='orange', s=4,
+            label='After outlier removal')
+ax0.plot(1000 * time, vel1x_spl, color='red',
+            label='Displacement to be used\n in 2nd pass (smoothed)')
+ax0.set_ylim([-5, 70])
+ax0.set_xlabel('Time (ms)')
+ax0.set_ylabel('vx (m/s)')
+ax0.legend(loc='upper right', fontsize='small', framealpha=1)
 
-    print()
-    # map1 = sig.correlate(downsample(imgs[1], factor=8), downsample(imgs[0], factor=8), method='fft')
-    # peaks, _ = find_peaks(map1, num_peaks=5, min_distance=5)
-    #
-    # # Todo: check this list of peak with previous and next frame (see step 3 in PIV book page 148)
-    # # If none match, interpolate between the two frames. For now, just take the first peak.
-    #
-    # disp1 = peaks[0] - np.array(map1.shape) // 2
-    # print(disp1 * 8 * res_avg / dt)
+piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
 
-    # # Split images into overlapping windows
-    # windows, centres = split_image(imgs, nr_windows=(16, 1), overlap=0.5)
-    #
-    # # # Plot the windows and centres on top of the first image
-    # # plt.imshow(imgs[0], cmap='gray')
-    # # for i, window in enumerate(windows):
-    # #     y, x = centres[i]
-    # #     rect = plt.Rectangle((x - window.shape[1] / 2, y - window.shape[0] / 2),
-    # #                          window.shape[1], window.shape[0], linewidth=1,
-    # #                          edgecolor='r', facecolor='none')
-    # #     plt.gca().add_patch(rect)
-    # #     plt.plot(x, y, 'ro')  # Plot the centre
-    # # plt.show()
-    #
-    # # Cycle through all windows in one specific image and correlate them with the corresponding windows in the other image
-    # maps = np.array([[sig.correlate(window[1], window[0], method='fft')
-    #          for window in zip(windows[0], windows[1])]])
-    #
-    # # TODO: Any processing of the correlation map happens here (i.e. blacking out all pixels outside of a positive semi-circle)
-    #
-    # peak, int = find_peaks(maps[0, 7, 0])
-    # print("Peak coordinates:", peak)
-    # print("Peak intensity:", int)
-    # peak = subpixel(maps[0, 7, 0], peak[0])
-    # print("Subpixel peak coordinates:", peak)
-    #
-    # # Get displacement vector from the peak coordinates
-    # displacement_vector = peak - np.array(maps.shape[3:]) // 2
-    #
-    # print(displacement_vector * res_avg / dt)
+# Scatter plot vy(t)
+fig0b, ax0b = plt.subplots()
+ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
+             c='gray', s=2, label='Other peaks')
+ax0b.scatter(1000 * time, vel1_unf[:, 0, 0], c='blue', s=10,
+             label='Most prominent peak')
+ax0b.scatter(1000 * time, vel1[:, 0], c='orange', s=4,
+             label='After outlier removal')
+ax0b.set_ylim([-5, 70])
+ax0b.set_xlabel('Time (ms)')
+ax0b.set_ylabel('vy (m/s)')
+ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
+
+piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+
+# Plot all velocities vy(vx)
+fig1, ax1 = plt.subplots()
+ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
+ax1.set_xlabel('vx (m/s)')
+ax1.set_ylabel('vy (m/s)')
+piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+
+# Plot intensity distribution histogram
+fig2, ax2 = plt.subplots()
+ax2.hist(int1_unf[~np.isnan(int1_unf)], bins=100, log=True)
+ax2.set_xlabel('Intensity')
+ax2.set_ylabel('Count')
+
+
+# SECOND PASS: Split image into windows and correlate ==========================
+
+# # Shortcut: if a disp2.npz file already exists, load it
+# disp2_path = os.path.join(proc_path, 'disp2.npz')
+# if os.path.exists(disp2_path) and not test_mode:
+#     with np.load(disp2_path) as data:
+#         disp2 = data['disp1']
+#         disp2_unf = data['disp2_unf']
+#         time = data['time']
+#     print("Loaded existing disp2.npz file.")
+#
+# # Otherwise, start from scratch
+# else:
+#
+# # Pre-allocate array for all peaks: (frame idx, window idx, peak idx, 2)
+# disp2_unf = np.full((n_corrs, n_windows2[0], n_peaks2, 2), np.nan)
+#
+# for i in tqdm(range(n_corrs), desc='Second pass'):
+#
+#     # Split the images into horizontal rectangular windows, shifted by
+#     # the interpolated/smoothed displacements from the first pass
+#     wnd0, centres = piv.split_n_shift(imgs[i], n_windows2,
+#                                       shift=disp1_spl[i, :],
+#                                       shift_mode='before')
+#     wnd1, _ = piv.split_n_shift(imgs[i + 1], n_windows2,
+#                                 shift=disp1_spl[i, :],
+#                                 shift_mode='after')
+#
+#     for j in range(n_windows2[0]):
+#         # Calculate the correlation map for each window pair
+#         # (i.e. the first window of frame i with the first window of frame i+1)
+#         corr_map = sig.correlate(wnd1[j, 0], wnd0[j, 0],
+#                                  method='fft', mode='same')
+#
+#         # Find peaks in the correlation maps
+#         peaks, int2_unf = piv.find_peaks(corr_map, num_peaks=n_peaks2,
+#                                         min_distance=3)
+#
+#         # Calculate displacements for all peaks
+#         disp2_unf[i, j, :, :] = (disp1_spl[i, :] + peaks
+#                                  - (np.array(corr_map.shape) // 2))
+#
+# # Save unfiltered displacements
+# disp2 = disp2_unf.copy()
+#
+# # Outlier removal using the new modular functions
+# disp2 = piv.filter_outliers(disp2, mode='semicircle_rect', a=d_max[0], b=d_max[1])
+# disp2 = piv.strip_peaks(disp2, mode='first_valid')
+# disp2_show = piv.filter_outliers(disp2_unf, mode='semicircle_rect', a=d_max[0], b=d_max[1])
+# # disp2_show keeps all peaks (no stripping) for visualization
+#
+# # Save the displacements to a file
+# if not test_mode:
+#     np.savez(os.path.join(proc_path, 'disp2'), disp2=disp2, disp2_unf=disp2_unf,
+#              int2_unf=int2_unf, centres=centres)
+#
+# # For each frame, plot the velocity vectors at the window centres
+# vel2_show = disp2_show * res_avg / dt
+# vel2 = disp2 * res_avg / dt
+# #
+# # # Set up video writer
+# # if not test_mode:
+# #     fig1, ax = plt.subplots()
+# #     writer = ani.FFMpegWriter(fps=10)
+# #
+# #     video_path = os.path.join(proc_path, 'disp2.mp4')
+# #     with writer.saving(fig1, video_path, dpi=150):
+# #         for i in range(n_corrs):
+# #             ax.clear()
+# #             for j in range(n_peaks2):
+# #                 ax.scatter(vel2_show[i, :, j, 0],
+# #                            centres[:, 0, 0] * res_avg * 1000, c='gray', s=2)
+# #                 ax.scatter(vel2_show[i, :, j, 1],
+# #                            centres[:, 0, 0] * res_avg * 1000, c='gray', s=2)
+# #             ax.plot(vel2[i, :, 0], centres[:, 0, 0] * res_avg * 1000,
+# #                     label='vy')
+# #             ax.plot(vel2[i, :, 1], centres[:, 0, 0] * res_avg * 1000,
+# #                     label='vx')
+# #             ax.set_title(f't = {((i + 1) * dt * 1000):.2f} ms')
+# #             ax.set_xlabel('v (m/s)')
+# #             ax.set_ylabel('y (mm)')
+# #             ax.set_xlim([-5, 60])
+# #             ax.legend(loc='upper right')
+# #             writer.grab_frame()
+# #     plt.close(fig1)
+# #
+# # # # Todo: outliers (see step 3 in PIV book page 148)
+# # print()
+
+# Finally, show all figures
+plt.show()

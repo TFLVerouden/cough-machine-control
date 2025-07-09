@@ -1,16 +1,18 @@
 import numpy as np
 import cv2 as cv
 from scipy import spatial
-import pickle
 import os
+
 
 def all_distances(points):
     if points.ndim != 2 or points.shape[1] != 2:
         raise ValueError("Input points must be a 2D array with shape (n_points, 2)")
     return spatial.distance.cdist(points, points, 'euclidean')
 
+
 def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
-                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=8):
+                   blur_ker=(3, 3), open_ker=(3, 3), print_prec=5,
+                   plot=False, save=True):
     """
     Calculate resolution from a grid.
 
@@ -34,6 +36,7 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
     img = cv.imread(path, cv.IMREAD_UNCHANGED)
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     img = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
+    orig_shape = img.shape
 
     # Crop the image to the specified region of interest (ROI)
     if roi is None:
@@ -94,31 +97,37 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
     res_avg = np.average(all_res[mask], weights=dist_pixel[mask])
     res_std = np.sqrt(np.average((all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
 
-    print(f"Resolution (+- std): {res_avg:.{print_prec}f} +- {res_std:.{print_prec}f} m/px")
+    # Print the resolution and standard deviation
+    print(f"Resolution (+- std): {res_avg*1000:.{print_prec}f} +- "
+          f"{res_std*1000:.{print_prec}f} mm/px")
+
+    # Calculate calibration image size
+    print(f"Frame size: {orig_shape[0]*res_avg*1000:.{print_prec//2}f} x "
+          f"{orig_shape[1]*res_avg*1000:.{print_prec//2}f} mm²")
 
     # Save the resolution and standard deviation to a file
-    with open(path.replace('.tif', '_res_std.txt'), 'wb') as f:
-        np.savetxt(f,[res_avg, res_std])
+    if save:
+        with open(path.replace('.tif', '_res_std.txt'), 'wb') as f:
+            np.savetxt(f,[res_avg, res_std])
     print("Resolution saved to disk.")
+
+    # TODO: Optionally plot the results
+    if plot:
+        print("Plotting is not implemented in this function.")
 
     return res_avg, res_std
 
 
 if __name__ == "__main__":
-    # Define the path to the image and other parameters
-    current_dir = os.getcwd()
-    parent_dir = os.path.dirname(current_dir)
-   
-    path = "cough-machine-control/piv/calibration/250624_calibration_PIV_500micron.tif"
-    cal_path = parent_dir + "\\" + path
+    # Get the directory containing the file
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    cal_path = os.path.join(current_dir, "calibration", "250624_calibration_PIV_500micron.tif")
 
-    # cal_path = ('/Users/tommieverouden/PycharmProjects/cough-machine-control/'
-    #             'piv/calibration/250624_calibration_PIV_500micron.tif')
-    # cal_path = 'D:\Experiments\PIV\250624_calibration_PIV_500micron.tif'
-    cal_spacing = 0.001  # m
+    # Define calibration parameters
+    cal_spacing = 0.0005  # m
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
-    calibrate_grid(cal_path, cal_spacing, roi=cal_roi)
+    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=True)
 
     # Resolution (+- std): 0.0508 +- 0.0001 mm/px
