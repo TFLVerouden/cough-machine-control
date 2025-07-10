@@ -90,7 +90,7 @@ if not bckp1_loaded:
         corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
                                  method='fft', mode='same')
 
-        # TODO: Any processing of the correlation map happens here
+        # TODO: Any processing of the correlation map should happen here
         #  (i.e. blacking out pixels or something)
 
         # Find peaks in the correlation map
@@ -107,7 +107,7 @@ if not bckp1_loaded:
     # Outlier removal using the new modular functions
     disp1 = piv.filter_outliers(disp1, mode='semicircle_rect', a=d_max[0], b=d_max[1],
                                 intensities=int1_unf, int_thr=0)
-    disp1 = piv.strip_peaks(disp1, mode='first_valid')
+    disp1 = piv.strip_peaks(disp1, axis=-2)
 
     # Interpolate data to smooth out the x_displacement in time
     disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 1])],
