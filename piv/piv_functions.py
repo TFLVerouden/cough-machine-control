@@ -389,13 +389,21 @@ def filter_neighbours(coords, thr=1, n_nbs=2):
                 j_nbs = np.clip(j, n_nbs[1], n_wins_y - n_nbs[1] - 1) - n_nbs[1]
                 k_nbs = np.clip(k, n_nbs[2], n_wins_x - n_nbs[2] - 1) - n_nbs[2]
 
+                # Skip if the coordinate is already NaN
+                if np.any(np.isnan(coords[i, j, k, :])):
+                    print(f"Skipping coordinate ({i}, {j}, {k}) as it is NaN.")
+                    continue
+
                 # Calculate the median and standard deviation of the neighbours
                 med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
                 std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}")
 
                 # Check if the current coordinate is within the threshold
                 if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
-                    coords[i, j, k, :] = (np.nan, np.nan)            
+                    print(f"(Filtered out: {coords[i, j, k, 0]}, {coords[i, j, k, 1]} not within {thr} std from median {med})")
+                    coords[i, j, k, :] = (np.nan, np.nan)
+  
 
     return coords
 

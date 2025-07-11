@@ -14,7 +14,7 @@ import piv_functions as piv
 # Set experimental parameters
 test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(1500, 1574)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(3000, 3100)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
@@ -110,8 +110,12 @@ if not bckp1_loaded:
 # Outlier removal using the new modular functions
 disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
 disp1 = piv.strip_peaks(disp1, axis=-2)
+print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
+
 # TODO: filter_neighbours could also consider unstripped peaks?
-disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(4, 0, 0))
+disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(10, 0, 0))
+print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
+
 
 # Interpolate data to smooth out the x_displacement in time
 disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 0, 0, 1])],
