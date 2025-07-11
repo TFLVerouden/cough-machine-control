@@ -64,20 +64,50 @@ print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
 disp1, int1 = piv.filter_outliers('intensity', disp1, a=int1_unf, b=0.00005)
 print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
 
-disp1 = piv.strip_peaks(disp1, axis=-2)  # Strip peaks with NaN values
+disp1 = np.expand_dims(disp1, axis=2)
 
-# Scatter plot vx(t)
-fig0, ax0 = plt.subplots()
-ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), disp1_unf[..., 1],
-            c='gray', s=2, label='Other peaks')
-ax0.scatter(1000 * time, disp1_unf[:, 0, 1], c='blue', s=10,
-            label='Most prominent peak')
-ax0.scatter(1000 * time, disp1[:, 1], c='orange', s=4,
-            label='After outlier removal')
+# Apply the filter_neighbours function
+disp1 = piv.filter_neighbours(disp1, thr=0.1, n_nbs=(4, 2, 0))
 
-ax0.set_xlim([110, 120])
-ax0.set_ylim([-2, 35])
-ax0.set_xlabel('Time (ms)')
-ax0.set_ylabel('dx (m/s)')
-ax0.legend(loc='upper right', fontsize='small', framealpha=1)
+# Count the number of NaN values in the filtered coordinates
+print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
+
+# %% Plot a single frame
+frame_idx = 500
+frame_coords = disp1[frame_idx, :, :, :]
+
+# Create a mask for valid coordinates (not NaN)
+valid_mask = ~np.isnan(frame_coords[:, :, 0])
+
+# Get valid and invalid coordinates
+valid_coords = frame_coords[valid_mask]
+invalid_coords = frame_coords[~valid_mask]
+
+# Create the plot
+fig, ax = plt.subplots(figsize=(10, 8))
+
+# Plot valid coordinates in blue
+if len(valid_coords) > 0:
+    ax.scatter(valid_coords[:, 1], valid_coords[:, 0], 
+              c='blue', s=30, alpha=0.7, label=f'Valid ({len(valid_coords)})')
+
+# Plot invalid coordinates in red (just the positions where they would be)
+invalid_y, invalid_x = np.where(~valid_mask)
+if len(invalid_y) > 0:
+    ax.scatter(invalid_x, invalid_y, 
+              c='red', s=30, alpha=0.7, marker='x', 
+              label=f'Invalid ({len(invalid_y)})')
+
+ax.set_xlabel('X coordinate')
+ax.set_ylabel('Y coordinate')
+ax.set_title(f'Coordinate filtering results for frame {frame_idx}')
+ax.legend()
+ax.grid(True, alpha=0.3)
+plt.tight_layout()
 plt.show()
+
+print(f"Frame {frame_idx}: {len(valid_coords)} valid, {len(invalid_y)} invalid coordinates")
+
+# disp1 = piv.strip_peaks(disp1, axis=-2)  # Strip peaks with NaN values
+
+# %%

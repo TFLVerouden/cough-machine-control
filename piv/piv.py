@@ -6,13 +6,13 @@ from matplotlib import pyplot as plt
 from matplotlib import animation as ani
 from scipy import signal as sig
 from scipy.interpolate import make_smoothing_spline
-from tqdm import tqdm
+from tqdm import trange, tqdm
 
 import piv_functions as piv
 
 
 # Set experimental parameters
-test_mode = True
+test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(1500, 1574)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
@@ -21,8 +21,9 @@ dt = 1 / 40000  # [s]
 v_max = [15, 100]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
+n_wins1 = (1, 1)
 n_peaks2 = 5
-n_windows2 = (8, 1)  # Number of windows in second pass (rows, cols)
+n_wins2 = (8, 1)  # Number of windows in second pass (rows, cols)
 
 # File handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -77,9 +78,11 @@ if not bckp1_loaded:
     # Downsample a copy of the images
     imgs_ds = piv.downsample(imgs.copy(), ds_fac)
 
-    # Pre-allocate arrays for all peaks: (n_frames, num_peaks, 2) [vy, vx]
-    disp1_unf = np.full((n_corrs, n_peaks1, 2), np.nan)
-    int1_unf = np.full((n_corrs, n_peaks1), np.nan)  # Intensities of peaks
+    # TODO: Adjust so dimensions are always the same, containing space for windows in 2 directions
+
+    # Pre-allocate arrays for all peaks
+    disp1_unf = np.full((n_corrs, n_wins1[0], n_wins1[1], n_peaks1, 2), np.nan)
+    int1_unf = np.full((n_corrs,  n_wins1[0], n_wins1[1], n_peaks1), np.nan)
 
     # Define time arrays beforehand
     time = np.linspace((frame_nrs[0] - 1) * dt,
@@ -94,31 +97,32 @@ if not bckp1_loaded:
         #  (i.e. blacking out pixels or something)
 
         # Find peaks in the correlation map
-        peaks, int1_unf[i, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1,
+        peaks, int1_unf[i, 0, 0, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1,
                                         min_distance=5)
 
         # Calculate displacements for all peaks
-        disp1_unf[i, :, :] = (peaks - np.array(
-                corr_map.shape) // 2) * ds_fac  # shape (n_found, 2)
+        disp1_unf[i, 0, 0, :, :] = (
+            peaks - np.array( corr_map.shape) // 2) * ds_fac
 
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
 
-    # Outlier removal using the new modular functions
-    disp1 = piv.filter_outliers(disp1, mode='semicircle_rect', a=d_max[0], b=d_max[1],
-                                intensities=int1_unf, int_thr=0)
-    disp1 = piv.strip_peaks(disp1, axis=-2)
+# Outlier removal using the new modular functions
+disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
+disp1 = piv.strip_peaks(disp1, axis=-2)
+# TODO: filter_neighbours could also consider unstripped peaks?
+disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(4, 0, 0))
 
-    # Interpolate data to smooth out the x_displacement in time
-    disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 1])],
-                                      disp1[~np.isnan(disp1[:, 1]), 1], lam=5e-7)
-    disp1_spl = disp1_spl(time).astype(int)
-    disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
+# Interpolate data to smooth out the x_displacement in time
+disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 0, 0, 1])],
+                                    disp1[~np.isnan(disp1[:, 0, 0, 1]), 0, 0, 1], lam=5e-7)
+disp1_spl = disp1_spl(time).astype(int)
+disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
 
-    # Save the displacements to a backup file
-    piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
-               time=time, disp1=disp1, disp1_unf=disp1_unf, disp1_spl=disp1_spl,
-               int1_unf=int1_unf, n_corrs=n_corrs)
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
+            time=time, disp1=disp1, disp1_unf=disp1_unf, disp1_spl=disp1_spl,
+            int1_unf=int1_unf, n_corrs=n_corrs)
 
 # Calculate velocities for plot
 vel1_unf = disp1_unf * res_avg / dt
@@ -129,9 +133,9 @@ vel1x_spl = disp1_spl[:, 1] * res_avg / dt
 fig0, ax0 = plt.subplots()
 ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
             c='gray', s=2, label='Other peaks')
-ax0.scatter(1000 * time, vel1_unf[:, 0, 1], c='blue', s=10,
+ax0.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 1], c='blue', s=10,
             label='Most prominent peak')
-ax0.scatter(1000 * time, vel1[:, 1], c='orange', s=4,
+ax0.scatter(1000 * time, vel1[:, 0, 0, 1], c='orange', s=4,
             label='After outlier removal')
 ax0.plot(1000 * time, vel1x_spl, color='red',
             label='Displacement to be used\n in 2nd pass (smoothed)')
@@ -142,33 +146,33 @@ ax0.legend(loc='upper right', fontsize='small', framealpha=1)
 
 piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
 
-# Scatter plot vy(t)
-fig0b, ax0b = plt.subplots()
-ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
-             c='gray', s=2, label='Other peaks')
-ax0b.scatter(1000 * time, vel1_unf[:, 0, 0], c='blue', s=10,
-             label='Most prominent peak')
-ax0b.scatter(1000 * time, vel1[:, 0], c='orange', s=4,
-             label='After outlier removal')
-ax0b.set_ylim([-5, 70])
-ax0b.set_xlabel('Time (ms)')
-ax0b.set_ylabel('vy (m/s)')
-ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
+# # Scatter plot vy(t)
+# fig0b, ax0b = plt.subplots()
+# ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
+#              c='gray', s=2, label='Other peaks')
+# ax0b.scatter(1000 * time, vel1_unf[:, 0, 0], c='blue', s=10,
+#              label='Most prominent peak')
+# ax0b.scatter(1000 * time, vel1[:, 0], c='orange', s=4,
+#              label='After outlier removal')
+# ax0b.set_ylim([-5, 70])
+# ax0b.set_xlabel('Time (ms)')
+# ax0b.set_ylabel('vy (m/s)')
+# ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
 
-piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+# piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
 
-# Plot all velocities vy(vx)
-fig1, ax1 = plt.subplots()
-ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
-ax1.set_xlabel('vx (m/s)')
-ax1.set_ylabel('vy (m/s)')
-piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+# # Plot all velocities vy(vx)
+# fig1, ax1 = plt.subplots()
+# ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
+# ax1.set_xlabel('vx (m/s)')
+# ax1.set_ylabel('vy (m/s)')
+# piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 
-# Plot intensity distribution histogram
-fig2, ax2 = plt.subplots()
-ax2.hist(int1_unf[~np.isnan(int1_unf)], bins=100, log=True)
-ax2.set_xlabel('Intensity')
-ax2.set_ylabel('Count')
+# # Plot intensity distribution histogram
+# fig2, ax2 = plt.subplots()
+# ax2.hist(int1_unf[~np.isnan(int1_unf)], bins=100, log=True)
+# ax2.set_xlabel('Intensity')
+# ax2.set_ylabel('Count')
 
 
 # SECOND PASS: Split image into windows and correlate ==========================
@@ -259,6 +263,11 @@ ax2.set_ylabel('Count')
 # #
 # # # # Todo: outliers (see step 3 in PIV book page 148)
 # # print()
+
+
+# Also later: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
+
+
 
 # Finally, show all figures
 plt.show()

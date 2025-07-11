@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from natsort import natsorted
 from skimage.feature import peak_local_max
-from tqdm import tqdm
+from tqdm import trange, tqdm
 
 
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
@@ -333,8 +333,71 @@ def filter_outliers(mode, coords, a=None, b=None):
         return coords
 
 
-def local_filter():
-    return
+def cart2polar(coords):
+    """
+    Convert Cartesian coordinates to polar coordinates.
+
+    Args:
+        coords (np.ndarray): ND array of shape (..., 2) with (y, x) coordinates.
+
+    Returns:
+        np.ndarray: ND array of shape (n_corrs, 2) with (r, phi) coordinates.
+    """
+    # Calculate the magnitude and angle
+    r = np.sqrt(coords[..., 0] ** 2 + coords[..., 1] ** 2)
+    phi = np.arctan2(coords[..., 1], coords[..., 0])
+
+    # Stack the results to form a new array
+    polar_coords = np.stack((r, phi), axis=-1)
+    return polar_coords
+
+
+def filter_neighbours(coords, thr=1, n_nbs=2):
+    """
+    Filter out coordinates that are too different from their neighbours.
+
+    Args:
+        coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
+        thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
+        nr_neighbours (int): Number of neighbours in each dimension to consider for filtering.
+
+    Returns:
+        np.ndarray: Filtered coordinates with invalid points set to NaN.
+    """
+
+    # Number of neighbours can be specified in each dimension and must be even
+    if isinstance(n_nbs, int):
+        n_nbs = (n_nbs, n_nbs, n_nbs)
+    elif isinstance(n_nbs, tuple) and len(n_nbs) == 3:
+        n_nbs = n_nbs
+    else:
+        raise ValueError("n_nbs must be integer or a tuple of three integers.")
+    if any(n % 2 != 0 for n in n_nbs):
+        raise ValueError("n_nbs must be even in each dimension.")
+
+    # Get a sliding window view of each coordinate
+    n_corrs, n_wins_y, n_wins_x, _ = coords.shape
+    nbs = np.lib.stride_tricks.sliding_window_view(coords,
+    (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
+
+    # Iterate over each coordinate, first spatially, then temporally
+    for i in range(n_corrs):
+        for j in range(n_wins_y):
+            for k in range(n_wins_x):
+                # Edge handling: clamp to valid sliding window range
+                i_nbs = np.clip(i, n_nbs[0], n_corrs - n_nbs[0] - 1) - n_nbs[0]
+                j_nbs = np.clip(j, n_nbs[1], n_wins_y - n_nbs[1] - 1) - n_nbs[1]
+                k_nbs = np.clip(k, n_nbs[2], n_wins_x - n_nbs[2] - 1) - n_nbs[2]
+
+                # Calculate the median and standard deviation of the neighbours
+                med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+
+                # Check if the current coordinate is within the threshold
+                if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
+                    coords[i, j, k, :] = (np.nan, np.nan)            
+
+    return coords
 
 
 def first_valid(arr):
@@ -357,7 +420,7 @@ def first_valid(arr):
 
 def strip_peaks(coords, axis=-2):
     """
-    Reduce array dimensionality by selecting the first valid peak along an axis.
+    Reduce array dimensionality by selecting the first valid peak along an axis containing options.
     
     Args:
         coords (np.ndarray): N-D array where one axis represents different peaks
