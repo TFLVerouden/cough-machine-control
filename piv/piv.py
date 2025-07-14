@@ -5,7 +5,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib import animation as ani
 from scipy import signal as sig
-from scipy.interpolate import make_smoothing_spline
 from tqdm import trange, tqdm
 
 import piv_functions as piv
@@ -84,10 +83,6 @@ if not bckp1_loaded:
     disp1_unf = np.full((n_corrs, n_wins1[0], n_wins1[1], n_peaks1, 2), np.nan)
     int1_unf = np.full((n_corrs,  n_wins1[0], n_wins1[1], n_peaks1), np.nan)
 
-    # Define time arrays beforehand
-    time = np.linspace((frame_nrs[0] - 1) * dt,
-                       (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
-
     # Go through all frames and calculate the correlation map
     for i in tqdm(range(n_corrs), desc='First pass'):
         corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
@@ -113,15 +108,15 @@ disp1 = piv.strip_peaks(disp1, axis=-2)
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
 
 # TODO: filter_neighbours could also consider unstripped peaks?
-disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(10, 0, 0))
+disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(20, 0, 0))
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
 
+# Define time arrays beforehand
+time = np.linspace((frame_nrs[0] - 1) * dt,
+                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
-# Interpolate data to smooth out the x_displacement in time
-disp1_spl = make_smoothing_spline(time[~np.isnan(disp1[:, 0, 0, 1])],
-                                    disp1[~np.isnan(disp1[:, 0, 0, 1]), 0, 0, 1], lam=5e-7)
-disp1_spl = disp1_spl(time).astype(int)
-disp1_spl = np.row_stack([np.zeros(len(disp1_spl)), disp1_spl]).T
+# Smooth the x displacement in time
+disp1_spl = piv.smooth(time, disp1.copy(), lam=5e-7, type=int)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
@@ -131,7 +126,7 @@ piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
 # Calculate velocities for plot
 vel1_unf = disp1_unf * res_avg / dt
 vel1 = disp1 * res_avg / dt
-vel1x_spl = disp1_spl[:, 1] * res_avg / dt
+vel1x_spl = disp1_spl[:, 0, 0, 1] * res_avg / dt
 
 # Scatter plot vx(t)
 fig0, ax0 = plt.subplots()
@@ -143,34 +138,34 @@ ax0.scatter(1000 * time, vel1[:, 0, 0, 1], c='orange', s=4,
             label='After outlier removal')
 ax0.plot(1000 * time, vel1x_spl, color='red',
             label='Displacement to be used\n in 2nd pass (smoothed)')
-ax0.set_ylim([-5, 70])
+ax0.set_ylim([-5, 45])
 ax0.set_xlabel('Time (ms)')
 ax0.set_ylabel('vx (m/s)')
 ax0.legend(loc='upper right', fontsize='small', framealpha=1)
 
 piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
 
-# # Scatter plot vy(t)
-# fig0b, ax0b = plt.subplots()
-# ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
-#              c='gray', s=2, label='Other peaks')
-# ax0b.scatter(1000 * time, vel1_unf[:, 0, 0], c='blue', s=10,
-#              label='Most prominent peak')
-# ax0b.scatter(1000 * time, vel1[:, 0], c='orange', s=4,
-#              label='After outlier removal')
-# ax0b.set_ylim([-5, 70])
-# ax0b.set_xlabel('Time (ms)')
-# ax0b.set_ylabel('vy (m/s)')
-# ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
+# Scatter plot vy(t)
+fig0b, ax0b = plt.subplots()
+ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
+             c='gray', s=2, label='Other peaks')
+ax0b.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 0], c='blue', s=10,
+             label='Most prominent peak')
+ax0b.scatter(1000 * time, vel1[:, 0, 0, 0], c='orange', s=4,
+             label='After outlier removal')
+ax0b.set_ylim([-5, 45])
+ax0b.set_xlabel('Time (ms)')
+ax0b.set_ylabel('vy (m/s)')
+ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
 
-# piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
 
-# # Plot all velocities vy(vx)
-# fig1, ax1 = plt.subplots()
-# ax1.scatter(vel1[:, 1], vel1[:, 0], c='blue', s=4)
-# ax1.set_xlabel('vx (m/s)')
-# ax1.set_ylabel('vy (m/s)')
-# piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+# Plot all velocities vy(vx)
+fig1, ax1 = plt.subplots()
+ax1.scatter(vel1[:, 0, 0, 1], vel1[:, 0, 0, 0], c='blue', s=4)
+ax1.set_xlabel('vx (m/s)')
+ax1.set_ylabel('vy (m/s)')
+piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 
 # # Plot intensity distribution histogram
 # fig2, ax2 = plt.subplots()

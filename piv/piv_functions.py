@@ -4,6 +4,7 @@ import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 from natsort import natsorted
+from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
 
@@ -391,17 +392,17 @@ def filter_neighbours(coords, thr=1, n_nbs=2):
 
                 # Skip if the coordinate is already NaN
                 if np.any(np.isnan(coords[i, j, k, :])):
-                    print(f"Skipping coordinate ({i}, {j}, {k}) as it is NaN.")
+                    # print(f"Skipping coordinate ({i}, {j}, {k}) as it is NaN.")
                     continue
 
                 # Calculate the median and standard deviation of the neighbours
                 med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
                 std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
-                print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}")
+                # print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}")
 
                 # Check if the current coordinate is within the threshold
                 if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
-                    print(f"(Filtered out: {coords[i, j, k, 0]}, {coords[i, j, k, 1]} not within {thr} std from median {med})")
+                    # print(f"(Filtered out: {coords[i, j, k, 0]}, {coords[i, j, k, 1]} not within {thr} std from median {med})")
                     coords[i, j, k, :] = (np.nan, np.nan)
   
 
@@ -447,11 +448,49 @@ def strip_peaks(coords, axis=-2):
     return coords
 
 
-def smooth_temporal(coords):
+def smooth(time, disps, col='both', lam=5e-7, type=int):
     """
-    TODO: Move smoothing methods from piv.py here.
+    Smooth displacement data along a specified axis using a smoothing spline.
+    
+    Args:
+        time (np.ndarray): 1D array of time values.
+        disps (np.ndarray): 2D array of displacement values.
+        col (str or int): Column to smooth:
+            - 'both': Smooth both columns (y and x displacements).
+            - int: Index of the column to smooth (0 for y, 1 for x).
+        lam (float): Smoothing parameter.
+        type (type): Type to convert the smoothed displacements to.
+
+    Returns:
+        tuple: Tuple containing:
+            - time (np.ndarray): 1D array of time values.
+            - disps (np.ndarray): 2D array of smoothed displacements.
     """
-    return coords
+
+    # Work on copy
+    disps_spl = disps.copy()
+    orig_shape = disps_spl.shape
+
+    # Try to squeeze displacements array, then check if 2D
+    disps_spl = disps_spl.squeeze() if disps_spl.ndim > 2 else disps_spl
+    if disps_spl.ndim != 2:
+        raise ValueError("disps must be a 2D array with shape (n_time, 2).")
+
+    # Mask any NaN values in the displacements
+    mask = ~np.isnan(disps_spl).any(axis=1)
+
+    # If cols is 'both', apply smoothing to both columns
+    if col == 'both':
+        for i in range(disps_spl.shape[1]):
+            disps_spl[:, i] = make_smoothing_spline(time[mask], disps_spl[mask, i], lam=lam)(time).astype(type)
+
+    # Otherwise, apply smoothing to the specified column
+    elif isinstance(col, int):
+        disps_spl[:, col] = make_smoothing_spline(time[mask], disps_spl[mask, col], lam=lam)(time).astype(type)
+    else:
+        raise ValueError("cols must be 'both' or an integer index.")
+    
+    return disps_spl.reshape(orig_shape)
 
 
 def three_point_gauss(array):
