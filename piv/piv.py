@@ -11,13 +11,13 @@ import piv_functions as piv
 
 
 # Set experimental parameters
-test_mode = False
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(3000, 3100)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
-v_max = [15, 100]  # [m/s]
+v_max = [10, 50]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
 n_wins1 = (1, 1)
@@ -102,14 +102,14 @@ if not bckp1_loaded:
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
 
-# Outlier removal using the new modular functions
+# Outlier removal
 disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
 disp1 = piv.strip_peaks(disp1, axis=-2)
-print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
+print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
 
 # TODO: filter_neighbours could also consider unstripped peaks?
 disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(20, 0, 0))
-print(f"Number of NaNs: {np.sum(np.isnan(disp1))}")
+print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
 
 # Define time arrays beforehand
 time = np.linspace((frame_nrs[0] - 1) * dt,
@@ -167,106 +167,201 @@ ax1.set_xlabel('vx (m/s)')
 ax1.set_ylabel('vy (m/s)')
 piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
 
-# # Plot intensity distribution histogram
-# fig2, ax2 = plt.subplots()
-# ax2.hist(int1_unf[~np.isnan(int1_unf)], bins=100, log=True)
-# ax2.set_xlabel('Intensity')
-# ax2.set_ylabel('Count')
-
 
 # SECOND PASS: Split image into windows and correlate ==========================
 
-# # Shortcut: if a disp2.npz file already exists, load it
-# disp2_path = os.path.join(proc_path, 'disp2.npz')
-# if os.path.exists(disp2_path) and not test_mode:
-#     with np.load(disp2_path) as data:
-#         disp2 = data['disp1']
-#         disp2_unf = data['disp2_unf']
-#         time = data['time']
-#     print("Loaded existing disp2.npz file.")
-#
-# # Otherwise, start from scratch
-# else:
-#
-# # Pre-allocate array for all peaks: (frame idx, window idx, peak idx, 2)
-# disp2_unf = np.full((n_corrs, n_windows2[0], n_peaks2, 2), np.nan)
-#
-# for i in tqdm(range(n_corrs), desc='Second pass'):
-#
-#     # Split the images into horizontal rectangular windows, shifted by
-#     # the interpolated/smoothed displacements from the first pass
-#     wnd0, centres = piv.split_n_shift(imgs[i], n_windows2,
-#                                       shift=disp1_spl[i, :],
-#                                       shift_mode='before')
-#     wnd1, _ = piv.split_n_shift(imgs[i + 1], n_windows2,
-#                                 shift=disp1_spl[i, :],
-#                                 shift_mode='after')
-#
-#     for j in range(n_windows2[0]):
-#         # Calculate the correlation map for each window pair
-#         # (i.e. the first window of frame i with the first window of frame i+1)
-#         corr_map = sig.correlate(wnd1[j, 0], wnd0[j, 0],
-#                                  method='fft', mode='same')
-#
-#         # Find peaks in the correlation maps
-#         peaks, int2_unf = piv.find_peaks(corr_map, num_peaks=n_peaks2,
-#                                         min_distance=3)
-#
-#         # Calculate displacements for all peaks
-#         disp2_unf[i, j, :, :] = (disp1_spl[i, :] + peaks
-#                                  - (np.array(corr_map.shape) // 2))
-#
-# # Save unfiltered displacements
-# disp2 = disp2_unf.copy()
-#
-# # Outlier removal using the new modular functions
-# disp2 = piv.filter_outliers(disp2, mode='semicircle_rect', a=d_max[0], b=d_max[1])
-# disp2 = piv.strip_peaks(disp2, mode='first_valid')
-# disp2_show = piv.filter_outliers(disp2_unf, mode='semicircle_rect', a=d_max[0], b=d_max[1])
-# # disp2_show keeps all peaks (no stripping) for visualization
-#
-# # Save the displacements to a file
-# if not test_mode:
-#     np.savez(os.path.join(proc_path, 'disp2'), disp2=disp2, disp2_unf=disp2_unf,
-#              int2_unf=int2_unf, centres=centres)
-#
-# # For each frame, plot the velocity vectors at the window centres
-# vel2_show = disp2_show * res_avg / dt
-# vel2 = disp2 * res_avg / dt
-# #
-# # # Set up video writer
-# # if not test_mode:
-# #     fig1, ax = plt.subplots()
-# #     writer = ani.FFMpegWriter(fps=10)
-# #
-# #     video_path = os.path.join(proc_path, 'disp2.mp4')
-# #     with writer.saving(fig1, video_path, dpi=150):
-# #         for i in range(n_corrs):
-# #             ax.clear()
-# #             for j in range(n_peaks2):
-# #                 ax.scatter(vel2_show[i, :, j, 0],
-# #                            centres[:, 0, 0] * res_avg * 1000, c='gray', s=2)
-# #                 ax.scatter(vel2_show[i, :, j, 1],
-# #                            centres[:, 0, 0] * res_avg * 1000, c='gray', s=2)
-# #             ax.plot(vel2[i, :, 0], centres[:, 0, 0] * res_avg * 1000,
-# #                     label='vy')
-# #             ax.plot(vel2[i, :, 1], centres[:, 0, 0] * res_avg * 1000,
-# #                     label='vx')
-# #             ax.set_title(f't = {((i + 1) * dt * 1000):.2f} ms')
-# #             ax.set_xlabel('v (m/s)')
-# #             ax.set_ylabel('y (mm)')
-# #             ax.set_xlim([-5, 60])
-# #             ax.legend(loc='upper right')
-# #             writer.grab_frame()
-# #     plt.close(fig1)
-# #
-# # # # Todo: outliers (see step 3 in PIV book page 148)
-# # print()
+# Data saving settings for second pass
+disp2_var_names = ['disp2', 'disp2_unf', 'int2_unf', 'centres']
+
+# Try to load existing backup data
+bckp2_loaded, loaded_vars2 = piv.backup("load", proc_path, "pass2.npz", disp2_var_names, test_mode)
+
+if bckp2_loaded:
+    # Extract loaded variables using the same names as defined in disp2_var_names
+    for var_name in disp2_var_names:
+        globals()[var_name] = loaded_vars2.get(var_name)
+    print("Loaded existing second pass backup data.")
+
+if not bckp2_loaded:
+    # Ensure we have the images loaded (in case only second pass backup failed)
+    if 'imgs' not in globals():
+        # Load images from disk    
+        imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
+                               timing=True)
+    
+    # Pre-allocate array for all peaks: (frame idx, window idx, peak idx, 2)
+    disp2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2, 2), np.nan)
+    int2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2), np.nan)
+
+    for i in tqdm(range(n_corrs), desc='Second pass'):
+        # Split the images into horizontal rectangular windows, shifted by
+        # the interpolated/smoothed displacements from the first pass
+        wnd0, centres = piv.split_n_shift(imgs[i], n_wins2,
+                                          shift=disp1_spl[i, 0, 0, :],
+                                          shift_mode='before')
+        wnd1, _ = piv.split_n_shift(imgs[i + 1], n_wins2,
+                                    shift=disp1_spl[i, 0, 0, :],
+                                    shift_mode='after')
+
+        # Loop through all windows
+        for j in range(n_wins2[0]):
+            for k in range(n_wins2[1]):
+                # Calculate the correlation map for each window pair
+                corr_map = sig.correlate(wnd1[j, k], wnd0[j, k],
+                                         method='fft', mode='same')
+
+                # TODO: Any processing of the correlation map should happen here
+                #  (i.e. blacking out pixels or something)
+
+                # Find peaks in the correlation maps
+                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2,
+                                                min_distance=3)
+
+                # Calculate displacements for all peaks
+                disp2_unf[i, j, k, :, :] = (disp1_spl[i, 0, 0, :] + peaks
+                                           - np.array(corr_map.shape) // 2)
+
+    # Save unfiltered displacements
+    disp2 = disp2_unf.copy()
+
+# Basic global outlier removal of unreasonable displacements
+disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1])
+disp2 = piv.strip_peaks(disp2, axis=-2)
+print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
+            
+# TODO: filtering neighbours
+disp2 = piv.filter_neighbours(disp2, thr=100, n_nbs=(2, 2, 0))
+print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
+
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
+           disp2=disp2, disp2_unf=disp2_unf, int2_unf=int2_unf, centres=centres)
+
+# Calculate velocities for plots
+vel2_unf = disp2_unf * res_avg / dt
+vel2 = disp2 * res_avg / dt
+
+# Plot velocity field for a sample frame
+sample_frame = min(50, n_corrs - 1) if not test_mode else min(10, n_corrs - 1)
+
+# Create a figure for velocity vectors
+fig2, ax2 = plt.subplots(figsize=(10, 6))
+
+# Plot velocity vectors at window centres for the sample frame
+if centres is not None:
+    # Plot all window centres in gray
+    for j in range(n_peaks2):
+        valid_mask = ~np.isnan(vel2_unf[sample_frame, :, :, j, :]).any(axis=-1)
+        if np.any(valid_mask):
+            y_pos, x_pos = np.where(valid_mask)
+            ax2.scatter(centres[y_pos, x_pos, 1] * res_avg * 1000, 
+                       centres[y_pos, x_pos, 0] * res_avg * 1000, 
+                       c='lightgray', s=10, alpha=0.5)
+    
+    # Plot filtered velocities
+    valid_mask = ~np.isnan(vel2[sample_frame, :, :, :]).any(axis=-1)
+    if np.any(valid_mask):
+        y_pos, x_pos = np.where(valid_mask)
+        
+        # Create velocity vectors
+        u = vel2[sample_frame, y_pos, x_pos, 1]  # vx
+        v = vel2[sample_frame, y_pos, x_pos, 0]  # vy
+        x_centers = centres[y_pos, x_pos, 1] * res_avg * 1000  # mm
+        y_centers = centres[y_pos, x_pos, 0] * res_avg * 1000  # mm
+        
+        # Plot velocity vectors
+        ax2.quiver(x_centers, y_centers, u, v,
+                  scale=200, scale_units='xy', angles='xy', 
+                  color='blue', alpha=0.8, width=0.003)
+
+ax2.set_xlabel('x (mm)')
+ax2.set_ylabel('y (mm)')
+ax2.set_title(f'Velocity field at t = {time[sample_frame]*1000:.2f} ms')
+# ax2.set_aspect('equal')
+ax2.grid(True, alpha=0.3)
+
+piv.save_cfig(proc_path, 'disp2_velocity_field', test_mode=test_mode)
+
+# Plot velocity profiles along the centerline
+if centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
+    fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Plot vx vs y
+    y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
+    vx_profile = vel2[sample_frame, :, 0, 1]  # vx at centerline
+    vy_profile = vel2[sample_frame, :, 0, 0]  # vy at centerline
+    
+    ax3a.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
+    ax3a.set_xlabel('vx (m/s)')
+    ax3a.set_ylabel('y (mm)')
+    fig3.suptitle(f'Velocity profiles at t = {time[sample_frame]*1000:.2f} ms')
+    ax3a.grid(True, alpha=0.3)
+    ax3a.set_xlim([-5, 40])  # Set x-limits for vx profile
+    
+    ax3b.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
+    ax3b.set_xlabel('vy (m/s)')
+    ax3b.set_ylabel('y (mm)')
+
+    # Use same scaling as ax3a for consistency
+    ax3b.set_xlim(ax3a.get_xlim())
+
+    # ax3b.set_title(f'Vertical velocity profile at t = {time[sample_frame]*1000:.2f} ms')
+    ax3b.grid(True, alpha=0.3)
+    
+    piv.save_cfig(proc_path, 'disp2_velocity_profiles', test_mode=test_mode)
+
+# Plot all velocities vy(vx)
+fig4, ax4 = plt.subplots()
+ax4.scatter(vel2[:, 0, 0, 1], vel2[:, 0, 0, 0], c='blue', s=4)
+ax4.set_xlabel('vx (m/s)')
+ax4.set_ylabel('vy (m/s)')
+piv.save_cfig(proc_path, 'disp2_vy_vx', test_mode=test_mode)
 
 
-# Also later: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
+# Set up video writer for velocity profiles
+# if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
+fig_video, (ax_vx, ax_vy) = plt.subplots(1, 2, figsize=(12, 5))
+writer = ani.FFMpegWriter(fps=10)
 
+video_path = os.path.join(proc_path, 'disp2.mp4')
+with writer.saving(fig_video, video_path, dpi=150):
+    for i in range(n_corrs):
+        # Clear both axes
+        ax_vx.clear()
+        ax_vy.clear()
+        
+        # Get y positions and velocity profiles for current frame
+        y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
+        vx_profile = vel2[i, :, 0, 1]  # vx at centerline
+        vy_profile = vel2[i, :, 0, 0]  # vy at centerline
+        
+        # Plot vx profile
+        ax_vx.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
+        ax_vx.set_xlabel('vx (m/s)')
+        ax_vx.set_ylabel('y (mm)')
+        ax_vx.grid(True, alpha=0.3)
+        ax_vx.set_xlim([-5, 40])
+        ax_vx.set_ylim([0, 21])
+        
+        # Plot vy profile  
+        ax_vy.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
+        ax_vy.set_xlabel('vy (m/s)')
+        ax_vy.set_ylabel('y (mm)')
+        ax_vy.grid(True, alpha=0.3)
+        ax_vy.set_xlim([-5, 40])
+        ax_vy.set_ylim([0, 21])
+        
+        # Set consistent title
+        fig_video.suptitle(f'Velocity profiles at t = {time[i]*1000:.2f} ms')
+        
+        writer.grab_frame()
+plt.close(fig_video)
 
+# TODO: Advanced visualization and analysis
+# - Video generation of velocity fields over time
+# - Statistical analysis of turbulence properties
+# - Profile fitting with turbulence models (Burgers equation)
+# - Also later: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
 
 # Finally, show all figures
 plt.show()

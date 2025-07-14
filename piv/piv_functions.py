@@ -376,7 +376,10 @@ def filter_neighbours(coords, thr=1, n_nbs=2):
     if any(n % 2 != 0 for n in n_nbs):
         raise ValueError("n_nbs must be even in each dimension.")
 
-    # Get a sliding window view of each coordinate
+    # Create a copy for output
+    coords_output = coords.copy()
+    
+    # Get a sliding window view of the input coordinates
     n_corrs, n_wins_y, n_wins_x, _ = coords.shape
     nbs = np.lib.stride_tricks.sliding_window_view(coords,
     (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
@@ -390,23 +393,29 @@ def filter_neighbours(coords, thr=1, n_nbs=2):
                 j_nbs = np.clip(j, n_nbs[1], n_wins_y - n_nbs[1] - 1) - n_nbs[1]
                 k_nbs = np.clip(k, n_nbs[2], n_wins_x - n_nbs[2] - 1) - n_nbs[2]
 
-                # Skip if the coordinate is already NaN
+                # Skip if the coordinate is already NaN in the input
                 if np.any(np.isnan(coords[i, j, k, :])):
-                    # print(f"Skipping coordinate ({i}, {j}, {k}) as it is NaN.")
+                    # print(f"Skipping coordinate ({i}, j}, {k}) as it is NaN.")
                     continue
-
-                # Calculate the median and standard deviation of the neighbours
-                med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                
+                # Need minimum number of neighbors for reliable statistics
+                # min_neighbors = 3
+                # if len(valid_neighbors) < min_neighbors:
+                #     # print(f"Skipping coordinate ({i}, {j}, {k}): only {len(valid_neighbors)} valid neighbors (need >= {min_neighbors})")
+                #     continue
+                
+                # Calculate the median and standard deviation
+                med = np.median(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
                 std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
-                # print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}")
+                # print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}, n_neighbors={len(valid_neighbors)}")
 
                 # Check if the current coordinate is within the threshold
                 if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
-                    # print(f"(Filtered out: {coords[i, j, k, 0]}, {coords[i, j, k, 1]} not within {thr} std from median {med})")
-                    coords[i, j, k, :] = (np.nan, np.nan)
+                    # print(f"(Filtered out: {coords_input[i, j, k, 0]}, {coords_input[i, j, k, 1]} not within {thr} std from median {med})")
+                    coords_output[i, j, k, :] = (np.nan, np.nan)
   
 
-    return coords
+    return coords_output
 
 
 def first_valid(arr):
@@ -447,6 +456,10 @@ def strip_peaks(coords, axis=-2):
     coords = np.apply_along_axis(first_valid, axis, coords)
     return coords
 
+
+def replace_nans():
+    """Function to replace NaN values with weighted average of neighbours (merge with strip_peaks?)"""
+    return
 
 def smooth(time, disps, col='both', lam=5e-7, type=int):
     """
