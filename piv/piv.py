@@ -3,7 +3,6 @@ import os
 
 import numpy as np
 from matplotlib import pyplot as plt
-from matplotlib import animation as ani
 from scipy import signal as sig
 from tqdm import trange, tqdm
 
@@ -129,43 +128,13 @@ vel1 = disp1 * res_avg / dt
 vel1x_spl = disp1_spl[:, 0, 0, 1] * res_avg / dt
 
 # Scatter plot vx(t)
-fig0, ax0 = plt.subplots()
-ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
-            c='gray', s=2, label='Other peaks')
-ax0.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 1], c='blue', s=10,
-            label='Most prominent peak')
-ax0.scatter(1000 * time, vel1[:, 0, 0, 1], c='orange', s=4,
-            label='After outlier removal')
-ax0.plot(1000 * time, vel1x_spl, color='red',
-            label='Displacement to be used\n in 2nd pass (smoothed)')
-ax0.set_ylim([-5, 45])
-ax0.set_xlabel('Time (ms)')
-ax0.set_ylabel('vx (m/s)')
-ax0.legend(loc='upper right', fontsize='small', framealpha=1)
-
-piv.save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
+piv.plot_first_pass_vx(time, vel1_unf, vel1, vel1x_spl, n_peaks1, proc_path, test_mode)
 
 # Scatter plot vy(t)
-fig0b, ax0b = plt.subplots()
-ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
-             c='gray', s=2, label='Other peaks')
-ax0b.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 0], c='blue', s=10,
-             label='Most prominent peak')
-ax0b.scatter(1000 * time, vel1[:, 0, 0, 0], c='orange', s=4,
-             label='After outlier removal')
-ax0b.set_ylim([-5, 45])
-ax0b.set_xlabel('Time (ms)')
-ax0b.set_ylabel('vy (m/s)')
-ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
-
-piv.save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+piv.plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode)
 
 # Plot all velocities vy(vx)
-fig1, ax1 = plt.subplots()
-ax1.scatter(vel1[:, 0, 0, 1], vel1[:, 0, 0, 0], c='blue', s=4)
-ax1.set_xlabel('vx (m/s)')
-ax1.set_ylabel('vy (m/s)')
-piv.save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+piv.plot_first_pass_vy_vx(vel1, proc_path, test_mode)
 
 
 # SECOND PASS: Split image into windows and correlate ==========================
@@ -245,123 +214,21 @@ vel2 = disp2 * res_avg / dt
 sample_frame = min(50, n_corrs - 1) if not test_mode else min(10, n_corrs - 1)
 
 # Create a figure for velocity vectors
-fig2, ax2 = plt.subplots(figsize=(10, 6))
-
-# Plot velocity vectors at window centres for the sample frame
-if centres is not None:
-    # Plot all window centres in gray
-    for j in range(n_peaks2):
-        valid_mask = ~np.isnan(vel2_unf[sample_frame, :, :, j, :]).any(axis=-1)
-        if np.any(valid_mask):
-            y_pos, x_pos = np.where(valid_mask)
-            ax2.scatter(centres[y_pos, x_pos, 1] * res_avg * 1000, 
-                       centres[y_pos, x_pos, 0] * res_avg * 1000, 
-                       c='lightgray', s=10, alpha=0.5)
-    
-    # Plot filtered velocities
-    valid_mask = ~np.isnan(vel2[sample_frame, :, :, :]).any(axis=-1)
-    if np.any(valid_mask):
-        y_pos, x_pos = np.where(valid_mask)
-        
-        # Create velocity vectors
-        u = vel2[sample_frame, y_pos, x_pos, 1]  # vx
-        v = vel2[sample_frame, y_pos, x_pos, 0]  # vy
-        x_centers = centres[y_pos, x_pos, 1] * res_avg * 1000  # mm
-        y_centers = centres[y_pos, x_pos, 0] * res_avg * 1000  # mm
-        
-        # Plot velocity vectors
-        ax2.quiver(x_centers, y_centers, u, v,
-                  scale=200, scale_units='xy', angles='xy', 
-                  color='blue', alpha=0.8, width=0.003)
-
-ax2.set_xlabel('x (mm)')
-ax2.set_ylabel('y (mm)')
-ax2.set_title(f'Velocity field at t = {time[sample_frame]*1000:.2f} ms')
-# ax2.set_aspect('equal')
-ax2.grid(True, alpha=0.3)
-
-piv.save_cfig(proc_path, 'disp2_velocity_field', test_mode=test_mode)
+piv.plot_velocity_field(vel2_unf, vel2, centres, time, sample_frame, n_peaks2, res_avg, proc_path, test_mode)
 
 # Plot velocity profiles along the centerline
 if centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
-    fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 5))
-    
-    # Plot vx vs y
-    y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
-    vx_profile = vel2[sample_frame, :, 0, 1]  # vx at centerline
-    vy_profile = vel2[sample_frame, :, 0, 0]  # vy at centerline
-    
-    ax3a.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
-    ax3a.set_xlabel('vx (m/s)')
-    ax3a.set_ylabel('y (mm)')
-    fig3.suptitle(f'Velocity profiles at t = {time[sample_frame]*1000:.2f} ms')
-    ax3a.grid(True, alpha=0.3)
-    ax3a.set_xlim([-5, 40])  # Set x-limits for vx profile
-    
-    ax3b.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
-    ax3b.set_xlabel('vy (m/s)')
-    ax3b.set_ylabel('y (mm)')
-
-    # Use same scaling as ax3a for consistency
-    ax3b.set_xlim(ax3a.get_xlim())
-
-    # ax3b.set_title(f'Vertical velocity profile at t = {time[sample_frame]*1000:.2f} ms')
-    ax3b.grid(True, alpha=0.3)
-    
-    piv.save_cfig(proc_path, 'disp2_velocity_profiles', test_mode=test_mode)
+    piv.plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path, test_mode)
 
 # Plot all velocities vy(vx)
-fig4, ax4 = plt.subplots()
-ax4.scatter(vel2[:, 0, 0, 1], vel2[:, 0, 0, 0], c='blue', s=4)
-ax4.set_xlabel('vx (m/s)')
-ax4.set_ylabel('vy (m/s)')
-piv.save_cfig(proc_path, 'disp2_vy_vx', test_mode=test_mode)
+piv.plot_second_pass_vy_vx(vel2, proc_path, test_mode)
 
 
 # Set up video writer for velocity profiles
-# if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
-fig_video, (ax_vx, ax_vy) = plt.subplots(1, 2, figsize=(12, 5))
-writer = ani.FFMpegWriter(fps=10)
+if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
+    piv.create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_path, test_mode)
 
-video_path = os.path.join(proc_path, 'disp2.mp4')
-with writer.saving(fig_video, video_path, dpi=150):
-    for i in range(n_corrs):
-        # Clear both axes
-        ax_vx.clear()
-        ax_vy.clear()
-        
-        # Get y positions and velocity profiles for current frame
-        y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
-        vx_profile = vel2[i, :, 0, 1]  # vx at centerline
-        vy_profile = vel2[i, :, 0, 0]  # vy at centerline
-        
-        # Plot vx profile
-        ax_vx.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
-        ax_vx.set_xlabel('vx (m/s)')
-        ax_vx.set_ylabel('y (mm)')
-        ax_vx.grid(True, alpha=0.3)
-        ax_vx.set_xlim([-5, 40])
-        ax_vx.set_ylim([0, 21])
-        
-        # Plot vy profile  
-        ax_vy.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
-        ax_vy.set_xlabel('vy (m/s)')
-        ax_vy.set_ylabel('y (mm)')
-        ax_vy.grid(True, alpha=0.3)
-        ax_vy.set_xlim([-5, 40])
-        ax_vy.set_ylim([0, 21])
-        
-        # Set consistent title
-        fig_video.suptitle(f'Velocity profiles at t = {time[i]*1000:.2f} ms')
-        
-        writer.grab_frame()
-plt.close(fig_video)
-
-# TODO: Advanced visualization and analysis
-# - Video generation of velocity fields over time
-# - Statistical analysis of turbulence properties
-# - Profile fitting with turbulence models (Burgers equation)
-# - Also later: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
+# TODO: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
 
 # Finally, show all figures
 plt.show()
