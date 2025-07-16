@@ -4,8 +4,9 @@ import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 from natsort import natsorted
+from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
-from tqdm import tqdm
+from tqdm import trange, tqdm
 
 
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
@@ -255,19 +256,18 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
     return peaks, intensities
 
 
-def filter_outliers(coords, mode, a=None, b=None, intensities=None, int_thr=0):
+def filter_outliers(mode, coords, a=None, b=None):
     """
-    Filter outliers from coordinates based on spatial and intensity criteria.
+    Remove outliers from coordinates based on spatial and intensity criteria.
     
     Args:
-        coords (np.ndarray): N-D array where last dimension is (y, x) coordinates.
-        mode (str): Filtering mode. Options:
-            - 'semicircle_rect': For x < 0: semicircle of radius a; For x >= 0: rectangle [-0.5, b] x [-a, a]
-            - 'circle': Circle of radius a centered at origin
-        a (float): First parameter (y-direction limit or radius)
-        b (float): Second parameter (x-direction limit)
-        intensities (np.ndarray): Intensity values corresponding to coordinates
-        int_thr (float): Minimum intensity threshold for valid coordinates
+        mode (str): Filtering mode:
+            - 'semicircle_rect': Filter a semicircle and rectangle
+            - 'circle': Filter a circle at the origin
+            - 'intensity': Filter based on intensity values of the provided peaks
+        coords (np.ndarray): ND coordinate array of shape (..., 2)
+        a (float or np.ndarray): Radius for filtering (or intensity values in 'intensity' mode)
+        b (float): Width for rectangle filtering or relative threshold in 'intensity' mode       
     
     Returns:
         np.ndarray: Filtered coordinates with invalid points set to NaN
@@ -277,160 +277,233 @@ def filter_outliers(coords, mode, a=None, b=None, intensities=None, int_thr=0):
     orig_shape = coords.shape
     coords = coords.reshape(-1, coords.shape[-1])
     
+    # OPTION 1: filter a semicircle of radius a (x < 0)
+    # and a rectangle of height 2a and width b (x >= 0).
     if mode == 'semicircle_rect':
-        # Current implementation: semicircle for x < 0, rectangle for x >= 0
+        if a is None or b is None:
+            raise ValueError("Both 'a' and 'b' parameters must be provided for "
+                             "'semicircle_rect' mode.")
         mask = (((coords[..., 1] < 0) &
                  (coords[..., 1] ** 2 + coords[:, 0] ** 2 <= a ** 2))
                 | ((coords[:, 1] >= 0) & (coords[:, 1] <= b)
                    & (np.abs(coords[:, 0]) <= a)))
     
+    # OPTION 2: filter a circle at the origin with radius a
     elif mode == 'circle':
         # TODO: Test circular filtering
         mask = (coords[:, 0] ** 2 + coords[:, 1] ** 2 <= a ** 2)
-    
+
+        if b is not None:
+            print("Warning: 'b' parameter is ignored in 'circle' mode.")
+
+    # OPTION 3: filter based on intensity values of the provided peaks
+    elif mode == 'intensity':
+        if a is None or b is None:
+            raise ValueError("Both 'a' and 'b' parameters must be provided for "
+                             "'intensity' mode.")
+        
+        # Check that a is an ND numpy array of intensity values
+        if not isinstance(a, np.ndarray) or a.shape != orig_shape[:-1]:
+            raise ValueError("Parameter 'a' must be an ND numpy array of intensity values matching the shape of the coordinates.")
+        if not isinstance(b, (int, float)):
+            raise ValueError("Parameter 'b' must be an integer or float representing the relative threshold.")
+
+        # Reshape a to match the flattened coords
+        ints = a.reshape(-1)
+
+        # Calculate the intensity threshold
+        int_min = b * np.nanmax(ints)
+
+        # Create a mask based on the intensity threshold
+        mask = (ints >= int_min)
+
     else:
         raise ValueError(f"Unknown filtering mode: {mode}")
-    
-    # Apply spatial filtering
-    coords[~mask] = np.array([np.nan, np.nan])
-    
-    # Apply intensity filtering if provided
-    if intensities is not None:
-        # TODO: Implement intensity filtering
-        # Reshape intensities to match flattened coords
-        intensities_flat = intensities.reshape(-1)
-        low_intensity_mask = intensities_flat < int_thr
-        coords[low_intensity_mask] = np.array([np.nan, np.nan])
+
+    # Apply the mask to the coordinates*
+    coords[~mask] = np.array([np.nan, np.nan])   
     
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
     
-    return coords
-
-
-def filter_outliers_local(coords, mode='temporal', window_size=3, threshold=2.0):
-    """
-    Filter outliers based on local consistency (temporal or spatial).
-    
-    Args:
-        coords (np.ndarray): Coordinate array
-        mode (str): Local filtering mode:
-            - 'temporal': Compare with previous/next timesteps
-            - 'spatial': Compare with neighboring windows
-            - 'peer_peaks': Use other candidate peaks for validation
-        window_size (int): Size of the local window for comparison
-        threshold (float): Threshold for outlier detection (in standard deviations)
-    
-    Returns:
-        np.ndarray: Filtered coordinates with outliers set to NaN
-    """
-    # TODO: Implement local filtering modes
-    
-    if mode == 'temporal':
-        # TODO: Implement temporal consistency filtering
-        # Could use rolling window statistics or interpolation-based detection
-        raise NotImplementedError("Temporal filtering not yet implemented")
-    
-    elif mode == 'spatial':
-        # TODO: Implement spatial consistency filtering
-        # Compare with neighboring windows in the same frame
-        raise NotImplementedError("Spatial filtering not yet implemented")
-    
-    elif mode == 'peer_peaks':
-        # TODO: Implement peer peak validation
-        # Use other candidate peaks to validate the primary peak
-        raise NotImplementedError("Peer peak filtering not yet implemented")
-    
+    # In intensity mode, also return the filtered intensities
+    if mode == 'intensity':
+        ints[~mask] = np.nan
+        return coords, ints
     else:
-        raise ValueError(f"Unknown local filtering mode: {mode}")
-    
-    return coords
+        return coords
 
 
-def strip_peaks(coords, mode='first_valid'):
+def cart2polar(coords):
     """
-    Reduce array dimensionality by selecting peaks along the second-to-last axis.
+    Convert Cartesian coordinates to polar coordinates.
+
+    Args:
+        coords (np.ndarray): ND array of shape (..., 2) with (y, x) coordinates.
+
+    Returns:
+        np.ndarray: ND array of shape (n_corrs, 2) with (r, phi) coordinates.
+    """
+    # Calculate the magnitude and angle
+    r = np.sqrt(coords[..., 0] ** 2 + coords[..., 1] ** 2)
+    phi = np.arctan2(coords[..., 1], coords[..., 0])
+
+    # Stack the results to form a new array
+    polar_coords = np.stack((r, phi), axis=-1)
+    return polar_coords
+
+
+def filter_neighbours(coords, thr=1, n_nbs=2):
+    """
+    Filter out coordinates that are too different from their neighbours.
+
+    Args:
+        coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
+        thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
+        nr_neighbours (int): Number of neighbours in each dimension to consider for filtering.
+
+    Returns:
+        np.ndarray: Filtered coordinates with invalid points set to NaN.
+    """
+
+    # Number of neighbours can be specified in each dimension and must be even
+    if isinstance(n_nbs, int):
+        n_nbs = (n_nbs, n_nbs, n_nbs)
+    elif isinstance(n_nbs, tuple) and len(n_nbs) == 3:
+        n_nbs = n_nbs
+    else:
+        raise ValueError("n_nbs must be integer or a tuple of three integers.")
+    if any(n % 2 != 0 for n in n_nbs):
+        raise ValueError("n_nbs must be even in each dimension.")
+
+    # Create a copy for output
+    coords_output = coords.copy()
+    
+    # Get a sliding window view of the input coordinates
+    n_corrs, n_wins_y, n_wins_x, _ = coords.shape
+    nbs = np.lib.stride_tricks.sliding_window_view(coords,
+    (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
+
+    # Iterate over each coordinate, first spatially, then temporally
+    for i in range(n_corrs):
+        for j in range(n_wins_y):
+            for k in range(n_wins_x):
+                # Edge handling: clamp to valid sliding window range
+                i_nbs = np.clip(i, n_nbs[0], n_corrs - n_nbs[0] - 1) - n_nbs[0]
+                j_nbs = np.clip(j, n_nbs[1], n_wins_y - n_nbs[1] - 1) - n_nbs[1]
+                k_nbs = np.clip(k, n_nbs[2], n_wins_x - n_nbs[2] - 1) - n_nbs[2]
+
+                # Skip if the coordinate is already NaN in the input
+                if np.any(np.isnan(coords[i, j, k, :])):
+                    # print(f"Skipping coordinate ({i}, j}, {k}) as it is NaN.")
+                    continue
+                
+                # Need minimum number of neighbors for reliable statistics
+                # min_neighbors = 3
+                # if len(valid_neighbors) < min_neighbors:
+                #     # print(f"Skipping coordinate ({i}, {j}, {k}): only {len(valid_neighbors)} valid neighbors (need >= {min_neighbors})")
+                #     continue
+                
+                # Calculate the median and standard deviation
+                med = np.median(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                # print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}, n_neighbors={len(valid_neighbors)}")
+
+                # Check if the current coordinate is within the threshold
+                if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
+                    # print(f"(Filtered out: {coords_input[i, j, k, 0]}, {coords_input[i, j, k, 1]} not within {thr} std from median {med})")
+                    coords_output[i, j, k, :] = (np.nan, np.nan)
+  
+
+    return coords_output
+
+
+def first_valid(arr):
+    """
+    Function to find the first non-NaN value in an array
+    """    
+
+    # Check if the input is a 1D array
+    if arr.ndim == 1:
+        for c in arr:
+            if not np.isnan(c):
+                return c
+        # If no valid value found, return NaN
+        return np.nan
+    
+    # Throw an error if the input is not 1D
+    else:
+        raise ValueError("Input must be a 1D array.")
+
+
+def strip_peaks(coords, axis=-2):
+    """
+    Reduce array dimensionality by selecting the first valid peak along an axis containing options.
     
     Args:
-        coords (np.ndarray): N-D array where second-to-last axis represents different peaks
-        mode (str): Peak selection mode:
-            - 'first_valid': Take first non-NaN peak
-            - 'best_intensity': Take peak with highest intensity (requires intensities)
-            - 'median': Take median of valid peaks
-            - 'mean': Take mean of valid peaks
+        coords (np.ndarray): N-D array where one axis represents different peaks
+        axis (int): Axis along which to reduce the array
+            (default: second-to-last axis)
     
     Returns:
-        np.ndarray: Array with second-to-last axis reduced
+        np.ndarray: Array with one axis reduced
     """
+
     if coords.ndim < 3:
         return coords  # Nothing to strip
-    
-    if mode == 'first_valid':
-        # Current implementation
-        def first_valid(arr):
-            for c in arr:
-                if not np.any(np.isnan(c)):
-                    return c
-            return np.full(arr.shape[-1], np.nan)
-        
-        return np.apply_along_axis(first_valid, -2, coords)
-    
-    elif mode == 'best_intensity':
-        # TODO: Implement intensity-based peak selection
-        # Would need intensities as additional parameter
-        raise NotImplementedError("Intensity-based peak selection not yet implemented")
-    
-    elif mode == 'median':
-        # TODO: Implement median peak selection
-        raise NotImplementedError("Median peak selection not yet implemented")
-    
-    elif mode == 'mean':
-        # TODO: Implement mean peak selection
-        raise NotImplementedError("Mean peak selection not yet implemented")
-    
-    else:
-        raise ValueError(f"Unknown peak selection mode: {mode}")
+
+    # Apply the first_valid function along the specified axis  
+    coords = np.apply_along_axis(first_valid, axis, coords)
+    return coords
 
 
-def smooth_temporal(coords, method='spline', **kwargs):
+def replace_nans():
+    """Function to replace NaN values with weighted average of neighbours (merge with strip_peaks?)"""
+    return
+
+def smooth(time, disps, col='both', lam=5e-7, type=int):
     """
-    Apply temporal smoothing to coordinate time series.
+    Smooth displacement data along a specified axis using a smoothing spline.
     
     Args:
-        coords (np.ndarray): 2D array of coordinates (time, coordinate)
-        method (str): Smoothing method:
-            - 'spline': Smoothing spline (current implementation)
-            - 'gaussian': Gaussian filter
-            - 'median': Median filter
-            - 'savgol': Savitzky-Golay filter
-        **kwargs: Method-specific parameters
-    
+        time (np.ndarray): 1D array of time values.
+        disps (np.ndarray): 2D array of displacement values.
+        col (str or int): Column to smooth:
+            - 'both': Smooth both columns (y and x displacements).
+            - int: Index of the column to smooth (0 for y, 1 for x).
+        lam (float): Smoothing parameter.
+        type (type): Type to convert the smoothed displacements to.
+
     Returns:
-        np.ndarray: Smoothed coordinates
+        tuple: Tuple containing:
+            - time (np.ndarray): 1D array of time values.
+            - disps (np.ndarray): 2D array of smoothed displacements.
     """
-    # TODO: Implement different smoothing methods
-    
-    if method == 'spline':
-        # TODO: Move spline smoothing from piv.py here
-        # Would use scipy.interpolate.make_smoothing_spline
-        raise NotImplementedError("Spline smoothing not yet implemented")
-    
-    elif method == 'gaussian':
-        # TODO: Implement Gaussian smoothing
-        raise NotImplementedError("Gaussian smoothing not yet implemented")
-    
-    elif method == 'median':
-        # TODO: Implement median filtering
-        raise NotImplementedError("Median filtering not yet implemented")
-    
-    elif method == 'savgol':
-        # TODO: Implement Savitzky-Golay filtering
-        raise NotImplementedError("Savitzky-Golay filtering not yet implemented")
-    
+
+    # Work on copy
+    disps_spl = disps.copy()
+    orig_shape = disps_spl.shape
+
+    # Try to squeeze displacements array, then check if 2D
+    disps_spl = disps_spl.squeeze() if disps_spl.ndim > 2 else disps_spl
+    if disps_spl.ndim != 2:
+        raise ValueError("disps must be a 2D array with shape (n_time, 2).")
+
+    # Mask any NaN values in the displacements
+    mask = ~np.isnan(disps_spl).any(axis=1)
+
+    # If cols is 'both', apply smoothing to both columns
+    if col == 'both':
+        for i in range(disps_spl.shape[1]):
+            disps_spl[:, i] = make_smoothing_spline(time[mask], disps_spl[mask, i], lam=lam)(time).astype(type)
+
+    # Otherwise, apply smoothing to the specified column
+    elif isinstance(col, int):
+        disps_spl[:, col] = make_smoothing_spline(time[mask], disps_spl[mask, col], lam=lam)(time).astype(type)
     else:
-        raise ValueError(f"Unknown smoothing method: {method}")
+        raise ValueError("cols must be 'both' or an integer index.")
     
-    return coords
+    return disps_spl.reshape(orig_shape)
 
 
 def three_point_gauss(array):
@@ -487,7 +560,7 @@ def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
     if test_mode:
         return
     
-    # Othrwise, save figure
+    # Otherwise, save figure
     else:
         # Set directory and file format
         filename = f"{filename}.{format}"
@@ -503,3 +576,238 @@ def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
     # plt.show()
 
     return
+
+
+# %% GPT GENERATED PLOTTING CODE: TO BE ADJUSTED
+
+def plot_first_pass_vx(time, vel1_unf, vel1, vel1x_spl, n_peaks1, proc_path, test_mode=False):
+    """
+    Plot vx velocity over time for first pass analysis.
+    
+    Args:
+        time (np.ndarray): Time array
+        vel1_unf (np.ndarray): Unfiltered velocities 
+        vel1 (np.ndarray): Filtered velocities
+        vel1x_spl (np.ndarray): Smoothed vx velocities
+        n_peaks1 (int): Number of peaks
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig0, ax0 = plt.subplots()
+    ax0.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 1],
+                c='gray', s=2, label='Other peaks')
+    ax0.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 1], c='blue', s=10,
+                label='Most prominent peak')
+    ax0.scatter(1000 * time, vel1[:, 0, 0, 1], c='orange', s=4,
+                label='After outlier removal')
+    ax0.plot(1000 * time, vel1x_spl, color='red',
+                label='Displacement to be used\n in 2nd pass (smoothed)')
+    ax0.set_ylim([-5, 45])
+    ax0.set_xlabel('Time (ms)')
+    ax0.set_ylabel('vx (m/s)')
+    ax0.legend(loc='upper right', fontsize='small', framealpha=1)
+
+    save_cfig(proc_path, 'disp1_vx_t', test_mode=test_mode)
+
+
+def plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode=False):
+    """
+    Plot vy velocity over time for first pass analysis.
+    
+    Args:
+        time (np.ndarray): Time array
+        vel1_unf (np.ndarray): Unfiltered velocities 
+        vel1 (np.ndarray): Filtered velocities
+        n_peaks1 (int): Number of peaks
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig0b, ax0b = plt.subplots()
+    ax0b.scatter(np.tile(1000 * time[:, None], (1, n_peaks1)), vel1_unf[..., 0],
+                 c='gray', s=2, label='Other peaks')
+    ax0b.scatter(1000 * time, vel1_unf[:, 0, 0, 0, 0], c='blue', s=10,
+                 label='Most prominent peak')
+    ax0b.scatter(1000 * time, vel1[:, 0, 0, 0], c='orange', s=4,
+                 label='After outlier removal')
+    ax0b.set_ylim([-5, 45])
+    ax0b.set_xlabel('Time (ms)')
+    ax0b.set_ylabel('vy (m/s)')
+    ax0b.legend(loc='upper right', fontsize='small', framealpha=1)
+
+    save_cfig(proc_path, 'disp1_vy_t', test_mode=test_mode)
+
+
+def plot_first_pass_vy_vx(vel1, proc_path, test_mode=False):
+    """
+    Plot vy vs vx scatter plot for first pass analysis.
+    
+    Args:
+        vel1 (np.ndarray): Filtered velocities
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig1, ax1 = plt.subplots()
+    ax1.scatter(vel1[:, 0, 0, 1], vel1[:, 0, 0, 0], c='blue', s=4)
+    ax1.set_xlabel('vx (m/s)')
+    ax1.set_ylabel('vy (m/s)')
+    save_cfig(proc_path, 'disp1_vy_vx', test_mode=test_mode)
+
+
+def plot_velocity_field(vel2_unf, vel2, centres, time, sample_frame, n_peaks2, res_avg, proc_path, test_mode=False):
+    """
+    Plot velocity field for a sample frame from second pass analysis.
+    
+    Args:
+        vel2_unf (np.ndarray): Unfiltered velocities from second pass
+        vel2 (np.ndarray): Filtered velocities from second pass
+        centres (np.ndarray): Window centres
+        time (np.ndarray): Time array
+        sample_frame (int): Frame index to plot
+        n_peaks2 (int): Number of peaks
+        res_avg (float): Average resolution
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig2, ax2 = plt.subplots(figsize=(10, 6))
+
+    # Plot velocity vectors at window centres for the sample frame
+    if centres is not None:
+        # Plot all window centres in gray
+        for j in range(n_peaks2):
+            valid_mask = ~np.isnan(vel2_unf[sample_frame, :, :, j, :]).any(axis=-1)
+            if np.any(valid_mask):
+                y_pos, x_pos = np.where(valid_mask)
+                ax2.scatter(centres[y_pos, x_pos, 1] * res_avg * 1000, 
+                           centres[y_pos, x_pos, 0] * res_avg * 1000, 
+                           c='lightgray', s=10, alpha=0.5)
+        
+        # Plot filtered velocities
+        valid_mask = ~np.isnan(vel2[sample_frame, :, :, :]).any(axis=-1)
+        if np.any(valid_mask):
+            y_pos, x_pos = np.where(valid_mask)
+            
+            # Create velocity vectors
+            u = vel2[sample_frame, y_pos, x_pos, 1]  # vx
+            v = vel2[sample_frame, y_pos, x_pos, 0]  # vy
+            x_centers = centres[y_pos, x_pos, 1] * res_avg * 1000  # mm
+            y_centers = centres[y_pos, x_pos, 0] * res_avg * 1000  # mm
+            
+            # Plot velocity vectors
+            ax2.quiver(x_centers, y_centers, u, v,
+                      scale=200, scale_units='xy', angles='xy', 
+                      color='blue', alpha=0.8, width=0.003)
+
+    ax2.set_xlabel('x (mm)')
+    ax2.set_ylabel('y (mm)')
+    ax2.set_title(f'Velocity field at t = {time[sample_frame]*1000:.2f} ms')
+    ax2.grid(True, alpha=0.3)
+
+    save_cfig(proc_path, 'disp2_velocity_field', test_mode=test_mode)
+
+
+def plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path, test_mode=False):
+    """
+    Plot velocity profiles along the centerline for second pass analysis.
+    
+    Args:
+        vel2 (np.ndarray): Filtered velocities from second pass
+        centres (np.ndarray): Window centres
+        time (np.ndarray): Time array
+        sample_frame (int): Frame index to plot
+        res_avg (float): Average resolution
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 5))
+    
+    # Plot vx vs y
+    y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
+    vx_profile = vel2[sample_frame, :, 0, 1]  # vx at centerline
+    vy_profile = vel2[sample_frame, :, 0, 0]  # vy at centerline
+    
+    ax3a.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
+    ax3a.set_xlabel('vx (m/s)')
+    ax3a.set_ylabel('y (mm)')
+    fig3.suptitle(f'Velocity profiles at t = {time[sample_frame]*1000:.2f} ms')
+    ax3a.grid(True, alpha=0.3)
+    ax3a.set_xlim([-5, 40])  # Set x-limits for vx profile
+    
+    ax3b.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
+    ax3b.set_xlabel('vy (m/s)')
+    ax3b.set_ylabel('y (mm)')
+
+    # Use same scaling as ax3a for consistency
+    ax3b.set_xlim(ax3a.get_xlim())
+
+    ax3b.grid(True, alpha=0.3)
+    
+    save_cfig(proc_path, 'disp2_velocity_profiles', test_mode=test_mode)
+
+
+def plot_second_pass_vy_vx(vel2, proc_path, test_mode=False):
+    """
+    Plot vy vs vx scatter plot for second pass analysis.
+    
+    Args:
+        vel2 (np.ndarray): Filtered velocities from second pass
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    fig4, ax4 = plt.subplots()
+    ax4.scatter(vel2[:, 0, 0, 1], vel2[:, 0, 0, 0], c='blue', s=4)
+    ax4.set_xlabel('vx (m/s)')
+    ax4.set_ylabel('vy (m/s)')
+    save_cfig(proc_path, 'disp2_vy_vx', test_mode=test_mode)
+
+
+def create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_path, test_mode=False):
+    """
+    Create a video of velocity profiles over time.
+    
+    Args:
+        vel2 (np.ndarray): Filtered velocities from second pass
+        centres (np.ndarray): Window centres
+        time (np.ndarray): Time array
+        n_corrs (int): Number of correlation frames
+        res_avg (float): Average resolution
+        proc_path (str): Path to save processed data
+        test_mode (bool): Test mode flag
+    """
+    from matplotlib import animation as ani
+    
+    fig_video, (ax_vx, ax_vy) = plt.subplots(1, 2, figsize=(12, 5))
+    writer = ani.FFMpegWriter(fps=10)
+
+    video_path = os.path.join(proc_path, 'velocity_profiles.mp4')
+    with writer.saving(fig_video, video_path, dpi=150):
+        for i in range(n_corrs):
+            # Clear both axes
+            ax_vx.clear()
+            ax_vy.clear()
+            
+            # Get y positions and velocity profiles for current frame
+            y_positions = centres[:, 0, 0] * res_avg * 1000  # mm
+            vx_profile = vel2[i, :, 0, 1]  # vx at centerline
+            vy_profile = vel2[i, :, 0, 0]  # vy at centerline
+            
+            # Plot vx profile
+            ax_vx.plot(vx_profile, y_positions, 'b-o', markersize=4, label='vx')
+            ax_vx.set_xlabel('vx (m/s)')
+            ax_vx.set_ylabel('y (mm)')
+            ax_vx.grid(True, alpha=0.3)
+            ax_vx.set_xlim([-5, 40])
+            ax_vx.set_ylim([0, 21])
+            
+            # Plot vy profile  
+            ax_vy.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
+            ax_vy.set_xlabel('vy (m/s)')
+            ax_vy.set_ylabel('y (mm)')
+            ax_vy.grid(True, alpha=0.3)
+            ax_vy.set_xlim([-5, 40])
+            ax_vy.set_ylim([0, 21])
+            
+            # Set consistent title
+            fig_video.suptitle(f'Velocity profiles at t = {time[i]*1000:.2f} ms')
+            
+            writer.grab_frame()
+    plt.close(fig_video)
