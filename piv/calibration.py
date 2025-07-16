@@ -114,7 +114,7 @@ if __name__ == "__main__":
     cal_path = os.path.join(current_dir, "calibration", "250624_calibration_PIV_500micron.tif")
 
     # Define calibration parameters
-    cal_spacing = 0.001  # m
+    cal_spacing = 0.0005  # m
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
