@@ -34,6 +34,7 @@ elif user == "sikke":
 
 # Data saving settings
 disp1_var_names = ['time', 'disp1_unf', 'int1_unf', 'n_corrs']
+disp2_var_names = ['disp2', 'disp2_unf', 'int2_unf', 'centres']
 
 # In the current directory, create a folder for processed data
 # named the same as the final part of the data_path
@@ -56,58 +57,39 @@ if bckp1_loaded:
         globals()[var_name] = loaded_vars.get(var_name)
     print("Loaded existing backup data.")
 
-# Filter data
-print("Number of NaNs:", np.sum(np.isnan(disp1_unf)),"/", disp1_unf.size)
-# disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
-disp1 = disp1_unf
-print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
-disp1, int1 = piv.filter_outliers('intensity', disp1, a=int1_unf, b=0.00005)
-print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
+bckp2_loaded, loaded_vars = piv.backup("load", proc_path, "pass2.npz", disp2_var_names)
 
-disp1 = np.expand_dims(disp1, axis=2)
+if bckp2_loaded:
+    # Extract loaded variables using the same names as defined in disp2_var_names
+    for var_name in disp2_var_names:
+        globals()[var_name] = loaded_vars.get(var_name)
+    print("Loaded existing backup data.")
 
-# Apply the filter_neighbours function
-disp1 = piv.filter_neighbours(disp1, thr=0.1, n_nbs=(4, 2, 0))
 
-# Count the number of NaN values in the filtered coordinates
-print("Number of NaNs:", np.sum(np.isnan(disp1)),"/", disp1.size)
+# Plot unfiltered peak intensities vs peak number for both passes
+fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
 
-# %% Plot a single frame
-frame_idx = 500
-frame_coords = disp1[frame_idx, :, :, :]
+# First pass
+axs[0].set_title("First Pass: Unfiltered Peak Intensities vs Peak Number")
+for i in range(int1_unf.shape[0]):  # frames
+    for j in range(int1_unf.shape[1]):  # windows (usually 1)
+        for k in range(int1_unf.shape[2]):  # windows (usually 1)
+            axs[0].plot(range(int1_unf.shape[3]), int1_unf[i, j, k, :], alpha=0.3)
+axs[0].set_ylabel("Intensity")
+axs[0].set_yscale('log')
+axs[0].set_xlabel("Peak Number")
 
-# Create a mask for valid coordinates (not NaN)
-valid_mask = ~np.isnan(frame_coords[:, :, 0])
+# Second pass
+axs[1].set_title("Second Pass: Unfiltered Peak Intensities vs Peak Number")
+for i in range(int2_unf.shape[0]):  # frames
+    for j in range(int2_unf.shape[1]):  # windows rows
+        for k in range(int2_unf.shape[2]):  # windows cols
+            axs[1].plot(range(int2_unf.shape[3]), int2_unf[i, j, k, :], alpha=0.3)
+axs[1].set_ylabel("Intensity")
+axs[1].set_yscale('log')
+axs[1].set_xlabel("Peak Number")
 
-# Get valid and invalid coordinates
-valid_coords = frame_coords[valid_mask]
-invalid_coords = frame_coords[~valid_mask]
-
-# Create the plot
-fig, ax = plt.subplots(figsize=(10, 8))
-
-# Plot valid coordinates in blue
-if len(valid_coords) > 0:
-    ax.scatter(valid_coords[:, 1], valid_coords[:, 0], 
-              c='blue', s=30, alpha=0.7, label=f'Valid ({len(valid_coords)})')
-
-# Plot invalid coordinates in red (just the positions where they would be)
-invalid_y, invalid_x = np.where(~valid_mask)
-if len(invalid_y) > 0:
-    ax.scatter(invalid_x, invalid_y, 
-              c='red', s=30, alpha=0.7, marker='x', 
-              label=f'Invalid ({len(invalid_y)})')
-
-ax.set_xlabel('X coordinate')
-ax.set_ylabel('Y coordinate')
-ax.set_title(f'Coordinate filtering results for frame {frame_idx}')
-ax.legend()
-ax.grid(True, alpha=0.3)
 plt.tight_layout()
+
+# Finally, show all figures
 plt.show()
-
-print(f"Frame {frame_idx}: {len(valid_coords)} valid, {len(invalid_y)} invalid coordinates")
-
-# disp1 = piv.strip_peaks(disp1, axis=-2)  # Strip peaks with NaN values
-
-# %%

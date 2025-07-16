@@ -778,7 +778,7 @@ def create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_p
     fig_video, (ax_vx, ax_vy) = plt.subplots(1, 2, figsize=(12, 5))
     writer = ani.FFMpegWriter(fps=10)
 
-    video_path = os.path.join(proc_path, 'velocity_profiles.mp4')
+    video_path = os.path.join(proc_path, 'disp2.mp4')
     with writer.saving(fig_video, video_path, dpi=150):
         for i in range(n_corrs):
             # Clear both axes
@@ -811,3 +811,4 @@ def create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_p
             
             writer.grab_frame()
     plt.close(fig_video)
+    print(f"Figure saved to {video_path}")

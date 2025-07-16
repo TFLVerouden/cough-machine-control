@@ -10,17 +10,17 @@ import piv_functions as piv
 
 
 # Set experimental parameters
-test_mode = True
+test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(3000, 3100)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(1500, 1600)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
-v_max = [10, 50]  # [m/s]
+v_max = [5, 45]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
 n_wins1 = (1, 1)
-n_peaks2 = 5
+n_peaks2 = 10
 n_wins2 = (8, 1)  # Number of windows in second pass (rows, cols)
 
 # File handling
@@ -35,6 +35,7 @@ elif user == "sikke":
 
 # Data saving settings
 disp1_var_names = ['time', 'disp1', 'disp1_unf', 'disp1_spl', 'int1_unf', 'n_corrs']
+disp2_var_names = ['disp2', 'disp2_unf', 'int2_unf', 'centres']
 
 # In the current directory, create a folder for processed data
 # named the same as the final part of the data_path
@@ -91,8 +92,7 @@ if not bckp1_loaded:
         #  (i.e. blacking out pixels or something)
 
         # Find peaks in the correlation map
-        peaks, int1_unf[i, 0, 0, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1,
-                                        min_distance=5)
+        peaks, int1_unf[i, 0, 0, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1, min_distance=5)
 
         # Calculate displacements for all peaks
         disp1_unf[i, 0, 0, :, :] = (
@@ -103,10 +103,9 @@ if not bckp1_loaded:
 
 # Outlier removal
 disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
-disp1 = piv.strip_peaks(disp1, axis=-2)
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
+disp1 = piv.strip_peaks(disp1, axis=-2)
 
-# TODO: filter_neighbours could also consider unstripped peaks?
 disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(20, 0, 0))
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
 
@@ -136,11 +135,7 @@ piv.plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode)
 # Plot all velocities vy(vx)
 piv.plot_first_pass_vy_vx(vel1, proc_path, test_mode)
 
-
 # SECOND PASS: Split image into windows and correlate ==========================
-
-# Data saving settings for second pass
-disp2_var_names = ['disp2', 'disp2_unf', 'int2_unf', 'centres']
 
 # Try to load existing backup data
 bckp2_loaded, loaded_vars2 = piv.backup("load", proc_path, "pass2.npz", disp2_var_names, test_mode)
@@ -183,8 +178,7 @@ if not bckp2_loaded:
                 #  (i.e. blacking out pixels or something)
 
                 # Find peaks in the correlation maps
-                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2,
-                                                min_distance=3)
+                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2, min_distance=3)
 
                 # Calculate displacements for all peaks
                 disp2_unf[i, j, k, :, :] = (disp1_spl[i, 0, 0, :] + peaks
@@ -199,7 +193,7 @@ disp2 = piv.strip_peaks(disp2, axis=-2)
 print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
             
 # TODO: filtering neighbours
-disp2 = piv.filter_neighbours(disp2, thr=100, n_nbs=(2, 2, 0))
+disp2 = piv.filter_neighbours(disp2, thr=3, n_nbs=(6, 4, 0))
 print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
 
 # Save the displacements to a backup file
@@ -213,22 +207,21 @@ vel2 = disp2 * res_avg / dt
 # Plot velocity field for a sample frame
 sample_frame = min(50, n_corrs - 1) if not test_mode else min(10, n_corrs - 1)
 
-# Create a figure for velocity vectors
-piv.plot_velocity_field(vel2_unf, vel2, centres, time, sample_frame, n_peaks2, res_avg, proc_path, test_mode)
+# # Create a figure for velocity vectors
+# piv.plot_velocity_field(vel2_unf, vel2, centres, time, sample_frame, n_peaks2, res_avg, proc_path, test_mode)
 
-# Plot velocity profiles along the centerline
-if centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
-    piv.plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path, test_mode)
+# # Plot velocity profiles along the centerline
+# if centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
+#     piv.plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path, test_mode)
 
 # Plot all velocities vy(vx)
 piv.plot_second_pass_vy_vx(vel2, proc_path, test_mode)
-
 
 # Set up video writer for velocity profiles
 if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
     piv.create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_path, test_mode)
 
-# TODO: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, max 3 params)
+# TODO: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 
 # Finally, show all figures
 plt.show()
