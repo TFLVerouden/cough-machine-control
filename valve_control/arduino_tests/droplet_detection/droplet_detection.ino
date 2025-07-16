@@ -10,7 +10,7 @@ const float R1 = 6710.0; // Ohm
 const float R2 = 3260.0; // Ohm
 
 // Threshold and timeout
-const float THRESHOLD = 2.5;     // Voltage threshold (V)
+const float THRESHOLD = 3;     // Voltage threshold (V)
 const unsigned long TIMEOUT = 20000; // Max measurement time in ms (20 seconds)
 
 // State variables
@@ -97,6 +97,23 @@ void loop() {
   if (streaming) {
     Serial.println(signalVoltage, 3);
     delay(10); // Optional: limit output speed
+
+    // Falling edge: signal drops below threshold
+    if (!belowThreshold && signalVoltage < THRESHOLD) {
+      Serial.print("DROPLET!!");
+      strip.setPixelColor(0, 0, 255, 0);
+      strip.show();
+      belowThreshold = true;
+    }
+
+    // Rising edge: signal rises back above or equal to threshold
+    else if (belowThreshold && signalVoltage >= THRESHOLD) {
+      Serial.println("...and it's gone.");
+      strip.setPixelColor(0, 255, 0, 0);
+      strip.show();
+      belowThreshold = false;
+    }
+
     return;
   }
 
@@ -117,7 +134,7 @@ void loop() {
 
     // Falling edge: signal drops below threshold
     if (!belowThreshold && signalVoltage < THRESHOLD) {
-      Serial.println("DROPLET!!");
+      Serial.print("DROPLET!!");
       strip.setPixelColor(0, 0, 255, 0);
       strip.show();
       belowThreshold = true;
