@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 
+
 cwd = os.path.abspath(os.path.dirname(__file__))
 
 parent_dir = os.path.dirname(cwd)
@@ -23,6 +24,47 @@ from Ximea import Ximea
 
 
 ####Finished loading Modules
+def split_array_by_header_marker(arr, marker='Date-Time'):
+    arr = np.array(arr)
+    header = arr[:,0]
+    rows = arr[:,1:]
+
+    # Find indices where header has the marker
+    split_indices = [i for i, val in enumerate(header) if val == marker]
+    split_indices.append(len(header))  # include end boundary
+
+    result = []
+    for i in range(len(split_indices) - 1):
+        start = split_indices[i]
+        end = split_indices[i+1]
+        section = arr[start:end]
+        result.append(section)
+
+    return result
+
+def Spraytec_data_saved_check():
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_path = os.path.dirname(current_dir)  # one level up
+    spraytec_path = os.path.join(parent_path,"spraytec")
+    path = os.path.join(spraytec_path,"auto_export_test.txt")
+    save_path = os.path.join(spraytec_path, "individual_data_files")
+    file = np.loadtxt(path,dtype=str,delimiter=',')
+    split_sections = split_array_by_header_marker(file)
+    last_file = split_sections[-1]
+    time_created= last_file[1,0]
+    dt = datetime.datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
+    # Format as YYYY_MM_DD_HH_MM
+    file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
+    save_path = os.path.join(save_path,file_name_time + ".txt")
+    if not os.path.exists(save_path):
+        np.savetxt(save_path,last_file,fmt='%s',delimiter=',')
+        print(f"Saved spraytec_data of {file_name_time}")
+
+    
+
+
+
 
 def find_serial_device(description, continue_on_error=False):
     ports = list(serial.tools.list_ports.comports())
@@ -88,6 +130,8 @@ class SprayTecLift(serial.Serial):
 
 
 if __name__ == '__main__':
+
+    Spraytec_data_saved_check()
     # Create the data directory if it doesn't exist
     data_dir = 'data'
     if not os.path.exists(data_dir):
@@ -117,7 +161,7 @@ if __name__ == '__main__':
                         or experiment_name_default)
 
     # Get the duration of the valve opening
-    duration_ms_default = 50
+    duration_ms_default = 80
     duration_ms = int(input(f'Enter valve opening duration (press ENTER for '
                             f'{duration_ms_default} ms): ').strip()
                       or duration_ms_default)
