@@ -30,9 +30,10 @@ print("You picked:", file)
 #From here we read the data
 df = pd.read_table(file,delimiter=",")
 df = df.replace('-', 0)
+print(df.loc[0,"Date-Time"])
 for col in df.columns:
     # Try converting each column to numeric, coercing errors to NaN
-    df[col] = pd.to_numeric(df[col], errors='coerce')
+    df[col] = pd.to_numeric(df[col], errors='ignore')
 important_columns= ["Date-Time","Transmission", "Duration","Time (relative)"]
 
 columns_scattervalues = df.loc[:,"0.10000020":"1000.00195313"].columns.tolist()
@@ -43,10 +44,13 @@ df_filtered= df.loc[:,important_columns]
 ####TEST
 
 #time depended variables
-percentages = df_filtered.loc[0,columns_scattervalues]
-t_start = df_filtered.loc[0,"Time (relative)"]
-t_end = t_start + df_filtered.loc[0,"Duration"]
-transmission = df_filtered.loc[0,"Transmission"]
+time_chosen = 1
+
+date= df_filtered.loc[time_chosen,"Date-Time"]
+percentages = df_filtered.loc[time_chosen,columns_scattervalues]
+t_start = df_filtered.loc[time_chosen,"Time (relative)"]
+t_end = t_start + df_filtered.loc[time_chosen,"Duration"]
+transmission = df_filtered.loc[time_chosen,"Transmission"]
 
 ###Extracting
 bin_centers = np.array(columns_scattervalues,dtype=float)
@@ -64,16 +68,34 @@ bin_widths = np.diff(bin_edges)
 
 #plotting
 
+### VOLUME PERCENTAGES
 
 plt.figure()
 plt.bar(bin_edges[:-1], percentages, width=bin_widths, align='edge', edgecolor='black')
 
 # Add labels
 plt.xlabel(r"Diameter ($\mu$m)")
-plt.ylabel("Number Percentage (%)")
-plt.title(f"Particle distribution, t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
+plt.ylabel("Volume Percentage (%)")
+plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
 plt.xscale('log')
-plt.grid()
+plt.grid(which='both', linestyle='--', linewidth=0.5)
+plt.ylim(0,40)
+plt.xlim(bin_edges[0],bin_edges[-1])
+plt.show()
+
+
+#NUMBER PERCENTAGES
+n_percentages = percentages/ (bin_centers*1E-6)**3
+n_percentages  = n_percentages/ sum(n_percentages)*100
+plt.figure()
+plt.bar(bin_edges[:-1], n_percentages, width=bin_widths, align='edge', edgecolor='black')
+
+# Add labels
+plt.xlabel(r"Diameter ($\mu$m)")
+plt.ylabel("Number Percentage (%)")
+plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
+plt.xscale('log')
+plt.grid(which='both', linestyle='--', linewidth=0.5)
 plt.ylim(0,40)
 plt.xlim(bin_edges[0],bin_edges[-1])
 plt.show()
