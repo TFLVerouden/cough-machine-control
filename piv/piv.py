@@ -10,9 +10,9 @@ import piv_functions as piv
 
 
 # Set experimental parameters
-test_mode = False
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(1500, 1600)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(1500, 1550)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
@@ -106,7 +106,7 @@ disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1]
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
 disp1 = piv.strip_peaks(disp1, axis=-2)
 
-disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(20, 0, 0))
+# disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(40, 0, 0))
 print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
 
 # Define time arrays beforehand
@@ -127,13 +127,13 @@ vel1 = disp1 * res_avg / dt
 vel1x_spl = disp1_spl[:, 0, 0, 1] * res_avg / dt
 
 # Scatter plot vx(t)
-piv.plot_first_pass_vx(time, vel1_unf, vel1, vel1x_spl, n_peaks1, proc_path, test_mode)
+# piv.plot_first_pass_vx(time, vel1_unf, vel1, vel1x_spl, n_peaks1, proc_path, test_mode)
 
 # Scatter plot vy(t)
-piv.plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode)
+# piv.plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode)
 
 # Plot all velocities vy(vx)
-piv.plot_first_pass_vy_vx(vel1, proc_path, test_mode)
+# piv.plot_first_pass_vy_vx(vel1, proc_path, test_mode)
 
 # SECOND PASS: Split image into windows and correlate ==========================
 
@@ -191,31 +191,34 @@ if not bckp2_loaded:
 disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1])
 disp2 = piv.strip_peaks(disp2, axis=-2)
 print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
-            
-# TODO: filtering neighbours
-disp2 = piv.filter_neighbours(disp2, thr=3, n_nbs=(6, 4, 0))
-print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
 
-# Save the displacements to a backup file
-piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
-           disp2=disp2, disp2_unf=disp2_unf, int2_unf=int2_unf, centres=centres)
+disp2_nbs = disp2.copy()
+
+# TODO: filtering neighbours
+disp2_nbs = piv.filter_neighbours(disp2_nbs, thr=1, n_nbs=(0, "all", 0), verbose=True)
+print(f"Number of NaNs: {np.sum(np.isnan(disp2_nbs))}/{np.size(disp2_nbs)}")
+
+# # Save the displacements to a backup file
+# piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
+#            disp2=disp2, disp2_unf=disp2_unf, int2_unf=int2_unf, centres=centres)
 
 # Calculate velocities for plots
 vel2_unf = disp2_unf * res_avg / dt
 vel2 = disp2 * res_avg / dt
+vel2_nbs = disp2_nbs * res_avg / dt
 
-# Plot velocity field for a sample frame
-sample_frame = min(50, n_corrs - 1) if not test_mode else min(10, n_corrs - 1)
+# Plot the velocity profiles for the first five frames
+for sample_frame in range(10,15):
+    # Plot velocity profiles
+    piv.plot_velocity_profiles(vel2, centres, time, sample_frame=sample_frame,
+                                res_avg=res_avg, proc_path=proc_path,
+                                test_mode=test_mode)
+    piv.plot_velocity_profiles(vel2_nbs, centres, time, sample_frame=sample_frame,
+                              res_avg=res_avg, proc_path=proc_path,
+                              test_mode=test_mode)
 
-# # Create a figure for velocity vectors
-# piv.plot_velocity_field(vel2_unf, vel2, centres, time, sample_frame, n_peaks2, res_avg, proc_path, test_mode)
-
-# # Plot velocity profiles along the centerline
-# if centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
-#     piv.plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path, test_mode)
-
-# Plot all velocities vy(vx)
-piv.plot_second_pass_vy_vx(vel2, proc_path, test_mode)
+# # Plot all velocities vy(vx)
+# piv.plot_second_pass_vy_vx(vel2, proc_path, test_mode)
 
 # Set up video writer for velocity profiles
 if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays

@@ -339,10 +339,10 @@ def cart2polar(coords):
     Convert Cartesian coordinates to polar coordinates.
 
     Args:
-        coords (np.ndarray): ND array of shape (..., 2) with (y, x) coordinates.
+        coords (np.ndarray): ND array of shape (..., 2) with (y, x) coordinates
 
     Returns:
-        np.ndarray: ND array of shape (n_corrs, 2) with (r, phi) coordinates.
+        np.ndarray: ND array of shape (..., 2) with (r, phi) coordinates
     """
     # Calculate the magnitude and angle
     r = np.sqrt(coords[..., 0] ** 2 + coords[..., 1] ** 2)
@@ -353,34 +353,67 @@ def cart2polar(coords):
     return polar_coords
 
 
-def filter_neighbours(coords, thr=1, n_nbs=2):
+def validate_n_nbs(n_nbs, max_shape=None):
+    """
+    Validate and process n_nbs parameter for filter_neighbours function.
+    
+    Args:
+        n_nbs (int, str, or tuple): Number of neighbours specification
+            - int: Number of neighbours in each dimension (must be even).
+            - str: "all" to use the full dimension length.
+            - tuple: Three values specifying neighbours in each dimension.
+        max (tuple): Shape of the dimensions to use if n_nbs is "all"
+
+    Returns:
+        tuple: Processed n_nbs values
+    """
+
+    # Convert to list
+    if isinstance(n_nbs, (int, str)):
+        n_nbs = [n_nbs, n_nbs, n_nbs]
+    elif isinstance(n_nbs, tuple):
+        n_nbs = list(n_nbs)
+    else:
+        raise ValueError("n_nbs must be integer, 'all', or a tuple of three values (int or 'all').")
+    
+    # Process each dimension
+    for i, n in enumerate(n_nbs):
+        if n == "all":
+            # Use dimension length (make it even if necessary)
+            n_nbs[i] = max_shape[i] - 2 if max_shape[i] % 2 == 0 else max_shape[i] - 1
+        elif isinstance(n, int):
+            if n % 2 != 0:
+                raise ValueError(f"n_nbs must be even in each dimension. Got {n} for dimension {i}.")
+        else:
+            raise ValueError(f"Each element of n_nbs must be an integer or 'all'. Got {n} for dimension {i}.")
+    
+    return tuple(n_nbs)
+
+
+def filter_neighbours(coords, thr=1, n_nbs=2, replace=False, verbose=False):
     """
     Filter out coordinates that are too different from their neighbours.
 
     Args:
         coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
         thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
-        nr_neighbours (int): Number of neighbours in each dimension to consider for filtering.
+        n_nbs (int, str, or tuple): Number of neighbours in each dimension to consider for filtering.
+                                   Can be an integer, "all", or a tuple of three values (int or "all").
+        replace (bool): Replace outliers and pre-existing NaN values with the median of neighbours.
+        verbose (bool): If True, print additional information during processing.
 
     Returns:
-        np.ndarray: Filtered coordinates with invalid points set to NaN.
+        np.ndarray: Filtered coordinates with invalid points set to NaN or replaced with median.
     """
 
-    # Number of neighbours can be specified in each dimension and must be even
-    if isinstance(n_nbs, int):
-        n_nbs = (n_nbs, n_nbs, n_nbs)
-    elif isinstance(n_nbs, tuple) and len(n_nbs) == 3:
-        n_nbs = n_nbs
-    else:
-        raise ValueError("n_nbs must be integer or a tuple of three integers.")
-    if any(n % 2 != 0 for n in n_nbs):
-        raise ValueError("n_nbs must be even in each dimension.")
+    # Get dimensions and validate n_nbs
+    n_corrs, n_wins_y, n_wins_x, _ = coords.shape
+    n_nbs = validate_n_nbs(n_nbs, (n_corrs, n_wins_y, n_wins_x))
 
     # Create a copy for output
     coords_output = coords.copy()
     
     # Get a sliding window view of the input coordinates
-    n_corrs, n_wins_y, n_wins_x, _ = coords.shape
     nbs = np.lib.stride_tricks.sliding_window_view(coords,
     (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
 
@@ -389,29 +422,39 @@ def filter_neighbours(coords, thr=1, n_nbs=2):
         for j in range(n_wins_y):
             for k in range(n_wins_x):
                 # Edge handling: clamp to valid sliding window range
-                i_nbs = np.clip(i, n_nbs[0], n_corrs - n_nbs[0] - 1) - n_nbs[0]
-                j_nbs = np.clip(j, n_nbs[1], n_wins_y - n_nbs[1] - 1) - n_nbs[1]
-                k_nbs = np.clip(k, n_nbs[2], n_wins_x - n_nbs[2] - 1) - n_nbs[2]
+                i_nbs = np.clip(i, n_nbs[0]//2, n_corrs - n_nbs[0]//2 - 1) - n_nbs[0]//2
+                j_nbs = np.clip(j, n_nbs[1]//2, n_wins_y - n_nbs[1]//2 - 1) - n_nbs[1]//2
+                k_nbs = np.clip(k, n_nbs[2]//2, n_wins_x - n_nbs[2]//2 - 1) - n_nbs[2]//2
 
-                # Skip if the coordinate is already NaN in the input
-                if np.any(np.isnan(coords[i, j, k, :])):
-                    # print(f"Skipping coordinate ({i}, j}, {k}) as it is NaN.")
-                    continue
-                
-                # Need minimum number of neighbors for reliable statistics
-                # min_neighbors = 3
-                # if len(valid_neighbors) < min_neighbors:
-                #     # print(f"Skipping coordinate ({i}, {j}, {k}): only {len(valid_neighbors)} valid neighbors (need >= {min_neighbors})")
-                #     continue
-                
-                # Calculate the median and standard deviation
-                med = np.median(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                # Calculate the median and standard deviation first
+                med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
                 std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
-                # print(f"Processing coordinate ({i}, {j}, {k}): median={med}, std={std}, n_neighbors={len(valid_neighbors)}")
 
-                # Check if the current coordinate is within the threshold
-                if not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std):
-                    # print(f"(Filtered out: {coords_input[i, j, k, 0]}, {coords_input[i, j, k, 1]} not within {thr} std from median {med})")
+                # TODO: make all below more compact
+                # Check if the coordinate is already NaN in the input
+                is_nan = np.any(np.isnan(coords[i, j, k, :]))
+                
+                # Check if the current coordinate is within the threshold (only for non-NaN values)
+                # TODO: different modes based on x and y coordinate or vector length?
+                is_outlier = False
+                if not is_nan:
+                    is_outlier = not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std)
+                
+                # If verbose, print the status of the coordinate
+                if verbose:
+                    if is_nan:
+                        print(f"Coordinate ({i}, {j}, {k}) is NaN, skipping.")
+                    elif is_outlier:
+                        print(f"Coordinate ({i}, {j}, {k}) is an outlier: "
+                              f"{coords[i, j, k, :]} (med: {med}, std: {std}).")
+                    else:
+                        print(f"Coordinate ({i}, {j}, {k}) is valid: "
+                              f"{coords[i, j, k, :]}.")
+
+                # Apply replacement or filtering logic
+                if replace and (is_nan or is_outlier):
+                    coords_output[i, j, k, :] = med
+                elif not replace and is_outlier:
                     coords_output[i, j, k, :] = (np.nan, np.nan)
   
 
@@ -456,10 +499,6 @@ def strip_peaks(coords, axis=-2):
     coords = np.apply_along_axis(first_valid, axis, coords)
     return coords
 
-
-def replace_nans():
-    """Function to replace NaN values with weighted average of neighbours (merge with strip_peaks?)"""
-    return
 
 def smooth(time, disps, col='both', lam=5e-7, type=int):
     """
@@ -731,6 +770,7 @@ def plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path
     fig3.suptitle(f'Velocity profiles at t = {time[sample_frame]*1000:.2f} ms')
     ax3a.grid(True, alpha=0.3)
     ax3a.set_xlim([-5, 40])  # Set x-limits for vx profile
+    ax3a.set_ylim([0, 21])  # Set y-limits for consistency
     
     ax3b.plot(vy_profile, y_positions, 'r-o', markersize=4, label='vy')
     ax3b.set_xlabel('vy (m/s)')
@@ -738,6 +778,7 @@ def plot_velocity_profiles(vel2, centres, time, sample_frame, res_avg, proc_path
 
     # Use same scaling as ax3a for consistency
     ax3b.set_xlim(ax3a.get_xlim())
+    ax3b.set_ylim(ax3a.get_ylim())
 
     ax3b.grid(True, alpha=0.3)
     
