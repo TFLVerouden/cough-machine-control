@@ -390,15 +390,19 @@ def validate_n_nbs(n_nbs, max_shape=None):
     return tuple(n_nbs)
 
 
-def filter_neighbours(coords, thr=1, n_nbs=2, replace=False, verbose=False):
+def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=False):
     """
     Filter out coordinates that are too different from their neighbours.
 
     Args:
         coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
         thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
-        n_nbs (int, str, or tuple): Number of neighbours in each dimension to consider for filtering.
-                                   Can be an integer, "all", or a tuple of three values (int or "all").
+        n_nbs (int, str, or tuple): Number of neighbours in each dimension to consider for filtering. Can be an integer, "all", or a tuple of three values (int or "all").
+        mode (str): Which coordinates should be within std*thr from the median:
+            - "x": Compare x coordinates only
+            - "y": Compare y coordinates only
+            - "xy": Compare both x and y coordinates
+            - "r": Compare vector lengths only
         replace (bool): Replace outliers and pre-existing NaN values with the median of neighbours.
         verbose (bool): If True, print additional information during processing.
 
@@ -413,14 +417,16 @@ def filter_neighbours(coords, thr=1, n_nbs=2, replace=False, verbose=False):
     # Create a copy for output
     coords_output = coords.copy()
     
-    # Get a sliding window view of the input coordinates
+    # Get a set of sliding windows around each coordinate
+    # Note this function is slow
     nbs = np.lib.stride_tricks.sliding_window_view(coords,
     (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
 
-    # Iterate over each coordinate, first spatially, then temporally
+    # Iterate over each coordinate
     for i in range(n_corrs):
         for j in range(n_wins_y):
             for k in range(n_wins_x):
+                
                 # Edge handling: clamp to valid sliding window range
                 i_nbs = np.clip(i, n_nbs[0]//2, n_corrs - n_nbs[0]//2 - 1) - n_nbs[0]//2
                 j_nbs = np.clip(j, n_nbs[1]//2, n_wins_y - n_nbs[1]//2 - 1) - n_nbs[1]//2
@@ -434,11 +440,23 @@ def filter_neighbours(coords, thr=1, n_nbs=2, replace=False, verbose=False):
                 # Check if the coordinate is already NaN in the input
                 is_nan = np.any(np.isnan(coords[i, j, k, :]))
                 
-                # Check if the current coordinate is within the threshold (only for non-NaN values)
-                # TODO: different modes based on x and y coordinate or vector length?
-                is_outlier = False
+                # Else, check if the current coordinate is within the threshold
                 if not is_nan:
-                    is_outlier = not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std)
+                    if mode == "x":
+                        is_outlier = not np.abs(coords[i, j, k, 1] - med[1]) <= thr * std[1]
+                    elif mode == "y":
+                        is_outlier = not np.abs(coords[i, j, k, 0] - med[0]) <= thr * std[1]
+                    elif mode == "xy":
+                        is_outlier = not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std)
+                    elif mode == "r":
+                        # Calculate the vector length and compare
+                        vec_length = np.sqrt(coords[i, j, k, 0] ** 2 + coords[i, j, k, 1] ** 2)
+                        med_length = np.sqrt(med[0] ** 2 + med[1] ** 2)
+                        is_outlier = not np.abs(vec_length - med_length) <= thr * std.mean()
+                    else:
+                        raise ValueError(f"Unknown mode: {mode}. Use 'x', 'y', 'xy', or 'r'.")
+                else:
+                    is_outlier = False
                 
                 # If verbose, print the status of the coordinate
                 if verbose:
