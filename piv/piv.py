@@ -1,5 +1,6 @@
 import getpass
 import os
+import sys
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -8,11 +9,18 @@ from tqdm import trange, tqdm
 
 import piv_functions as piv
 
+# Add the functions directory to the path and import CVD check
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'functions'))
+import cvd_check as cvd
+
+# Set CVD-friendly colors
+cvd.set_cvd_friendly_colors()
+
 
 # Set experimental parameters
-test_mode = True
+test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(1500, 1550)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(600, 1000)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s] 
 
 # Data processing settings
@@ -102,19 +110,17 @@ if not bckp1_loaded:
     disp1 = disp1_unf.copy()
 
 # Outlier removal
-disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1])
-print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
+disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1], verbose=True)
 disp1 = piv.strip_peaks(disp1, axis=-2)
-
-# disp1 = piv.filter_neighbours(disp1, thr=1, n_nbs=(40, 0, 0))
-print(f"Number of NaNs: {np.sum(np.isnan(disp1))}/{np.size(disp1)}")
+print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
+disp1_nbs = piv.filter_neighbours(disp1.copy(), thr=1, n_nbs=(40, 0, 0), verbose=True)
 
 # Define time arrays beforehand
 time = np.linspace((frame_nrs[0] - 1) * dt,
                     (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
 # Smooth the x displacement in time
-disp1_spl = piv.smooth(time, disp1.copy(), lam=5e-7, type=int)
+disp1_spl = piv.smooth(time, disp1_nbs.copy(), lam=5e-7, type=int)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
@@ -124,16 +130,27 @@ piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
 # Calculate velocities for plot
 vel1_unf = disp1_unf * res_avg / dt
 vel1 = disp1 * res_avg / dt
+vel1_nbs = disp1_nbs * res_avg / dt
 vel1x_spl = disp1_spl[:, 0, 0, 1] * res_avg / dt
 
 # Scatter plot vx(t)
-# piv.plot_first_pass_vx(time, vel1_unf, vel1, vel1x_spl, n_peaks1, proc_path, test_mode)
+fig, ax = plt.subplots(figsize=(10, 6))
+ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks1)).flatten(),
+           vel1_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='Unfiltered vx')
+ax.plot(1000 * time, vel1[:, 0, 0, 1], 'o', ms=4, c=cvd.get_color(1),
+           label='Filtered globally')
+ax.plot(1000 * time, vel1_nbs[:, 0, 0, 1], 'o', mfc='none', ms=4, c='black', label='Filtered neighbours')
+ax.plot(1000 * time, vel1x_spl, c=cvd.get_color(1), label='Displacement to be used\n in 2nd pass (smoothed)')
 
-# Scatter plot vy(t)
-# piv.plot_first_pass_vy(time, vel1_unf, vel1, n_peaks1, proc_path, test_mode)
+ax.set_ylim(v_max[0] * -1.1, v_max[1] * 1.1)
+ax.set_xlabel('Time (ms)')
+ax.set_ylabel('Velocity (m/s)')
+ax.set_title('First pass summary')
+ax.legend()
+ax.grid()
 
-# Plot all velocities vy(vx)
-# piv.plot_first_pass_vy_vx(vel1, proc_path, test_mode)
+piv.save_cfig(proc_path, "disp1", test_mode=test_mode)
+
 
 # SECOND PASS: Split image into windows and correlate ==========================
 
@@ -174,11 +191,11 @@ if not bckp2_loaded:
                 corr_map = sig.correlate(wnd1[j, k], wnd0[j, k],
                                          method='fft', mode='same')
 
-                # TODO: Any processing of the correlation map should happen here
+                # TODO: Any processing of the correlation map could happen here
                 #  (i.e. blacking out pixels or something)
 
                 # Find peaks in the correlation maps
-                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2, min_distance=3)
+                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2, floor=10, min_distance=3)
 
                 # Calculate displacements for all peaks
                 disp2_unf[i, j, k, :, :] = (disp1_spl[i, 0, 0, :] + peaks
@@ -188,41 +205,115 @@ if not bckp2_loaded:
     disp2 = disp2_unf.copy()
 
 # Basic global outlier removal of unreasonable displacements
-disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1])
+disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1], verbose=True)
 disp2 = piv.strip_peaks(disp2, axis=-2)
-print(f"Number of NaNs: {np.sum(np.isnan(disp2))}/{np.size(disp2)}")
+print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
 
-disp2_nbs = disp2.copy()
+# Neighbour filtering
+disp2_nbs = piv.filter_neighbours(disp2.copy(), thr=4, n_nbs=(20, 2, 0), verbose=True, mode='r')
 
-# TODO: filtering neighbours
-disp2_nbs = piv.filter_neighbours(disp2_nbs, thr=1, n_nbs=(0, "all", 0), verbose=True)
-print(f"Number of NaNs: {np.sum(np.isnan(disp2_nbs))}/{np.size(disp2_nbs)}")
-
-# # Save the displacements to a backup file
-# piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
-#            disp2=disp2, disp2_unf=disp2_unf, int2_unf=int2_unf, centres=centres)
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
+           disp2=disp2, disp2_unf=disp2_unf, int2_unf=int2_unf, centres=centres)
 
 # Calculate velocities for plots
 vel2_unf = disp2_unf * res_avg / dt
 vel2 = disp2 * res_avg / dt
 vel2_nbs = disp2_nbs * res_avg / dt
 
-# Plot the velocity profiles for the first five frames
-for sample_frame in range(10,15):
-    # Plot velocity profiles
-    piv.plot_velocity_profiles(vel2, centres, time, sample_frame=sample_frame,
-                                res_avg=res_avg, proc_path=proc_path,
-                                test_mode=test_mode)
-    piv.plot_velocity_profiles(vel2_nbs, centres, time, sample_frame=sample_frame,
-                              res_avg=res_avg, proc_path=proc_path,
-                              test_mode=test_mode)
+# # Plot the velocity profiles for randomly selected frames
+# np.random.seed(42)  # For reproducible results
+# sample_frames = np.random.choice(n_corrs, size=min(10, n_corrs), replace=False)
+# sample_frames = np.sort(sample_frames)  # Sort for better organization
 
-# # Plot all velocities vy(vx)
-# piv.plot_second_pass_vy_vx(vel2, proc_path, test_mode)
+# for sample_frame in sample_frames:
+#     fig0, ax0 = plt.subplots(figsize=(10, 6))
 
-# Set up video writer for velocity profiles
-if not test_mode and centres is not None and n_wins2[1] == 1:  # Only for 1D window arrays
-    piv.create_velocity_profiles_video(vel2, centres, time, n_corrs, res_avg, proc_path, test_mode)
+#     y_pos = centres[:, 0, 0] * res_avg * 1000
+#     vx2 = vel2[sample_frame, :, 0, 1]
+#     vx2_nbs = vel2_nbs[sample_frame, :, 0, 1]
+#     vy2 = vel2[sample_frame, :, 0, 0]
+#     vy2_nbs = vel2_nbs[sample_frame, :, 0, 0]
+
+#     ax0.plot(vx2, y_pos, '-o', c=cvd.get_color(1), label='vx (filtered)')
+#     ax0.plot(vx2_nbs, y_pos, 'o', mfc='none', c='black', label='vx (filtered neighbours)')
+#     ax0.plot(vy2, y_pos, '-o', c=cvd.get_color(0), label='vy (filtered)')
+#     ax0.plot(vy2_nbs, y_pos, 'o', mfc='none', c='black', label='vy (filtered neighbours)')
+
+#     ax0.set_xlabel('Velocity (m/s)')
+#     ax0.set_ylabel('y position (mm)')
+#     # ax0.set_yticklabels([])
+
+#     ax0.legend()
+#     ax0.grid()
+
+#     ax0.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
+#     ax0.set_title(f'Velocity profiles at frame {sample_frame + 1} ({time[sample_frame] * 1000:.2f} ms)')
+
+
+# Plot the median velocity in time, show the min and max as a shaded area - Regular filtering
+fig1, ax1 = plt.subplots(figsize=(10, 6))
+
+# Plot vy (vertical velocity)
+ax1.plot(time * 1000, np.nanmean(vel2[:, :, :, 0], axis=(1, 2)), label='Mean vy')
+ax1.fill_between(time * 1000,
+                 np.nanmin(vel2[:, :, :, 0], axis=(1, 2)),
+                 np.nanmax(vel2[:, :, :, 0], axis=(1, 2)),
+                 alpha=0.3, label='Min/Max vy')
+
+# Plot vx (horizontal velocity)
+ax1.plot(time * 1000, np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Mean vx')
+ax1.fill_between(time * 1000,
+                 np.nanmin(vel2[:, :, :, 1], axis=(1, 2)),
+                 np.nanmax(vel2[:, :, :, 1], axis=(1, 2)),
+                 alpha=0.3, label='Min/Max vx')
+ax1.set_ylim(v_max[0] * -1.1, v_max[1] * 1.1)
+
+ax1.set_xlabel('Time (ms)')
+ax1.set_ylabel('Velocity (m/s)')
+ax1.set_title('Second pass (after global filter)')
+ax1.legend()
+ax1.grid()
+
+piv.save_cfig(proc_path, "disp2_med",  test_mode=test_mode)
+
+# Set up video writer for velocity profiles - based on random samples plotting style
+if not test_mode:
+    from matplotlib import animation as ani
+    
+    fig_video, ax_video = plt.subplots(figsize=(10, 6))
+    writer = ani.FFMpegWriter(fps=10)
+
+    video_path = os.path.join(proc_path, 'pass2.mp4')
+    with writer.saving(fig_video, video_path, dpi=150):
+        for i in range(n_corrs):
+            # Clear the axis
+            ax_video.clear()
+            
+            # Get data for current frame (same as random samples code)
+            y_pos = centres[:, 0, 0] * res_avg * 1000
+            vx2 = vel2[i, :, 0, 1]
+            vx2_nbs = vel2_nbs[i, :, 0, 1]
+            vy2 = vel2[i, :, 0, 0]
+            vy2_nbs = vel2_nbs[i, :, 0, 0]
+
+            # Plot using the same style as the random samples
+            ax_video.plot(vx2, y_pos, '-o', c=cvd.get_color(1), label='vx (filtered)')
+            ax_video.plot(vx2_nbs, y_pos, 'o', mfc='none', c='black', label='vx (filtered neighbours)')
+            ax_video.plot(vy2, y_pos, '-o', c=cvd.get_color(0), label='vy (filtered)')
+            ax_video.plot(vy2_nbs, y_pos, 'o', mfc='none', c='black', label='vy (filtered neighbours)')
+
+            ax_video.set_xlabel('Velocity (m/s)')
+            ax_video.set_ylabel('y position (mm)')
+            ax_video.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
+            ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time[i] * 1000:.2f} ms)')
+            ax_video.legend()
+            ax_video.grid()
+            
+            writer.grab_frame()
+    
+    plt.close(fig_video)
+    print(f"Video saved to {video_path}")
 
 # TODO: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 

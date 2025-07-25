@@ -217,7 +217,7 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
     return windows, centres
 
 
-def find_peaks(corr_map, num_peaks=1, min_distance=5):
+def find_peaks(corr_map, num_peaks=1, min_distance=5, floor=None):
     """
     Find peaks in a correlation map.
 
@@ -231,13 +231,21 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
         intensities (np.ndarray): Intensities of the found peaks.
     """
 
+    # Based on the median of the correlation map, set a floor
+    if floor is not None:
+        floor = floor * np.nanmedian(corr_map, axis=None)
+
+        # # Check whether the floor is below the standard deviation
+        # if floor < np.nanstd(corr_map, axis=None):
+        #     print(f"Warning: floor {floor} is above the standard deviation.")
+
     if num_peaks == 1:
         # Find the single peak
         peaks = np.argwhere(np.amax(corr_map) == corr_map).astype(np.float64)
     else:
         # Find multiple peaks using peak_local_max
         peaks = peak_local_max(corr_map, min_distance=min_distance,
-                               num_peaks=num_peaks, exclude_border=True).astype(np.float64)
+                               num_peaks=num_peaks, exclude_border=True, threshold_abs=floor).astype(np.float64)
 
     # If a smaller number of peaks is found, pad with NaNs
     if peaks.shape[0] < num_peaks:
@@ -256,7 +264,7 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5):
     return peaks, intensities
 
 
-def filter_outliers(mode, coords, a=None, b=None):
+def filter_outliers(mode, coords, a=None, b=None, verbose=False):
     """
     Remove outliers from coordinates based on spatial and intensity criteria.
     
@@ -267,7 +275,8 @@ def filter_outliers(mode, coords, a=None, b=None):
             - 'intensity': Filter based on intensity values of the provided peaks
         coords (np.ndarray): ND coordinate array of shape (..., 2)
         a (float or np.ndarray): Radius for filtering (or intensity values in 'intensity' mode)
-        b (float): Width for rectangle filtering or relative threshold in 'intensity' mode       
+        b (float): Width for rectangle filtering or relative threshold in 'intensity' mode  
+        verbose (bool): If True, print summary of filtering.     
     
     Returns:
         np.ndarray: Filtered coordinates with invalid points set to NaN
@@ -323,6 +332,10 @@ def filter_outliers(mode, coords, a=None, b=None):
     # Apply the mask to the coordinates*
     coords[~mask] = np.array([np.nan, np.nan])   
     
+    if verbose:
+        # Print summary statistics
+        print(f"Global filter removed {np.sum(~mask)} out of {coords.shape[0]} coordinates in mode '{mode}'")
+
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
     
@@ -404,7 +417,7 @@ def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=
             - "xy": Compare both x and y coordinates
             - "r": Compare vector lengths only
         replace (bool): Replace outliers and pre-existing NaN values with the median of neighbours.
-        verbose (bool): If True, print additional information during processing.
+        verbose (bool): If True, print summary statistics about filtering.
 
     Returns:
         np.ndarray: Filtered coordinates with invalid points set to NaN or replaced with median.
@@ -417,6 +430,12 @@ def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=
     # Create a copy for output
     coords_output = coords.copy()
     
+    # Initialize counters for verbose mode
+    if verbose:
+        outlier_count = 0
+        nan_replaced_count = 0
+        outlier_replaced_count = 0
+    
     # Get a set of sliding windows around each coordinate
     # Note this function is slow
     nbs = np.lib.stride_tricks.sliding_window_view(coords,
@@ -426,55 +445,65 @@ def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=
     for i in range(n_corrs):
         for j in range(n_wins_y):
             for k in range(n_wins_x):
-                
-                # Edge handling: clamp to valid sliding window range
-                i_nbs = np.clip(i, n_nbs[0]//2, n_corrs - n_nbs[0]//2 - 1) - n_nbs[0]//2
-                j_nbs = np.clip(j, n_nbs[1]//2, n_wins_y - n_nbs[1]//2 - 1) - n_nbs[1]//2
-                k_nbs = np.clip(k, n_nbs[2]//2, n_wins_x - n_nbs[2]//2 - 1) - n_nbs[2]//2
 
-                # Calculate the median and standard deviation first
-                med = np.nanmedian(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
-                std = np.nanstd(nbs[i_nbs, j_nbs, k_nbs], axis=(1, 2, 3))
+                # First handle the coordinates at the edges, which are not in the centre of a neighbourhood
+                i_nbs = (np.clip(i, n_nbs[0]//2, n_corrs - n_nbs[0]//2 - 1) 
+                         - n_nbs[0]//2)
+                j_nbs = (np.clip(j, n_nbs[1]//2, n_wins_y - n_nbs[1]//2 - 1) 
+                         - n_nbs[1]//2)
+                k_nbs = (np.clip(k, n_nbs[2]//2, n_wins_x - n_nbs[2]//2 - 1) 
+                         - n_nbs[2]//2)
+                nb = nbs[i_nbs, j_nbs, k_nbs]
 
-                # TODO: make all below more compact
+                # Calculate the median and standard deviation
+                med = np.nanmedian(nb, axis=(1, 2, 3))
+                std = np.nanstd(nb, axis=(1, 2, 3))
+
                 # Check if the coordinate is already NaN in the input
-                is_nan = np.any(np.isnan(coords[i, j, k, :]))
+                coord = coords[i, j, k, :]
+                is_nan = np.any(np.isnan(coord))
                 
-                # Else, check if the current coordinate is within the threshold
+                # Check if the current coordinate is an outlier
+                is_outlier = False
                 if not is_nan:
                     if mode == "x":
-                        is_outlier = not np.abs(coords[i, j, k, 1] - med[1]) <= thr * std[1]
+                        is_outlier = np.abs(coord[1] - med[1]) > thr * std[1]
                     elif mode == "y":
-                        is_outlier = not np.abs(coords[i, j, k, 0] - med[0]) <= thr * std[1]
+                        is_outlier = np.abs(coord[0] - med[0]) > thr * std[0]
                     elif mode == "xy":
-                        is_outlier = not np.all(np.abs(coords[i, j, k, :] - med) <= thr * std)
+                        is_outlier = np.any(np.abs(coord - med) > thr * std)
                     elif mode == "r":
-                        # Calculate the vector length and compare
-                        vec_length = np.sqrt(coords[i, j, k, 0] ** 2 + coords[i, j, k, 1] ** 2)
-                        med_length = np.sqrt(med[0] ** 2 + med[1] ** 2)
-                        is_outlier = not np.abs(vec_length - med_length) <= thr * std.mean()
+                        vec_length = np.linalg.norm(coord)
+                        med_length = np.linalg.norm(med)
+                        is_outlier = np.abs(vec_length - med_length) > thr * std.mean()
                     else:
                         raise ValueError(f"Unknown mode: {mode}. Use 'x', 'y', 'xy', or 'r'.")
-                else:
-                    is_outlier = False
                 
-                # If verbose, print the status of the coordinate
+                # Update counters for verbose mode
                 if verbose:
-                    if is_nan:
-                        print(f"Coordinate ({i}, {j}, {k}) is NaN, skipping.")
-                    elif is_outlier:
-                        print(f"Coordinate ({i}, {j}, {k}) is an outlier: "
-                              f"{coords[i, j, k, :]} (med: {med}, std: {std}).")
-                    else:
-                        print(f"Coordinate ({i}, {j}, {k}) is valid: "
-                              f"{coords[i, j, k, :]}.")
+                    if is_outlier:
+                        outlier_count += 1
+                        if replace:
+                            outlier_replaced_count += 1
+                    if is_nan and replace:
+                        nan_replaced_count += 1
+                
+                # Detailed verbose output (commented out for simplicity)
+                # if verbose:
+                #     status = "NaN" if is_nan else ("outlier" if is_outlier else "valid")
+                #     print(f"Coordinate ({i}, {j}, {k}) is {status}: {coord}" +
+                #           (f" (med: {med}, std: {std})" if status == "outlier" else ""))
 
                 # Apply replacement or filtering logic
-                if replace and (is_nan or is_outlier):
-                    coords_output[i, j, k, :] = med
-                elif not replace and is_outlier:
-                    coords_output[i, j, k, :] = (np.nan, np.nan)
-  
+                if (replace and (is_nan or is_outlier)) or (not replace and is_outlier):
+                    coords_output[i, j, k, :] = med if replace else np.array([np.nan, np.nan])
+
+    # Print summary for verbose mode
+    if verbose:
+        if replace:
+            print(f"Neighbour filter replaced {outlier_replaced_count}/{len(coords_output)} outliers and {nan_replaced_count} other NaNs")
+        else:
+            print(f"Neighbour filter removed {outlier_count}/{len(coords_output)} outliers")
 
     return coords_output
 
