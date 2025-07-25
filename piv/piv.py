@@ -209,8 +209,8 @@ disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1]
 disp2 = piv.strip_peaks(disp2, axis=-2)
 print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
 
-# Neighbour filtering
-disp2_nbs = piv.filter_neighbours(disp2.copy(), thr=4, n_nbs=(20, 2, 0), verbose=True, mode='r')
+# Very light neighbour filtering to remove extremes and replace missing values
+disp2 = piv.filter_neighbours(disp2, thr=5, n_nbs=(50, 2, 0), verbose=True, mode='r', replace=True)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
@@ -219,7 +219,6 @@ piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
 # Calculate velocities for plots
 vel2_unf = disp2_unf * res_avg / dt
 vel2 = disp2 * res_avg / dt
-vel2_nbs = disp2_nbs * res_avg / dt
 
 # # Plot the velocity profiles for randomly selected frames
 # np.random.seed(42)  # For reproducible results
@@ -271,13 +270,13 @@ ax1.set_ylim(v_max[0] * -1.1, v_max[1] * 1.1)
 
 ax1.set_xlabel('Time (ms)')
 ax1.set_ylabel('Velocity (m/s)')
-ax1.set_title('Second pass (after global filter)')
+ax1.set_title('Second pass summary')
 ax1.legend()
 ax1.grid()
 
 piv.save_cfig(proc_path, "disp2_med",  test_mode=test_mode)
 
-# Set up video writer for velocity profiles - based on random samples plotting style
+# Set up video writer for velocity profiles
 if not test_mode:
     from matplotlib import animation as ani
     
@@ -293,19 +292,19 @@ if not test_mode:
             # Get data for current frame (same as random samples code)
             y_pos = centres[:, 0, 0] * res_avg * 1000
             vx2 = vel2[i, :, 0, 1]
-            vx2_nbs = vel2_nbs[i, :, 0, 1]
+            # vx2_nbs = vel2_nbs[i, :, 0, 1]
             vy2 = vel2[i, :, 0, 0]
-            vy2_nbs = vel2_nbs[i, :, 0, 0]
+            # vy2_nbs = vel2_nbs[i, :, 0, 0]
 
             # Plot using the same style as the random samples
-            ax_video.plot(vx2, y_pos, '-o', c=cvd.get_color(1), label='vx (filtered)')
-            ax_video.plot(vx2_nbs, y_pos, 'o', mfc='none', c='black', label='vx (filtered neighbours)')
-            ax_video.plot(vy2, y_pos, '-o', c=cvd.get_color(0), label='vy (filtered)')
-            ax_video.plot(vy2_nbs, y_pos, 'o', mfc='none', c='black', label='vy (filtered neighbours)')
+            ax_video.plot(vx2, y_pos, '-o', c=cvd.get_color(1), label='vx')
+            ax_video.plot(vy2, y_pos, '-o', c=cvd.get_color(0), label='vy')
+            # ax_video.plot(vy2_nbs, y_pos, 'o', mfc='none', c='black', label='vy (filtered neighbours)')
 
             ax_video.set_xlabel('Velocity (m/s)')
             ax_video.set_ylabel('y position (mm)')
             ax_video.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
+            ax_video.set_ylim(0, 21.12)
             ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time[i] * 1000:.2f} ms)')
             ax_video.legend()
             ax_video.grid()
