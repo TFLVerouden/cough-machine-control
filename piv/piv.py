@@ -18,14 +18,15 @@ cvd.set_cvd_friendly_colors()
 
 
 # Set experimental parameters
-test_mode = False
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(600, 1000)) if test_mode else list(range(1, 6000))
-dt = 1 / 40000  # [s] 
+frame_nrs = list(range(4500, 5500)) if test_mode else list(range(1, 6000))
+dt = 1 / 40000  # [s]
 
 # Data processing settings
 v_max = [5, 45]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
+sum_corrs = 10  # Number of correlation frames to sum in first pass
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
 n_wins1 = (1, 1)
 n_peaks2 = 10
@@ -37,7 +38,8 @@ cal_path = os.path.join(current_dir, "calibration",
                         "250624_calibration_PIV_500micron_res_std.txt")
 user = getpass.getuser()
 if user == "tommieverouden":
-    data_path = os.path.join("/Volumes/Data/Data/250623 PIV/", meas_name)
+    # data_path = os.path.join("/Volumes/Data/Data/250623 PIV/", meas_name)
+    data_path = os.path.join("/Users/tommieverouden/Documents/Current data/250623 PIV/", meas_name)
 elif user == "sikke":
     data_path = os.path.join("D:\\Experiments\\PIV\\", meas_name)
 
@@ -71,7 +73,7 @@ if bckp1_loaded:
 
 if not bckp1_loaded:
     # Load images from disk    
-    imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
+    imgs = piv.read_images(data_path, frame_nrs, format='tif', lead_0=5,
                            timing=True)
 
     # TODO: Pre-process images (background subtraction? thresholding?
@@ -79,32 +81,41 @@ if not bckp1_loaded:
     #  low-pass filter to remove camera noise?
     #  mind increase in measurement uncertainty -> PIV book page 140)
 
-    # Calculate the number of correlation frames
+    # Number of correlation maps is shorter than the number of images
     n_corrs = len(imgs) - 1
 
     # Downsample a copy of the images
     imgs_ds = piv.downsample(imgs.copy(), ds_fac)
 
-    # TODO: Adjust so dimensions are always the same, containing space for windows in 2 directions
-
-    # Pre-allocate arrays for all peaks
-    disp1_unf = np.full((n_corrs, n_wins1[0], n_wins1[1], n_peaks1, 2), np.nan)
-    int1_unf = np.full((n_corrs,  n_wins1[0], n_wins1[1], n_peaks1), np.nan)
-
     # Go through all frames and calculate the correlation map
-    for i in tqdm(range(n_corrs), desc='First pass'):
-        corr_map = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
+    corr1 = np.zeros((n_corrs, n_wins1[0], n_wins1[1], *imgs_ds.shape[1:]))
+    for i in range(n_corrs):
+        corr1[i, 0, 0, ...] = sig.correlate(imgs_ds[i + 1], imgs_ds[i],
                                  method='fft', mode='same')
 
         # TODO: Any processing of the correlation map should happen here
         #  (i.e. blacking out pixels or something)
 
+    # Sliding window sum of correlation maps
+    n_corrs = len(imgs) - 1 - sum_corrs + 1
+    for i in range(n_corrs):
+        corr1[i, 0, 0, ...] = np.sum(corr1[i:i+sum_corrs, 0, 0, ...], axis=0)
+
+    # Truncate corr1 to only the valid summed entries
+    corr1 = corr1[:n_corrs, ...]
+
+    # Go through all frames and find peaks in the correlation maps
+    # TODO: unf variable naming is messy    
+    disp1_unf = np.full((n_corrs, n_wins1[0], n_wins1[1], n_peaks1, 2), np.nan)
+    int1_unf = np.full((n_corrs,  n_wins1[0], n_wins1[1], n_peaks1), np.nan)
+    
+    for i in range(n_corrs):
         # Find peaks in the correlation map
-        peaks, int1_unf[i, 0, 0, :] = piv.find_peaks(corr_map, num_peaks=n_peaks1, min_distance=5)
+        peaks, int1_unf[i, 0, 0, :] = piv.find_peaks(corr1[i, 0, 0, ...], num_peaks=n_peaks1, min_distance=5)
 
         # Calculate displacements for all peaks
         disp1_unf[i, 0, 0, :, :] = (
-            peaks - np.array( corr_map.shape) // 2) * ds_fac
+            peaks - np.array(corr1[i, 0, 0, ...].shape) // 2) * ds_fac
 
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
