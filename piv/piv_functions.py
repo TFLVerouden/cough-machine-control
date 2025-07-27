@@ -9,6 +9,9 @@ from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
 
+# TODO: - check docstrings for updated names
+# TODO: y typing in the docstrings
+
 
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
     """
@@ -74,7 +77,7 @@ def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=F
         return False
 
 
-def read_image(filepath):
+def read_img(filepath):
     """
     Read a single image file using OpenCV.
     
@@ -90,7 +93,7 @@ def read_image(filepath):
     return img
 
 
-def read_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
+def read_imgs(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     """
     Load selected .tif images from a directory into a 3D numpy array.
 
@@ -127,7 +130,7 @@ def read_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     n_jobs = os.cpu_count() or 4
     
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-        imgs = list(tqdm(executor.map(read_image, file_paths), 
+        imgs = list(tqdm(executor.map(read_img, file_paths), 
                         total=len(file_paths), 
                         desc='Reading images'))
 
@@ -158,7 +161,7 @@ def downsample(imgs, factor):
                         w // factor, factor).sum(axis=(2, 4))
 
 
-def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
+def split_n_shift(img, n_wins, overlap=0, shift=(0, 0),
                   shift_mode='before', plot=False):
     """
     Split a 2D image array (y, x) into (overlapping) windows,
@@ -166,7 +169,7 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
 
     Args:
         img (np.ndarray): 2D array of image values (y, x).
-        n_windows (tuple): Number of windows in (y, x) direction.
+        n_wins (tuple): Number of windows in (y, x) direction.
         overlap (float): Fractional overlap between windows (0 = no overlap).
         shift (tuple): (dy, dx) shift in pixels - can be (0, 0).
         shift_mode (str): 'before' or 'after' shift: which frame is considered?
@@ -180,7 +183,7 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
     """
     # Get dimensions
     h, w = img.shape
-    n_y, n_x = n_windows
+    n_y, n_x = n_wins
     dy, dx = np.asarray(shift, dtype=int)
 
     # Calculate window size including overlap
@@ -242,12 +245,116 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
     return windows, centres
 
 
-def find_peaks(corr_map, num_peaks=1, min_distance=5, floor=None):
+def calc_corrs(imgs, n_wins, shifts=None, ds_fac=1):
+    """
+    Calculate correlation maps for all frames and windows.
+    
+    Args:
+        imgs (np.ndarray): 3D array of images (frame, y, x)
+        n_wins (tuple): Number of windows (n_y, n_x) 
+        shifts (np.ndarray): Opt. array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used
+        ds_fac (int): Downsampling factor (1 = no downsampling)
+
+    Returns:
+        tuple: (corr_maps, centres)
+            - corr_maps: Dict {(frame, j, k): correlation_map} or 4D array for single window
+            - centres: Window centres from first frame
+    """
+    from scipy import signal as sig
+
+    n_corrs = len(imgs) - 1
+
+    # Apply downsampling if needed
+    if ds_fac > 1:
+        imgs = downsample(imgs, ds_fac)
+
+    # Handle shifts - default to zero if not provided
+    if shifts is None:
+        shifts = np.zeros((n_corrs, 2))
+
+    corr_maps = {}
+    centres = None
+
+    for i in trange(n_corrs, desc='Calculating correlation maps'):
+        # Split images into windows with shifts
+        wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before')
+        wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after')
+
+        # Store centres from first frame
+        if centres is None:
+            centres = centres_curr
+
+        # Calculate correlation maps for all windows
+        for j in range(n_wins[0]):
+            for k in range(n_wins[1]):
+                corr_maps[(i, j, k)] = sig.correlate(wnd1[j, k], wnd0[j, k], method='fft', mode='same')
+
+    return corr_maps, centres
+
+
+def sum_corrs(corrs, shifts, n_tosum, n_wins):
+    """
+    Sum correlation maps with windowing and alignment.
+    
+    Args:
+        corrs: Correlation maps from calc_correlation_maps
+        shifts (np.ndarray): 3D array of shifts (frame, y_shift, x_shift)
+        n_tosum (int): Number of correlation maps to sum
+        n_wins (tuple): Number of windows (n_y, n_x)
+        
+    Returns:
+        Dict or array: Summed correlation maps with same structure as input
+    """
+    
+    # Always use dictionary storage
+    n_corrs = max(key[0] for key in corrs.keys()) + 1
+    corrs_sum = {}
+
+    for i in trange(n_corrs, desc='Summing correlation maps'):
+        # Calculate window bounds for summing: odd = symmetric, even = asymmetric
+        i0 = max(0, i - (n_tosum - 1) // 2)
+        i1 = min(n_corrs, i + n_tosum // 2 + 1)
+        ref = shifts[i]  # Reference shift for current frame
+        for j in range(n_wins[0]):
+            for k in range(n_wins[1]):
+                # Collect all correlation maps to sum and their relative shifts
+                maps = []
+                sfts = []
+                for f in range(i0, i1):
+                    # Calculate shift difference (in pixels) relative to reference
+                    d = np.round(shifts[f] - ref).astype(int)
+                    maps.append(corrs[(f, j, k)])
+                    sfts.append(d)
+                if len(maps) == 1:
+                    # Only one map to sum, no alignment needed
+                    smap = maps[0]
+                    ctr = np.array(smap.shape) // 2
+                else:
+                    # Calculate the expanded size needed to fit all shifted maps
+                    sh0 = maps[0].shape
+                    mn = np.min(sfts, axis=0)
+                    mx = np.max(sfts, axis=0)
+                    nshape = (sh0[0] + mx[0] - mn[0], sh0[1] + mx[1] - mn[1])
+                    # Calculate new center position in expanded map
+                    ctr = (sh0[0] // 2 - mn[0], sh0[1] // 2 - mn[1])
+                    smap = np.zeros(nshape)
+                    # Add each map at its shifted position in the expanded array
+                    for m, s in zip(maps, sfts):
+                        # Calculate start and end indices for placement
+                        sy, sx = s - mn
+                        ey, ex = sy + m.shape[0], sx + m.shape[1]
+                        smap[sy:ey, sx:ex] += m
+                # Store the summed map and its center for this window
+                corrs_sum[(i, j, k)] = (smap, ctr)
+    return corrs_sum
+    
+
+def find_peaks(corr, num_peaks=1, min_distance=5, floor=None):
     """
     Find peaks in a correlation map.
 
     Args:
-        corr_map (np.ndarray): 2D array of correlation values.
+        corr (np.ndarray): 2D array of correlation values.
         num_peaks (int): Number of peaks to find.
         min_distance (int): Minimum distance between peaks in pixels.
 
@@ -258,7 +365,7 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5, floor=None):
 
     # Based on the median of the correlation map, set a floor
     if floor is not None:
-        floor = floor * np.nanmedian(corr_map, axis=None)
+        floor = floor * np.nanmedian(corr, axis=None)
 
         # # Check whether the floor is below the standard deviation
         # if floor < np.nanstd(corr_map, axis=None):
@@ -266,10 +373,10 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5, floor=None):
 
     if num_peaks == 1:
         # Find the single peak
-        peaks = np.argwhere(np.amax(corr_map) == corr_map).astype(np.float64)
+        peaks = np.argwhere(np.amax(corr) == corr).astype(np.float64)
     else:
         # Find multiple peaks using peak_local_max
-        peaks = peak_local_max(corr_map, min_distance=min_distance,
+        peaks = peak_local_max(corr, min_distance=min_distance,
                                num_peaks=num_peaks, exclude_border=True, threshold_abs=floor).astype(np.float64)
 
     # If a smaller number of peaks is found, pad with NaNs
@@ -284,10 +391,117 @@ def find_peaks(corr_map, num_peaks=1, min_distance=5, floor=None):
     valid_mask = ~np.isnan(peaks).any(axis=1)
     if np.any(valid_mask):
         valid_peaks = peaks[valid_mask]
-        intensities[valid_mask] = corr_map[valid_peaks[:, 0].astype(int), valid_peaks[:, 1].astype(int)]
+        intensities[valid_mask] = corr[valid_peaks[:, 0].astype(int), valid_peaks[:, 1].astype(int)]
 
     return peaks, intensities
 
+
+def three_point_gauss(array):
+    """
+    Fit a Gaussian to three points.
+
+    Args:
+        array (np.ndarray): 1D array of three points, peak in the middle.
+    Returns:
+        float: Subpixel correction value.
+    """
+
+    # Check if the input is a 1D array
+    if array.ndim != 1 or array.shape[0] != 3:
+        raise ValueError("Input must be a 1D array with exactly three elements.")
+
+    # Calculate the subpixel correction using the Gaussian fit formula
+    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
+            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+
+
+def subpixel(corr, peak):
+    """
+    Use a Gaussian fit to refine the peak coordinates.
+
+    Args:
+        corr (np.ndarray): 2D array of correlation values.
+        peak (np.ndarray): Coordinates of the peak (y, x).
+    Returns:
+        np.ndarray: Refined peak coordinates with subpixel correction.
+    """
+
+    # Apply three-point Gaussian fit to peak coordinates in two directions
+    y_corr = three_point_gauss(corr[peak[0] - 1:peak[0] + 2, peak[1]])
+    x_corr = three_point_gauss(corr[peak[0], peak[1] - 1:peak[1] + 2])
+
+    # Add subpixel correction to the peak coordinates
+    return peak.astype(np.float64) + np.array([y_corr, x_corr])
+
+
+def find_disps(corrs, shifts, n_wins, n_peaks, ds_fac=1, 
+                          find_peaks_kwargs=None):
+    """
+    Find peaks in correlation maps and calculate displacements.
+    # TODO: Implement subpixel function! Should be easy.
+    
+    Args:
+        corrs: Correlation maps (from sum_correlation_maps or calc_correlation_maps)
+        shifts (np.ndarray): 3D array of shifts (frame, y_shift, x_shift)
+        n_wins (tuple): Number of windows (n_y, n_x)
+        n_peaks (int): Number of peaks to find
+        ds_fac (int): Downsampling factor to account for in displacement calculation
+        find_peaks_kwargs (dict): Additional arguments for find_peaks function
+        
+    Returns:
+        tuple: (disps, ints)
+            - displacements: 4D array (frame, win_y, win_x, peak, 2)
+            - intensities: 3D array (frame, win_y, win_x, peak)
+    """
+    
+    if find_peaks_kwargs is None:
+        find_peaks_kwargs = {}
+    
+    # Determine number of frames
+    if isinstance(corrs, dict):
+        n_corrs = max(key[0] for key in corrs.keys()) + 1
+        is_dict = True
+    else:
+        n_corrs = corrs.shape[0]
+        is_dict = False
+    
+    # Initialize output arrays
+    disps = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks, 2), np.nan)
+    ints = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks), np.nan)
+    
+    for i in tqdm(range(n_corrs), desc='Finding peaks'):
+        # Get reference shift (from current frame) - same for all windows
+        ref_shift = shifts[i]
+        
+        for j in range(n_wins[0]):
+            for k in range(n_wins[1]):
+                # Get correlation map and center
+                if is_dict:
+                    if isinstance(corrs[(i, j, k)], tuple):
+                        # Summed maps with new center
+                        corr_map, map_center = corrs[(i, j, k)]
+                    else:
+                        # Regular maps
+                        corr_map = corrs[(i, j, k)]
+                        map_center = np.array(corr_map.shape) // 2
+                else:
+                    # Array format (single window)
+                    corr_map = corrs[i, j, k, ...]
+                    map_center = np.array(corr_map.shape) // 2
+                
+                # Find peaks in the correlation map
+                peaks, peak_intensities = find_peaks(corr_map, num_peaks=n_peaks, 
+                                                   **find_peaks_kwargs)
+                
+                # Store intensities
+                ints[i, j, k, :] = peak_intensities
+                
+                # Calculate displacements for all peaks
+                disps[i, j, k, :, :] = (ref_shift + 
+                                              (peaks - map_center) * ds_fac)
+    
+    return disps, ints
+    
 
 def filter_outliers(mode, coords, a=None, b=None, verbose=False):
     """
@@ -615,44 +829,6 @@ def smooth(time, disps, col='both', lam=5e-7, type=int):
         raise ValueError("cols must be 'both' or an integer index.")
     
     return disps_spl.reshape(orig_shape)
-
-
-def three_point_gauss(array):
-    """
-    Fit a Gaussian to three points.
-
-    Args:
-        array (np.ndarray): 1D array of three points, peak in the middle.
-    Returns:
-        float: Subpixel correction value.
-    """
-
-    # Check if the input is a 1D array
-    if array.ndim != 1 or array.shape[0] != 3:
-        raise ValueError("Input must be a 1D array with exactly three elements.")
-
-    # Calculate the subpixel correction using the Gaussian fit formula
-    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
-            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
-
-
-def subpixel(corr_map, peak):
-    """
-    Use a Gaussian fit to refine the peak coordinates.
-
-    Args:
-        corr_map (np.ndarray): 2D array of correlation values.
-        peak (np.ndarray): Coordinates of the peak (y, x).
-    Returns:
-        np.ndarray: Refined peak coordinates with subpixel correction.
-    """
-
-    # Apply three-point Gaussian fit to peak coordinates in two directions
-    y_corr = three_point_gauss(corr_map[peak[0] - 1:peak[0] + 2, peak[1]])
-    x_corr = three_point_gauss(corr_map[peak[0], peak[1] - 1:peak[1] + 2])
-
-    # Add subpixel correction to the peak coordinates
-    return peak.astype(np.float64) + np.array([y_corr, x_corr])
 
 
 def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
