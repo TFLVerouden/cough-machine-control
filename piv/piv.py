@@ -18,7 +18,7 @@ cvd.set_cvd_friendly_colors()
 
 
 # Set experimental parameters
-test_mode = False
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(4500, 4600)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
@@ -101,9 +101,9 @@ if not bckp1_loaded:
     n_corrs = len(imgs) - 1
 
     # Step 1: Calculate correlation maps (with downsampling, no windows, no shifts)
-    corr1, _ = piv.calc_corrs(imgs, n_wins1,
-                              shifts=None,
-                              ds_fac=ds_fac)
+    corr1 = piv.calc_corrs(imgs, n_wins1,
+                           shifts=None,
+                           ds_fac=ds_fac)
 
     # Step 2: Sum correlation maps with windowing
     corr1 = piv.sum_corrs(corr1,
@@ -117,7 +117,7 @@ if not bckp1_loaded:
                                          n_wins=n_wins1,
                                          n_peaks=n_peaks1,
                                          ds_fac=ds_fac,
-                                         find_peaks_kwargs={'min_distance': 5})
+                                         min_dist=5)
 
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
@@ -196,26 +196,34 @@ if not bckp2_loaded:
     shifts = disp1_spl[:, 0, 0, :]  # Shape: (n_corrs, 2)
 
     # Step 1: Calculate correlation maps (no downsampling, with windows and shifts)
-    corr_maps, centres = piv.calc_corrs(imgs, n_wins2,
-                                        shifts=shifts,
-                                        ds_fac=1)
+    corr2 = piv.calc_corrs(imgs, n_wins2,
+                               shifts=shifts,
+                               ds_fac=1)
 
     # Step 2: Sum correlation maps with alignment and size expansion
-    summed_corr_maps = piv.sum_corrs(corr_maps,
+    corr2 = piv.sum_corrs(corr2,
                                      shifts=shifts,
                                      n_tosum=sum_corrs2,
                                      n_wins=n_wins2)
 
     # Step 3: Find peaks in summed correlation maps
-    disp2_unf, int2_unf = piv.find_disps(summed_corr_maps,
+    disp2_unf, int2_unf = piv.find_disps(corr2,
                                          shifts=shifts,
                                          n_wins=n_wins2,
                                          n_peaks=n_peaks2,
                                          ds_fac=1,
-                                         find_peaks_kwargs={'floor': 10, 'min_distance': 3})
+                                         floor=10, 
+                                         min_dist=3)
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
+
+    # Extract centres from correlation maps for plotting and saving
+    centres = np.zeros((n_wins2[0], n_wins2[1], 2))
+    for j in range(n_wins2[0]):
+        for k in range(n_wins2[1]):
+            _, centre = corr2[(0, j, k)]  # Use first frame's centres
+            centres[j, k] = centre
 
 # POST-PROCESSING
 # Define time arrays for second pass (same as first pass since we keep all frames)
