@@ -18,7 +18,7 @@ cvd.set_cvd_friendly_colors()
 
 
 # Set experimental parameters
-test_mode = True
+test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(4500, 5500)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
@@ -26,11 +26,18 @@ dt = 1 / 40000  # [s]
 # Data processing settings
 v_max = [5, 45]  # [m/s]
 ds_fac = 4  # First pass downsampling factor
-sum_corrs = 10  # Number of correlation frames to sum in first pass
+sum_corrs1 = 21  # Number of correlation frames to sum in first pass (1 = no summation, even = asymmetric)
+sum_corrs2 = 21  # Number of correlation frames to sum in second pass (1 = no summation, even = asymmetric)
 n_peaks1 = 10  # Number of peaks to find in first pass correlation map
 n_wins1 = (1, 1)
 n_peaks2 = 10
 n_wins2 = (8, 1)  # Number of windows in second pass (rows, cols)
+
+# Validate that sum_corrs1 and sum_corrs2 are positive integers
+if sum_corrs1 < 1 or not isinstance(sum_corrs1, int):
+    raise ValueError("sum_corrs1 must be a positive integer (1 = no summation, odd = symmetric, even = asymmetric)")
+if sum_corrs2 < 1 or not isinstance(sum_corrs2, int):
+    raise ValueError("sum_corrs2 must be a positive integer (1 = no summation, odd = symmetric, even = asymmetric)")
 
 # File handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -96,13 +103,16 @@ if not bckp1_loaded:
         # TODO: Any processing of the correlation map should happen here
         #  (i.e. blacking out pixels or something)
 
-    # Sliding window sum of correlation maps
-    n_corrs = len(imgs) - 1 - sum_corrs + 1
+    # Apply windowing (keeping same number of output frames)
+    corr1_sum = np.zeros_like(corr1)
     for i in range(n_corrs):
-        corr1[i, 0, 0, ...] = np.sum(corr1[i:i+sum_corrs, 0, 0, ...], axis=0)
+        # Calculate window bounds: odd = symmetric, even = asymmetric (extra frame after)
+        start_idx = max(0, i - (sum_corrs1 - 1) // 2)
+        end_idx = min(n_corrs, i + sum_corrs1 // 2 + 1)
 
-    # Truncate corr1 to only the valid summed entries
-    corr1 = corr1[:n_corrs, ...]
+        # Sum correlation maps in the window
+        corr1_sum[i, 0, 0, ...] = np.sum(corr1[start_idx:end_idx, 0, 0, ...], axis=0)
+    corr1 = corr1_sum
 
     # Go through all frames and find peaks in the correlation maps
     # TODO: unf variable naming is messy    
@@ -124,6 +134,7 @@ if not bckp1_loaded:
 disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1], verbose=True)
 disp1 = piv.strip_peaks(disp1, axis=-2)
 print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
+# TODO: Make it so neighbour filtering is done over an odd number of neighbours, counting the value itself. This is more consistent
 disp1_nbs = piv.filter_neighbours(disp1.copy(), thr=1, n_nbs=(40, 0, 0), verbose=True)
 
 # Define time arrays beforehand
@@ -131,7 +142,7 @@ time = np.linspace((frame_nrs[0] - 1) * dt,
                     (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
 # Smooth the x displacement in time
-disp1_spl = piv.smooth(time, disp1_nbs.copy(), lam=5e-7, type=int)
+disp1_spl = piv.smooth(time, disp1_nbs.copy(), lam=4e-7, type=int)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
@@ -156,7 +167,7 @@ ax.plot(1000 * time, vel1x_spl, c=cvd.get_color(1), label='Displacement to be us
 ax.set_ylim(v_max[0] * -1.1, v_max[1] * 1.1)
 ax.set_xlabel('Time (ms)')
 ax.set_ylabel('Velocity (m/s)')
-ax.set_title('First pass summary')
+ax.set_title('First pass')
 ax.legend()
 ax.grid()
 
@@ -178,42 +189,123 @@ if not bckp2_loaded:
     # Ensure we have the images loaded (in case only second pass backup failed)
     if 'imgs' not in globals():
         # Load images from disk    
-        imgs = piv.load_images(data_path, frame_nrs, format='tif', lead_0=5,
+        imgs = piv.read_images(data_path, frame_nrs, format='tif', lead_0=5,
                                timing=True)
     
-    # Pre-allocate array for all peaks: (frame idx, window idx, peak idx, 2)
-    disp2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2, 2), np.nan)
-    int2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2), np.nan)
-
-    for i in tqdm(range(n_corrs), desc='Second pass'):
-        # Split the images into horizontal rectangular windows, shifted by
-        # the interpolated/smoothed displacements from the first pass
-        wnd0, centres = piv.split_n_shift(imgs[i], n_wins2,
-                                          shift=disp1_spl[i, 0, 0, :],
-                                          shift_mode='before')
+    # Step 1: Calculate all correlation maps for all windows and frames
+    print("Step 1: Calculating all correlation maps...")
+    corr_maps = {}  # Store as dict since shapes may vary: {(frame, window_j, window_k): corr_map}
+    centres = None  # Will be set from the first frame
+    
+    for i in trange(n_corrs, desc='Calculating correlation maps'):
+        # Split the images into windows
+        wnd0, frame_centres = piv.split_n_shift(imgs[i], n_wins2,
+                                               shift=disp1_spl[i, 0, 0, :],
+                                               shift_mode='before')
         wnd1, _ = piv.split_n_shift(imgs[i + 1], n_wins2,
-                                    shift=disp1_spl[i, 0, 0, :],
-                                    shift_mode='after')
-
-        # Loop through all windows
+                                   shift=disp1_spl[i, 0, 0, :],
+                                   shift_mode='after')
+        
+        # Store centres from the first frame
+        if centres is None:
+            centres = frame_centres
+        
+        # Calculate correlation maps for all windows
         for j in range(n_wins2[0]):
             for k in range(n_wins2[1]):
-                # Calculate the correlation map for each window pair
-                corr_map = sig.correlate(wnd1[j, k], wnd0[j, k],
-                                         method='fft', mode='same')
-
-                # TODO: Any processing of the correlation map could happen here
-                #  (i.e. blacking out pixels or something)
-
-                # Find peaks in the correlation maps
-                peaks, int2_unf[i, j, k, :] = piv.find_peaks(corr_map, num_peaks=n_peaks2, floor=10, min_distance=3)
+                corr_map = sig.correlate(wnd1[j, k], wnd0[j, k], method='fft', mode='same')
+                corr_maps[(i, j, k)] = corr_map
+    
+    # Step 2: Sum correlation maps with alignment and size expansion
+    print("Step 2: Summing correlation maps...")
+    summed_corr_maps = {}  # Store summed maps: {(frame, window_j, window_k): (summed_map, new_center)}
+    
+    for i in trange(n_corrs, desc='Summing correlation maps'):
+        # Calculate window bounds: odd = symmetric, even = asymmetric (extra frame after)
+        start_idx = max(0, i - (sum_corrs2 - 1) // 2)
+        end_idx = min(n_corrs, i + sum_corrs2 // 2 + 1)
+        
+        # Get reference shift (from current frame) - same for all windows
+        ref_shift = disp1_spl[i, 0, 0, :]
+        
+        for j in range(n_wins2[0]):
+            for k in range(n_wins2[1]):
+                
+                # Collect all correlation maps to sum with their shifts
+                maps_to_sum = []
+                shifts_to_apply = []
+                
+                for frame_idx in range(start_idx, end_idx):
+                    current_shift = disp1_spl[frame_idx, 0, 0, :]
+                    shift_diff = current_shift - ref_shift
+                    shift_diff_px = np.round(shift_diff).astype(int)
+                    
+                    maps_to_sum.append(corr_maps[(frame_idx, j, k)])
+                    shifts_to_apply.append(shift_diff_px)
+                
+                # Sum maps with size expansion
+                if len(maps_to_sum) == 1:
+                    # No summation needed
+                    summed_map = maps_to_sum[0]
+                    new_center = np.array(summed_map.shape) // 2
+                else:
+                    # Calculate the expanded size needed
+                    base_shape = maps_to_sum[0].shape
+                    min_shift = np.min(shifts_to_apply, axis=0)
+                    max_shift = np.max(shifts_to_apply, axis=0)
+                    
+                    # Calculate new size to accommodate all shifted maps
+                    new_shape = (base_shape[0] + max_shift[0] - min_shift[0],
+                                base_shape[1] + max_shift[1] - min_shift[1])
+                    
+                    # Calculate new center position
+                    new_center = (base_shape[0] // 2 - min_shift[0],
+                                 base_shape[1] // 2 - min_shift[1])
+                    
+                    # Initialize summed map
+                    summed_map = np.zeros(new_shape)
+                    
+                    # Add each map at its shifted position
+                    for map_idx, (corr_map, shift) in enumerate(zip(maps_to_sum, shifts_to_apply)):
+                        # Calculate position in the expanded map
+                        start_y = shift[0] - min_shift[0]
+                        start_x = shift[1] - min_shift[1]
+                        end_y = start_y + corr_map.shape[0]
+                        end_x = start_x + corr_map.shape[1]
+                        
+                        # Add to the summed map
+                        summed_map[start_y:end_y, start_x:end_x] += corr_map
+                
+                # Store the summed map and its center
+                summed_corr_maps[(i, j, k)] = (summed_map, new_center)
+    
+    # Step 3: Find peaks in all summed correlation maps
+    print("Step 3: Finding peaks...")
+    disp2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2, 2), np.nan)
+    int2_unf = np.full((n_corrs, n_wins2[0], n_wins2[1], n_peaks2), np.nan)
+    
+    for i in tqdm(range(n_corrs), desc='Finding peaks'):
+        # Get reference shift (from current frame) - same for all windows  
+        ref_shift = disp1_spl[i, 0, 0, :]
+        
+        for j in range(n_wins2[0]):
+            for k in range(n_wins2[1]):
+                summed_map, map_center = summed_corr_maps[(i, j, k)]
+                
+                # Find peaks in the summed correlation map
+                peaks, int2_unf[i, j, k, :] = piv.find_peaks(summed_map, 
+                                                           num_peaks=n_peaks2, 
+                                                           floor=10, 
+                                                           min_distance=3)
 
                 # Calculate displacements for all peaks
-                disp2_unf[i, j, k, :, :] = (disp1_spl[i, 0, 0, :] + peaks
-                                           - np.array(corr_map.shape) // 2)
+                disp2_unf[i, j, k, :, :] = (ref_shift + peaks - map_center)
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
+
+# Define time arrays for second pass (same as first pass since we keep all frames)
+time2 = time.copy()
 
 # Basic global outlier removal of unreasonable displacements
 disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1], verbose=True)
@@ -265,15 +357,15 @@ vel2 = disp2 * res_avg / dt
 fig1, ax1 = plt.subplots(figsize=(10, 6))
 
 # Plot vy (vertical velocity)
-ax1.plot(time * 1000, np.nanmean(vel2[:, :, :, 0], axis=(1, 2)), label='Mean vy')
-ax1.fill_between(time * 1000,
+ax1.plot(time2 * 1000, np.nanmedian(vel2[:, :, :, 0], axis=(1, 2)), label='Median vy')
+ax1.fill_between(time2 * 1000,
                  np.nanmin(vel2[:, :, :, 0], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 0], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vy')
 
 # Plot vx (horizontal velocity)
-ax1.plot(time * 1000, np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Mean vx')
-ax1.fill_between(time * 1000,
+ax1.plot(time2 * 1000, np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Median vx')
+ax1.fill_between(time2 * 1000,
                  np.nanmin(vel2[:, :, :, 1], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 1], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vx')
@@ -281,7 +373,7 @@ ax1.set_ylim(v_max[0] * -1.1, v_max[1] * 1.1)
 
 ax1.set_xlabel('Time (ms)')
 ax1.set_ylabel('Velocity (m/s)')
-ax1.set_title('Second pass summary')
+ax1.set_title('Second pass')
 ax1.legend()
 ax1.grid()
 
@@ -296,7 +388,7 @@ if not test_mode:
 
     video_path = os.path.join(proc_path, 'pass2.mp4')
     with writer.saving(fig_video, video_path, dpi=150):
-        for i in range(n_corrs):
+        for i in trange(n_corrs, desc='Creating video'):
             # Clear the axis
             ax_video.clear()
             
@@ -316,7 +408,7 @@ if not test_mode:
             ax_video.set_ylabel('y position (mm)')
             ax_video.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
             ax_video.set_ylim(0, 21.12)
-            ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time[i] * 1000:.2f} ms)')
+            ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time2[i] * 1000:.2f} ms)')
             ax_video.legend()
             ax_video.grid()
             
