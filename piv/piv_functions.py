@@ -77,35 +77,37 @@ def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=F
         return False
 
 
-def read_img(filepath):
+
+def read_img(file_path: str) -> np.ndarray | None:
     """
     Read a single image file using OpenCV.
-    
+
     Args:
         filepath (str): Full path to the image file to load.
-        
+
     Returns:
-        np.ndarray or None: Loaded image as grayscale array, or None if loading failed.
+        np.ndarray | None: Loaded image as grayscale array, or None if loading failed.
     """
-    img = cv.imread(filepath, cv.IMREAD_GRAYSCALE)
+    img = cv.imread(file_path, cv.IMREAD_GRAYSCALE)
     if img is None:
-        print(f"Warning: Failed to load {filepath}")
+        print(f"Warning: Failed to load {file_path}")
     return img
 
 
-def read_imgs(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
+def read_imgs(data_path: str, frame_nrs: list[int], format: str = 'tif', lead_0: int = 5, timing: bool = True) -> np.ndarray:
+
     """
-    Load selected .tif images from a directory into a 3D numpy array.
+    Load selected images from a directory into a 3D numpy array.
 
     Args:
-        data_path (str): Path to the directory containing .tif images.
-        frame_nrs (list of int): List of frame numbers to load.
+        data_path (str): Path to the directory containing images.
+        frame_nrs (list[int]): List of frame numbers to load.
         format (str): File extension to load.
         lead_0 (int): Number of leading zeros in the file names.
         timing (bool): If True, show a progress bar while loading images.
 
     Returns:
-        imgs (np.ndarray): 3D array of images (image_index, y, x).
+        np.ndarray: 3D array of images (image_index, y, x).
     """
 
     # Check if the directory exists
@@ -139,7 +141,7 @@ def read_imgs(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     return imgs
 
 
-def downsample(imgs, factor):
+def downsample(imgs: np.ndarray, factor: int) -> np.ndarray:
     """Downsample a 2D image by summing non-overlapping blocks
      of size (block_size, block_size).
 
@@ -161,25 +163,23 @@ def downsample(imgs, factor):
                         w // factor, factor).sum(axis=(2, 4))
 
 
-def split_n_shift(img, n_wins, overlap=0, shift=(0, 0),
-                  shift_mode='before', plot=False):
+def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap=0, shift=(0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a 2D image array (y, x) into (overlapping) windows,
     with optional edge cut-off for shifted images.
 
     Args:
         img (np.ndarray): 2D array of image values (y, x).
-        n_wins (tuple): Number of windows in (y, x) direction.
+        n_wins (tuple[int, int]): Number of windows in (y, x) direction.
         overlap (float): Fractional overlap between windows (0 = no overlap).
-        shift (tuple): (dy, dx) shift in pixels - can be (0, 0).
+        shift (tuple[int, int] | np.ndarray): (dy, dx) shift in pixels - can be (0, 0).
         shift_mode (str): 'before' or 'after' shift: which frame is considered?
         plot (bool): If True, plot the windows on the image.
 
     Returns:
-        windows (np.ndarray): 4D array of image windows
-            (window_y_idx, window_x_idx, y, x).
-        centres (np.ndarray): 3D array of window centres
-            (window_y_idx, window_x_idx, 2).
+        tuple[np.ndarray, np.ndarray]:
+            - windows: 4D array of image windows (window_y_idx, window_x_idx, y, x)
+            - centres: 3D array of window centres (window_y_idx, window_x_idx, 2)
     """
     # Get dimensions
     h, w = img.shape
@@ -245,19 +245,19 @@ def split_n_shift(img, n_wins, overlap=0, shift=(0, 0),
     return windows, centres
 
 
-def calc_corrs(imgs, n_wins, shifts=None, ds_fac=1):
+def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | None = None, ds_fac: int = 1):
     """
     Calculate correlation maps for all frames and windows.
-    
+
     Args:
         imgs (np.ndarray): 3D array of images (frame, y, x)
-        n_wins (tuple): Number of windows (n_y, n_x) 
-        shifts (np.ndarray): Opt. array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        shifts (np.ndarray | None): Optional array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used.
         ds_fac (int): Downsampling factor (1 = no downsampling)
 
     Returns:
-        tuple: (corr_maps, centres)
-            - corr_maps: Dict {(frame, j, k): correlation_map} or 4D array for single window
+        tuple[dict, np.ndarray]:
+            - corr_maps: Dict {(frame, j, k): correlation_map}
             - centres: Window centres from first frame
     """
     from scipy import signal as sig
@@ -292,18 +292,18 @@ def calc_corrs(imgs, n_wins, shifts=None, ds_fac=1):
     return corr_maps, centres
 
 
-def sum_corrs(corrs, shifts, n_tosum, n_wins):
+def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, int]) -> dict:
     """
     Sum correlation maps with windowing and alignment.
-    
+
     Args:
-        corrs: Correlation maps from calc_correlation_maps
-        shifts (np.ndarray): 3D array of shifts (frame, y_shift, x_shift)
+        corrs (dict): Correlation maps from calc_corrs
+        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
         n_tosum (int): Number of correlation maps to sum
-        n_wins (tuple): Number of windows (n_y, n_x)
-        
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+
     Returns:
-        Dict or array: Summed correlation maps with same structure as input
+        dict: Summed correlation maps with same structure as input
     """
     
     # Always use dictionary storage
@@ -349,7 +349,8 @@ def sum_corrs(corrs, shifts, n_tosum, n_wins):
     return corrs_sum
     
 
-def find_peaks(corr, num_peaks=1, min_distance=5, floor=None):
+def find_peaks(corr: np.ndarray, num_peaks: int = 1, min_distance: int = 5, floor: float | None = None):
+
     """
     Find peaks in a correlation map.
 
@@ -357,10 +358,12 @@ def find_peaks(corr, num_peaks=1, min_distance=5, floor=None):
         corr (np.ndarray): 2D array of correlation values.
         num_peaks (int): Number of peaks to find.
         min_distance (int): Minimum distance between peaks in pixels.
+        floor (float | None): Optional floor threshold for peak detection.
 
     Returns:
-        peaks (np.ndarray): Array of peak coordinates shaped (num_peaks, 2)
-        intensities (np.ndarray): Intensities of the found peaks.
+        tuple[np.ndarray, np.ndarray]:
+            - peaks: Array of peak coordinates shaped (num_peaks, 2)
+            - intensities: Intensities of the found peaks.
     """
 
     # Based on the median of the correlation map, set a floor
@@ -396,12 +399,14 @@ def find_peaks(corr, num_peaks=1, min_distance=5, floor=None):
     return peaks, intensities
 
 
-def three_point_gauss(array):
+def three_point_gauss(array: np.ndarray) -> float:
+
     """
     Fit a Gaussian to three points.
 
     Args:
         array (np.ndarray): 1D array of three points, peak in the middle.
+
     Returns:
         float: Subpixel correction value.
     """
@@ -415,13 +420,15 @@ def three_point_gauss(array):
             ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
 
 
-def subpixel(corr, peak):
+def subpixel(corr: np.ndarray, peak: np.ndarray) -> np.ndarray:
+
     """
     Use a Gaussian fit to refine the peak coordinates.
 
     Args:
         corr (np.ndarray): 2D array of correlation values.
         peak (np.ndarray): Coordinates of the peak (y, x).
+
     Returns:
         np.ndarray: Refined peak coordinates with subpixel correction.
     """
@@ -434,24 +441,24 @@ def subpixel(corr, peak):
     return peak.astype(np.float64) + np.array([y_corr, x_corr])
 
 
-def find_disps(corrs, shifts, n_wins, n_peaks, ds_fac=1, 
-                          find_peaks_kwargs=None):
+def find_disps(corrs: dict | np.ndarray, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int = 1, find_peaks_kwargs: dict | None = None) -> tuple[np.ndarray, np.ndarray]:
     """
     Find peaks in correlation maps and calculate displacements.
     # TODO: Implement subpixel function! Should be easy.
-    
+    # TODO: Make find_peaks_kwargs just kwargs for this function?
+
     Args:
-        corrs: Correlation maps (from sum_correlation_maps or calc_correlation_maps)
-        shifts (np.ndarray): 3D array of shifts (frame, y_shift, x_shift)
-        n_wins (tuple): Number of windows (n_y, n_x)
+        corrs (dict | np.ndarray): Correlation maps (from sum_corrs or calc_corrs)
+        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_peaks (int): Number of peaks to find
         ds_fac (int): Downsampling factor to account for in displacement calculation
-        find_peaks_kwargs (dict): Additional arguments for find_peaks function
-        
+        find_peaks_kwargs (dict | None): Additional arguments for find_peaks function
+
     Returns:
-        tuple: (disps, ints)
-            - displacements: 4D array (frame, win_y, win_x, peak, 2)
-            - intensities: 3D array (frame, win_y, win_x, peak)
+        tuple[np.ndarray, np.ndarray]:
+            - disps: 4D array (frame, win_y, win_x, peak, 2)
+            - ints: 3D array (frame, win_y, win_x, peak)
     """
     
     if find_peaks_kwargs is None:
@@ -503,22 +510,25 @@ def find_disps(corrs, shifts, n_wins, n_peaks, ds_fac=1,
     return disps, ints
     
 
-def filter_outliers(mode, coords, a=None, b=None, verbose=False):
+def filter_outliers(mode: str, coords: np.ndarray, a: float | np.ndarray | None = None, b: float | None = None, verbose: bool = False):
+
     """
     Remove outliers from coordinates based on spatial and intensity criteria.
-    
+
     Args:
         mode (str): Filtering mode:
             - 'semicircle_rect': Filter a semicircle and rectangle
             - 'circle': Filter a circle at the origin
             - 'intensity': Filter based on intensity values of the provided peaks
         coords (np.ndarray): ND coordinate array of shape (..., 2)
-        a (float or np.ndarray): Radius for filtering (or intensity values in 'intensity' mode)
-        b (float): Width for rectangle filtering or relative threshold in 'intensity' mode  
+        a (float | np.ndarray | None): Radius for filtering (or intensity values in 'intensity' mode)
+        b (float | None): Width for rectangle filtering or relative threshold in 'intensity' mode  
         verbose (bool): If True, print summary of filtering.     
-    
+
     Returns:
-        np.ndarray: Filtered coordinates with invalid points set to NaN
+        np.ndarray | tuple[np.ndarray, np.ndarray]:
+            - Filtered coordinates with invalid points set to NaN
+            - (if mode == 'intensity') also returns filtered intensities
     """
     
     # Store original shape and flatten for processing
@@ -586,7 +596,8 @@ def filter_outliers(mode, coords, a=None, b=None, verbose=False):
         return coords
 
 
-def cart2polar(coords):
+def cart2polar(coords: np.ndarray) -> np.ndarray:
+
     """
     Convert Cartesian coordinates to polar coordinates.
 
@@ -605,19 +616,20 @@ def cart2polar(coords):
     return polar_coords
 
 
-def validate_n_nbs(n_nbs, max_shape=None):
+def validate_n_nbs(n_nbs: int | str | tuple[int, int, int], max_shape: tuple[int, int, int] | None = None):
+
     """
     Validate and process n_nbs parameter for filter_neighbours function.
-    
+
     Args:
-        n_nbs (int, str, or tuple): Number of neighbours specification
+        n_nbs (int | str | tuple): Number of neighbours specification
             - int: Number of neighbours in each dimension (must be even).
             - str: "all" to use the full dimension length.
             - tuple: Three values specifying neighbours in each dimension.
-        max (tuple): Shape of the dimensions to use if n_nbs is "all"
+        max_shape (tuple[int, int, int] | None): Shape of the dimensions to use if n_nbs is "all"
 
     Returns:
-        tuple: Processed n_nbs values
+        tuple[int, int, int]: Processed n_nbs values
     """
 
     # Convert to list
@@ -642,14 +654,15 @@ def validate_n_nbs(n_nbs, max_shape=None):
     return tuple(n_nbs)
 
 
-def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=False):
+def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tuple[int, int, int] = 2, mode: str = "xy", replace: bool = False, verbose: bool = False):
+
     """
     Filter out coordinates that are too different from their neighbours.
 
     Args:
         coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
         thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
-        n_nbs (int, str, or tuple): Number of neighbours in each dimension to consider for filtering. Can be an integer, "all", or a tuple of three values (int or "all").
+        n_nbs (int | str | tuple): Number of neighbours in each dimension to consider for filtering. Can be an integer, "all", or a tuple of three values (int or "all").
         mode (str): Which coordinates should be within std*thr from the median:
             - "x": Compare x coordinates only
             - "y": Compare y coordinates only
@@ -747,10 +760,17 @@ def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=
     return coords_output
 
 
-def first_valid(arr):
+def first_valid(arr: np.ndarray) -> float | int | np.generic:
+
     """
-    Function to find the first non-NaN value in an array
-    """    
+    Function to find the first non-NaN value in a 1D array.
+
+    Args:
+        arr (np.ndarray): 1D array
+
+    Returns:
+        float | int | np.generic: First non-NaN value, or np.nan if none found
+    """
 
     # Check if the input is a 1D array
     if arr.ndim == 1:
@@ -765,15 +785,15 @@ def first_valid(arr):
         raise ValueError("Input must be a 1D array.")
 
 
-def strip_peaks(coords, axis=-2):
+def strip_peaks(coords: np.ndarray, axis: int = -2) -> np.ndarray:
+
     """
     Reduce array dimensionality by selecting the first valid peak along an axis containing options.
-    
+
     Args:
         coords (np.ndarray): N-D array where one axis represents different peaks
-        axis (int): Axis along which to reduce the array
-            (default: second-to-last axis)
-    
+        axis (int): Axis along which to reduce the array (default: second-to-last axis)
+
     Returns:
         np.ndarray: Array with one axis reduced
     """
@@ -786,23 +806,22 @@ def strip_peaks(coords, axis=-2):
     return coords
 
 
-def smooth(time, disps, col='both', lam=5e-7, type=int):
+def smooth(time: np.ndarray, disps: np.ndarray, col: str | int = 'both', lam: float = 5e-7, type: type = int) -> np.ndarray:
+
     """
     Smooth displacement data along a specified axis using a smoothing spline.
-    
+
     Args:
         time (np.ndarray): 1D array of time values.
         disps (np.ndarray): 2D array of displacement values.
-        col (str or int): Column to smooth:
+        col (str | int): Column to smooth:
             - 'both': Smooth both columns (y and x displacements).
             - int: Index of the column to smooth (0 for y, 1 for x).
         lam (float): Smoothing parameter. Larger = more smoothing.
         type (type): Type to convert the smoothed displacements to.
 
     Returns:
-        tuple: Tuple containing:
-            - time (np.ndarray): 1D array of time values.
-            - disps (np.ndarray): 2D array of smoothed displacements.
+        np.ndarray: 2D array of smoothed displacements (same shape as input)
     """
 
     # Work on copy
@@ -831,7 +850,7 @@ def smooth(time, disps, col='both', lam=5e-7, type=int):
     return disps_spl.reshape(orig_shape)
 
 
-def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
+def save_cfig(directory: str, filename: str, format: str = 'pdf', test_mode: bool = False, verbose: bool = True):
     """
     Save the current matplotlib figure to a file.
 
@@ -841,6 +860,9 @@ def save_cfig(directory, filename, format='pdf', test_mode=False, verbose=True):
         format (str): File format to save the figure in (e.g., 'pdf', 'png').
         test_mode (bool): If True, do not save the figure.
         verbose (bool): If True, print a message when saving the figure.
+
+    Returns:
+        None
     """
 
     # Only run when not in test mode
