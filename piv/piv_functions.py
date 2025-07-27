@@ -181,7 +181,7 @@ def split_n_shift(img, n_windows, overlap=0, shift=(0, 0),
     # Get dimensions
     h, w = img.shape
     n_y, n_x = n_windows
-    dy, dx = shift.astype(int)
+    dy, dx = np.asarray(shift, dtype=int)
 
     # Calculate window size including overlap
     size_y = min(int(h // n_y * (1 + overlap)), h)
@@ -582,7 +582,7 @@ def smooth(time, disps, col='both', lam=5e-7, type=int):
         col (str or int): Column to smooth:
             - 'both': Smooth both columns (y and x displacements).
             - int: Index of the column to smooth (0 for y, 1 for x).
-        lam (float): Smoothing parameter.
+        lam (float): Smoothing parameter. Larger = more smoothing.
         type (type): Type to convert the smoothed displacements to.
 
     Returns:
