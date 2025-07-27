@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2 as cv
 import numpy as np
@@ -73,7 +74,23 @@ def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=F
         return False
 
 
-def load_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
+def read_image(filepath):
+    """
+    Read a single image file using OpenCV.
+    
+    Args:
+        filepath (str): Full path to the image file to load.
+        
+    Returns:
+        np.ndarray or None: Loaded image as grayscale array, or None if loading failed.
+    """
+    img = cv.imread(filepath, cv.IMREAD_GRAYSCALE)
+    if img is None:
+        print(f"Warning: Failed to load {filepath}")
+    return img
+
+
+def read_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
     """
     Load selected .tif images from a directory into a 3D numpy array.
 
@@ -104,10 +121,18 @@ def load_images(data_path, frame_nrs, format='tif', lead_0=5, timing=True):
                                 f"frame numbers {frame_nrs} with type '"
                                 f"{format}'.")
 
-    # Read images into a 3D numpy array
-    imgs = np.array([cv.imread(os.path.join(data_path, f), cv.IMREAD_GRAYSCALE)
-                     for f in tqdm(files, desc='Reading images', disable=not
-        timing)], dtype=np.uint64)
+    # Read images into a 3D numpy array in parallel
+    file_paths = [os.path.join(data_path, f) for f in files]
+    
+    n_jobs = os.cpu_count() or 4
+    
+    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+        imgs = list(tqdm(executor.map(read_image, file_paths), 
+                        total=len(file_paths), 
+                        desc='Reading images'))
+
+    # Convert list of images to a numpy array
+    imgs = np.array(imgs, dtype=np.uint64)
     return imgs
 
 
