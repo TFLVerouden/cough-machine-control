@@ -1,4 +1,3 @@
-import cvd_check as cvd
 import getpass
 import os
 import sys
@@ -12,13 +11,14 @@ import piv_functions as piv
 # Add the functions directory to the path and import CVD check
 sys.path.append(os.path.join(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))), 'functions'))
+import cvd_check as cvd
 
 # Set CVD-friendly colors
 cvd.set_cvd_friendly_colors()
 
 
 # Set experimental parameters
-test_mode = True
+test_mode = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(4500, 4600)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]

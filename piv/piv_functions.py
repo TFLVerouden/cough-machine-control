@@ -9,9 +9,6 @@ from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
 
-# TODO: - check docstrings for updated names
-# TODO: y typing in the docstrings
-
 
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
     """
