@@ -359,7 +359,7 @@ def filter_outliers(mode, coords, a=None, b=None, verbose=False):
     
     if verbose:
         # Print summary statistics
-        print(f"Global filter removed {np.sum(~mask)} out of {coords.shape[0]} coordinates in mode '{mode}'")
+        print(f"Post-processing: global filter removed {np.sum(~mask)} out of {coords.shape[0]} coordinates in mode '{mode}'")
 
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
@@ -526,9 +526,9 @@ def filter_neighbours(coords, thr=1, n_nbs=2, mode="xy", replace=False, verbose=
     # Print summary for verbose mode
     if verbose:
         if replace:
-            print(f"Neighbour filter replaced {outlier_replaced_count}/{len(coords_output)} outliers and {nan_replaced_count} other NaNs")
+            print(f"Post-processing: neighbour filter replaced {outlier_replaced_count}/{len(coords_output)} outliers and {nan_replaced_count} other NaNs")
         else:
-            print(f"Neighbour filter removed {outlier_count}/{len(coords_output)} outliers")
+            print(f"Post-processing: neighbour filter removed {outlier_count}/{len(coords_output)} outliers")
 
     return coords_output
 

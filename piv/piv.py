@@ -18,7 +18,7 @@ cvd.set_cvd_friendly_colors()
 
 
 # Set experimental parameters
-test_mode = False
+test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
 frame_nrs = list(range(4500, 5500)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
@@ -79,6 +79,7 @@ if bckp1_loaded:
     print("Loaded existing backup data.")
 
 if not bckp1_loaded:
+    # LOADING & CORRELATION
     # Load images from disk    
     imgs = piv.read_images(data_path, frame_nrs, format='tif', lead_0=5,
                            timing=True)
@@ -130,12 +131,13 @@ if not bckp1_loaded:
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
 
+# POST-PROCESSING
 # Outlier removal
 disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1], verbose=True)
 disp1 = piv.strip_peaks(disp1, axis=-2)
-print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
+print(f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
 # TODO: Make it so neighbour filtering is done over an odd number of neighbours, counting the value itself. This is more consistent
-disp1_nbs = piv.filter_neighbours(disp1.copy(), thr=1, n_nbs=(40, 0, 0), verbose=True)
+disp1_nbs = piv.filter_neighbours(disp1.copy(), thr=1, n_nbs=(40, 0, 0),  verbose=True)
 
 # Define time arrays beforehand
 time = np.linspace((frame_nrs[0] - 1) * dt,
@@ -186,6 +188,7 @@ if bckp2_loaded:
     print("Loaded existing second pass backup data.")
 
 if not bckp2_loaded:
+    # LOADING & CORRELATION
     # Ensure we have the images loaded (in case only second pass backup failed)
     if 'imgs' not in globals():
         # Load images from disk    
@@ -304,13 +307,12 @@ if not bckp2_loaded:
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
 
-# Define time arrays for second pass (same as first pass since we keep all frames)
-time2 = time.copy()
+# POST-PROCESSING
 
 # Basic global outlier removal of unreasonable displacements
 disp2 = piv.filter_outliers('semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1], verbose=True)
 disp2 = piv.strip_peaks(disp2, axis=-2)
-print(f"Keeping only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
+print(f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
 
 # Very light neighbour filtering to remove extremes and replace missing values
 disp2 = piv.filter_neighbours(disp2, thr=5, n_nbs=(50, 2, 0), verbose=True, mode='r', replace=True)
@@ -357,15 +359,15 @@ vel2 = disp2 * res_avg / dt
 fig1, ax1 = plt.subplots(figsize=(10, 6))
 
 # Plot vy (vertical velocity)
-ax1.plot(time2 * 1000, np.nanmedian(vel2[:, :, :, 0], axis=(1, 2)), label='Median vy')
-ax1.fill_between(time2 * 1000,
+ax1.plot(time * 1000, np.nanmedian(vel2[:, :, :, 0], axis=(1, 2)), label='Median vy')
+ax1.fill_between(time * 1000,
                  np.nanmin(vel2[:, :, :, 0], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 0], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vy')
 
 # Plot vx (horizontal velocity)
-ax1.plot(time2 * 1000, np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Median vx')
-ax1.fill_between(time2 * 1000,
+ax1.plot(time * 1000, np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Median vx')
+ax1.fill_between(time * 1000,
                  np.nanmin(vel2[:, :, :, 1], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 1], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vx')
@@ -408,7 +410,7 @@ if not test_mode:
             ax_video.set_ylabel('y position (mm)')
             ax_video.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
             ax_video.set_ylim(0, 21.12)
-            ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time2[i] * 1000:.2f} ms)')
+            ax_video.set_title(f'Velocity profiles at frame {i + 1} ({time[i] * 1000:.2f} ms)')
             ax_video.legend()
             ax_video.grid()
             
