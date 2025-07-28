@@ -212,7 +212,7 @@ if not bckp2_loaded:
                                          n_wins=n_wins2,
                                          n_peaks=n_peaks2,
                                          ds_fac=1, floor=10,
-                                         min_dist=3)
+                                         min_dist=3, subpx=True)
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()

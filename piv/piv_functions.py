@@ -523,9 +523,25 @@ def three_point_gauss(array: np.ndarray) -> float:
     if array.ndim != 1 or array.shape[0] != 3:
         raise ValueError("Input must be a 1D array with exactly three elements.")
 
-    # Calculate the subpixel correction using the Gaussian fit formula
-    return (0.5 * (np.log(array[0]) - np.log(array[2])) /
-            ((np.log(array[0])) + np.log(array[2]) - 2 * np.log(array[1])))
+    # Check if middle value is not the peak
+    if array[1] < array[0] or array[1] < array[2]:
+        raise ValueError("Middle value must be the peak of the three-point array.")
+    
+    # Shortcut for the symmetric case
+    if array[0] == array[2]:
+        return 0.0
+    
+    # Replace any zero values with 1 to avoid log(0) issues
+    array1 = np.where(array <= 0, 1, array)
+    
+    # Calculate the denominator (PIV book §5.4.5)
+    den = (np.log(array1[0]) + np.log(array1[2]) - 2 * np.log(array1[1]))
+    
+    # If the denominator is too small, return 0 to avoid division by zero
+    if np.abs(den) < 1e-10:
+        return 0.0
+    else:
+        return (0.5 * (np.log(array1[0]) - np.log(array1[2])) / den)
 
 
 def subpixel(corr: np.ndarray, peak: np.ndarray) -> np.ndarray:
@@ -549,7 +565,7 @@ def subpixel(corr: np.ndarray, peak: np.ndarray) -> np.ndarray:
     return peak.astype(np.float64) + np.array([y_corr, x_corr])
 
 
-def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int, find_peaks_kwargs: dict) -> tuple[int, np.ndarray, np.ndarray]:
+def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int, subpx: bool = False, **find_peaks_kwargs) -> tuple[int, np.ndarray, np.ndarray]:
     """
     Find peaks and calculate displacements for a single correlation map.
     
@@ -560,7 +576,8 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_peaks (int): Number of peaks to find
         ds_fac (int): Downsampling factor to account for in displacement calculation
-        find_peaks_kwargs (dict): Additional arguments for find_peaks function
+        subpx (bool): If True, apply subpixel accuracy using Gaussian fitting
+        **find_peaks_kwargs: Additional arguments for find_peaks function (min_distance, floor, etc.)
         
     Returns:
         tuple: (frame_index, frame_disps, frame_ints) for this frame
@@ -582,6 +599,16 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
             peaks, peak_ints = find_peaks(corr_map, n_peaks=n_peaks, 
                                                **find_peaks_kwargs)
             
+            # Apply subpixel correction if requested
+            if subpx:
+                for p in range(n_peaks):
+                    if not np.isnan(peaks[p]).any():  # Only apply to valid peaks
+                        # Check if peak is not on the edge (needed for subpixel correction)
+                        peak_y, peak_x = peaks[p].astype(int)
+                        if (peak_y > 0 and peak_y < corr_map.shape[0] - 1 and 
+                            peak_x > 0 and peak_x < corr_map.shape[1] - 1):
+                            peaks[p] = subpixel(corr_map, peaks[p].astype(int))
+            
             # Store intensities
             frame_ints[j, k, :] = peak_ints
             
@@ -592,10 +619,9 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
     return i, frame_disps, frame_ints
 
 
-def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int = 1, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
+def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int = 1, subpx: bool = False, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
     """
     Find peaks in correlation maps and calculate displacements.
-    # TODO: Implement subpixel function! Should be easy.
 
     Args:
         corrs (dict): Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
@@ -603,6 +629,7 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_peaks (int): Number of peaks to find
         ds_fac (int): Downsampling factor to account for in displacement calculation
+        subpx (bool): If True, apply subpixel accuracy using Gaussian fitting
         **find_peaks_kwargs: Additional arguments for find_peaks function (min_distance, floor, etc.)
 
     Returns:
@@ -619,8 +646,8 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
     ints = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks), np.nan)
     
     # Prepare arguments for multithreading
-    find_disp_partial = partial(find_disp, corrs=corrs, shifts=shifts, n_wins=n_wins, n_peaks=n_peaks, ds_fac=ds_fac, find_peaks_kwargs=find_peaks_kwargs)
-    
+    find_disp_partial = partial(find_disp, corrs=corrs, shifts=shifts, n_wins=n_wins, n_peaks=n_peaks, ds_fac=ds_fac, subpx=subpx, **find_peaks_kwargs)
+
     n_jobs = os.cpu_count() or 4
     
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
