@@ -216,8 +216,8 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, 
 
     Returns:
         tuple[np.ndarray, np.ndarray]:
-            - windows: 4D array of image windows (window_y_idx, window_x_idx, y, x)
-            - centres: 3D array of window centres (window_y_idx, window_x_idx, 2)
+            - wins: 4D array of image windows (window_y_idx, window_x_idx, y, x)
+            - win_pos: corresponding positions (window_y_idx, window_x_idx, 2)
     """
     # Get dimensions
     h, w = img.shape
@@ -234,7 +234,7 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, 
     x_indices = np.linspace(0, w - size_x, num=n_x, dtype=int)
     grid = np.stack(np.meshgrid(y_indices, x_indices, indexing="ij"), axis=-1)
 
-    # Compute centres (window_y_idx, window_x_idx, 2)
+    # Compute physical centres of windows in image coordinates (for plotting/visualization)
     centres = np.stack((grid[:, :, 0] + size_y / 2,
                         grid[:, :, 1] + size_x / 2), axis=-1)
 
@@ -284,7 +284,7 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, 
     return windows, centres
 
 
-def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, overlap: float, centres: np.ndarray) -> dict:
+def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, overlap: float) -> dict:
     """
     Calculate correlation maps for a single set of frames.
 
@@ -294,27 +294,31 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         shifts (np.ndarray): Array of shifts per frame (frame, y_shift, x_shift)
         overlap (float): Fractional overlap between windows (0 = no overlap)
-        centres (np.ndarray): Window centres from first frame
         
     Returns:
         dict: Correlation maps for this frame as {(frame, win_y, win_x): (correlation_map, map_center)}
     """
     
     # Split images into windows with shifts
-    wnd0, centres = split_n_shift(imgs[i], n_wins, shift=shifts[i],
+    wnd0, _ = split_n_shift(imgs[i], n_wins, shift=shifts[i],
                                   shift_mode='before', overlap=overlap)
     wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i],
                             shift_mode='after', overlap=overlap)
-    # print(centres)
 
-    # Calculate correlation maps + window centres for all windows
+    # Calculate correlation maps and their centres for all windows
     corrs = {}
     for j in range(n_wins[0]):
         for k in range(n_wins[1]):
+
+            # Correlate two (shifted) frames
             corr = sig.correlate(wnd1[j, k], wnd0[j, k],
                                      method='fft', mode='same')
-            print(centres[j, k])
-            corrs[(i, j, k)] = (corr, centres[j, k])
+            
+            # Calculate the centre of the correlation map
+            cntr = np.array(corr.shape) // 2
+
+            # Store them in a dict
+            corrs[(i, j, k)] = (corr, cntr)
 
     return corrs
 
@@ -345,25 +349,21 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int] = (1, 1), shifts: np.nd
     if shifts is None:
         shifts = np.zeros((n_corrs, 2))
 
-    # Get centres from first frame
-    _, centres = split_n_shift(imgs[0], n_wins, shift=shifts[0], shift_mode='before', overlap=overlap)
-
     # Prepare arguments for multithreading
-    calc_corr_partial = partial(calc_corr, imgs=imgs, n_wins=n_wins, shifts=shifts, overlap=overlap, centres=centres)
+    calc_corr_partial = partial(calc_corr, imgs=imgs, n_wins=n_wins, shifts=shifts, overlap=overlap)
 
+    # Execute calc_corr in parallel for each frame
     n_jobs = os.cpu_count() or 4
-    
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
-        frame_results = list(tqdm(executor.map(calc_corr_partial, range(n_corrs)), 
-                                 total=n_corrs, 
-                                 desc='Calculating correlation maps'))
-    
-    # Combine results from all frames
-    corr_maps = {}
-    for frame_result in frame_results:
-        corr_maps.update(frame_result)
+        frame_results = list(tqdm(
+            executor.map(calc_corr_partial, range(n_corrs)), total=n_corrs, desc='Calculating correlation maps'))
 
-    return corr_maps
+    # Combine results from all frames
+    corrs = {}
+    for frame_result in frame_results:
+        corrs.update(frame_result)
+
+    return corrs
 
 
 def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, int], n_corrs: int) -> dict:
@@ -385,52 +385,58 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
     # Calculate window bounds for summing: odd = symmetric, even = asymmetric
     i0 = max(0, i - (n_tosum - 1) // 2)
     i1 = min(n_corrs, i + n_tosum // 2 + 1)
-    ref = shifts[i]  # Reference shift for current frame
+    ref_shift = shifts[i]  # Reference shift for current frame
     
-    frame_corrs_sum = {}
+    # Pre-calculate frame indices and relative shifts
+    corr_idxs = np.arange(i0, i1)
+    rel_shifts = np.round(shifts[corr_idxs] - ref_shift).astype(int)
+    n_tosum = len(corr_idxs)
     
+    # For each window...
+    corrs_summed = {}
     for j in range(n_wins[0]):
         for k in range(n_wins[1]):
-
-            # Collect all correlation maps to sum and their relative shifts
-            maps = []
-            sfts = []
-
-            for f in range(i0, i1):
-                # Calculate shift difference (in pixels) relative to reference
-                d = np.round(shifts[f] - ref).astype(int)
-
-                # Extract correlation map from tuple (corr_map, map_center)
-                corr_map, _ = corrs[(f, j, k)]
-                maps.append(corr_map)
-                sfts.append(d)
-
-            if len(maps) == 1:
-                # Only one map to sum, no alignment needed
-                smap = maps[0]
-                ctr = np.array(smap.shape) // 2
+            
+            # Single frame case - no alignment needed
+            if n_tosum == 1:
+                corr, _ = corrs[(corr_idxs[0], j, k)]
+                corr_summed = corr
+                cntr = np.array(corr_summed.shape) // 2
+            
+            # Multiple frames case - need alignment and summing
             else:
+                # Get first correlation map to determine base shape
+                first_corr, _ = corrs[(corr_idxs[0], j, k)]
+                base_shape = first_corr.shape
+                
                 # Calculate the expanded size needed to fit all shifted maps
-                sh0 = maps[0].shape
-                mn = np.min(sfts, axis=0)
-                mx = np.max(sfts, axis=0)
-                nshape = (sh0[0] + mx[0] - mn[0], sh0[1] + mx[1] - mn[1])
-
+                shift_min = np.min(rel_shifts, axis=0)
+                shift_max = np.max(rel_shifts, axis=0)
+                expanded_shape = (base_shape[0] + shift_max[0] - shift_min[0],
+                                base_shape[1] + shift_max[1] - shift_min[1])
+                
+                # Pre-allocate the summed correlation map
+                corr_summed = np.zeros(expanded_shape, dtype=first_corr.dtype)
+                
                 # Calculate new center position in expanded map
-                ctr = (sh0[0] // 2 - mn[0], sh0[1] // 2 - mn[1])
-                smap = np.zeros(nshape)
-
-                # Add each map at its shifted position in the expanded array
-                for m, s in zip(maps, sfts):
-                    # Calculate start and end indices for placement
-                    sy, sx = s - mn
-                    ey, ex = sy + m.shape[0], sx + m.shape[1]
-                    smap[sy:ey, sx:ex] += m
+                cntr = (base_shape[0] // 2 - shift_min[0],
+                        base_shape[1] // 2 - shift_min[1])
+                
+                # Sum each correlation map at its shifted position
+                for frame_idx, shift in zip(corr_idxs, rel_shifts):
+                    corr, _ = corrs[(frame_idx, j, k)]
+                    
+                    # Calculate placement indices
+                    sy, sx = shift - shift_min
+                    ey, ex = sy + corr.shape[0], sx + corr.shape[1]
+                    
+                    # Add correlation map to summed array
+                    corr_summed[sy:ey, sx:ex] += corr
 
             # Store the summed map and its center for this window
-            frame_corrs_sum[(i, j, k)] = (smap, ctr)
+            corrs_summed[(i, j, k)] = (corr_summed, cntr)
     
-    return frame_corrs_sum
+    return corrs_summed
 
 
 def sum_corrs(corrs: dict, n_tosum: int, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None) -> dict:
@@ -613,7 +619,9 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
     
     for j in range(n_wins[0]):
         for k in range(n_wins[1]):
-            # Get correlation map and center
+            # Get correlation map and its center (zero-displacement reference point)
+            # NOTE: map_center is NOT the physical window position - it's the reference 
+            # point in the correlation map coordinate system for calculating displacements
             corr_map, map_center = corrs[(i, j, k)]
             
             # Find peaks in the correlation map
@@ -1042,30 +1050,33 @@ def plot_vel_comp(disp_unf, disp_glo, disp_nbs, disp_spl, res, frame_nrs, dt, pr
 
     # Define a time array
     n_corrs = disp_unf.shape[0]
-    n_peaks = disp_unf.shape[3]
+    # n_peaks = disp_unf.shape[3]
     time = np.linspace((frame_nrs[0] - 1) * dt,
                     (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
     # Convert displacement to velocity
-    vel_unf = disp_unf * res / dt
+    # vel_unf = disp_unf * res / dt
     vel_glo = disp_glo * res / dt
     vel_nbs = disp_nbs * res / dt
     vel_spl = disp_spl * res / dt
 
     # Scatter plot vx(t)
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks)).flatten(),
-            vel_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (all candidate peaks)')
-    ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c=cvd.get_color(1),
+    # ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks)).flatten(),
+    #         vel_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (all candidate peaks)')
+    # ax.plot(1000 * time, vel_unf[:, 0, 0, 0, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (brightest peak)')
+    ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c='gray',
             label='vx (filtered globally)')
-    ax.plot(1000 * time, vel_nbs[:, 0, 0, 1], '.', ms=2, c='black',
+    ax.plot(1000 * time, vel_nbs[:, 0, 0, 1], '.', ms=2, c=cvd.get_color(1),
             label='vx (filtered neighbours)')
-    ax.plot(1000 * time, vel_spl[:, 0, 0, 1], c=cvd.get_color(1),
-            label='vx (smoothed for 2nd pass)')
 
     # Also plot filtered vy(t)
-    ax.plot(1000 * time, vel_nbs[:, 0, 0, 0], 'o', ms=4, c=cvd.get_color(0), 
+    ax.plot(1000 * time, vel_nbs[:, 0, 0, 0], c=cvd.get_color(0), 
             label='vy (filtered neighbours)')
+    
+    # Smoothed vy(t)
+    ax.plot(1000 * time, vel_spl[:, 0, 0, 1], c='black',
+        label='vx (smoothed for 2nd pass)')
 
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Velocity (m/s)')
@@ -1127,7 +1138,7 @@ def plot_vel_med(disp, res, frame_nrs, dt, proc_path=None, file_name=None, test_
     return fig, ax
 
 
-def plot_vel_prof(disp, res, frame_nrs, dt, centres, 
+def plot_vel_prof(disp, res, frame_nrs, dt, win_pos, 
                   mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, **kwargs):
     # TODO: Write docstring
     
@@ -1177,7 +1188,7 @@ def plot_vel_prof(disp, res, frame_nrs, dt, centres,
     
     # Common plotting function
     def plot_frame(frame_idx, ax):
-        y_pos = centres[:, 0, 0] * res * 1000
+        y_pos = win_pos[:, 0, 0] * res * 1000
         vx = vel[frame_idx, :, 0, 1]
         vy = vel[frame_idx, :, 0, 0]
         
@@ -1208,12 +1219,11 @@ def plot_vel_prof(disp, res, frame_nrs, dt, centres,
             
             # Save if path is specified
             if save_path is not None:
-                save_cfig(save_path, f"vel_prof_frame_{frame_idx:04d}", test_mode=test_mode)
+                save_cfig(save_path, file_name + f"_{frame_idx:04d}", test_mode=test_mode)
+                
                 # Close figure to save memory when plotting all frames
                 if mode == "all":
                     plt.close(fig)
-
-    return fig, ax
 
 
 def save_cfig(directory: str, file_name: str, format: str = 'pdf', test_mode: bool = False, verbose: bool = True):
