@@ -20,7 +20,7 @@ cvd.set_cvd_friendly_colors()
 # Set experimental parameters
 test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(4500, 4600)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(1, 6000)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings

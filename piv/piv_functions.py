@@ -1,10 +1,12 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
 from natsort import natsorted
+from scipy import signal as sig
 from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
@@ -242,6 +244,37 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap=0, shift=(0,
     return windows, centres
 
 
+def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, centres: np.ndarray) -> dict:
+    """
+    Calculate correlation maps for a single set of frames.
+
+    Args:
+        i (int): Frame index
+        imgs (np.ndarray): 3D array of images (frame, y, x)
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        shifts (np.ndarray): Array of shifts per frame (frame, y_shift, x_shift)
+        centres (np.ndarray): Window centres from first frame
+        
+    Returns:
+        dict: Correlation maps for this frame as {(frame, win_y, win_x): (correlation_map, map_center)}
+    """
+    
+    # Split images into windows with shifts
+    wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before')
+    wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after')
+    
+    frame_corr_maps = {}
+    
+    # Calculate correlation maps for all windows
+    for j in range(n_wins[0]):
+        for k in range(n_wins[1]):
+            corr_map = sig.correlate(wnd1[j, k], wnd0[j, k], method='fft', mode='same')
+            map_center = centres[j, k] if centres is not None else centres_curr[j, k]
+            frame_corr_maps[(i, j, k)] = (corr_map, map_center)
+    
+    return frame_corr_maps
+
+
 def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | None = None, ds_fac: int = 1):
     """
     Calculate correlation maps for all frames and windows.
@@ -255,8 +288,6 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | N
     Returns:
         dict: Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
     """
-    from scipy import signal as sig
-
     n_corrs = len(imgs) - 1
 
     # Apply downsampling if needed
@@ -267,26 +298,92 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | N
     if shifts is None:
         shifts = np.zeros((n_corrs, 2))
 
+    # Get centres from first frame
+    _, centres = split_n_shift(imgs[0], n_wins, shift=shifts[0], shift_mode='before')
+    
+    # Prepare arguments for multithreading
+    calc_corr_partial = partial(calc_corr, imgs=imgs, n_wins=n_wins, shifts=shifts, centres=centres)
+    
+    n_jobs = os.cpu_count() or 4
+    
+    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+        frame_results = list(tqdm(executor.map(calc_corr_partial, range(n_corrs)), 
+                                 total=n_corrs, 
+                                 desc='Calculating correlation maps'))
+    
+    # Combine results from all frames
     corr_maps = {}
-    centres = None
-
-    for i in trange(n_corrs, desc='Calculating correlation maps'):
-        # Split images into windows with shifts
-        wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before')
-        wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after')
-
-        # Store centres from first frame
-        if centres is None:
-            centres = centres_curr
-
-        # Calculate correlation maps for all windows
-        for j in range(n_wins[0]):
-            for k in range(n_wins[1]):
-                corr_map = sig.correlate(wnd1[j, k], wnd0[j, k], method='fft', mode='same')
-                map_center = centres[j, k]  # Use window center
-                corr_maps[(i, j, k)] = (corr_map, map_center)
+    for frame_result in frame_results:
+        corr_maps.update(frame_result)
 
     return corr_maps
+
+
+def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, int], n_corrs: int) -> dict:
+    """
+    Sum correlation maps for a single set of frames.
+
+    Args:
+        i (int): Frame index
+        corrs (dict): Correlation maps from calc_corrs
+        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        n_tosum (int): Number of correlation maps to sum
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        n_corrs (int): Total number of correlation frames
+        
+    Returns:
+        dict: Summed correlation maps for this frame as {(frame, win_y, win_x): (summed_map, new_center)}
+    """
+    
+    # Calculate window bounds for summing: odd = symmetric, even = asymmetric
+    i0 = max(0, i - (n_tosum - 1) // 2)
+    i1 = min(n_corrs, i + n_tosum // 2 + 1)
+    ref = shifts[i]  # Reference shift for current frame
+    
+    frame_corrs_sum = {}
+    
+    for j in range(n_wins[0]):
+        for k in range(n_wins[1]):
+
+            # Collect all correlation maps to sum and their relative shifts
+            maps = []
+            sfts = []
+
+            for f in range(i0, i1):
+                # Calculate shift difference (in pixels) relative to reference
+                d = np.round(shifts[f] - ref).astype(int)
+
+                # Extract correlation map from tuple (corr_map, map_center)
+                corr_map, _ = corrs[(f, j, k)]
+                maps.append(corr_map)
+                sfts.append(d)
+
+            if len(maps) == 1:
+                # Only one map to sum, no alignment needed
+                smap = maps[0]
+                ctr = np.array(smap.shape) // 2
+            else:
+                # Calculate the expanded size needed to fit all shifted maps
+                sh0 = maps[0].shape
+                mn = np.min(sfts, axis=0)
+                mx = np.max(sfts, axis=0)
+                nshape = (sh0[0] + mx[0] - mn[0], sh0[1] + mx[1] - mn[1])
+
+                # Calculate new center position in expanded map
+                ctr = (sh0[0] // 2 - mn[0], sh0[1] // 2 - mn[1])
+                smap = np.zeros(nshape)
+
+                # Add each map at its shifted position in the expanded array
+                for m, s in zip(maps, sfts):
+                    # Calculate start and end indices for placement
+                    sy, sx = s - mn
+                    ey, ex = sy + m.shape[0], sx + m.shape[1]
+                    smap[sy:ey, sx:ex] += m
+
+            # Store the summed map and its center for this window
+            frame_corrs_sum[(i, j, k)] = (smap, ctr)
+    
+    return frame_corrs_sum
 
 
 def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, int]) -> dict:
@@ -305,55 +402,22 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
     
     # Always use dictionary storage
     n_corrs = max(key[0] for key in corrs.keys()) + 1
+    
+    # Prepare arguments for multithreading
+    sum_corr_partial = partial(sum_corr, corrs=corrs, shifts=shifts, n_tosum=n_tosum, n_wins=n_wins, n_corrs=n_corrs)
+    
+    n_jobs = os.cpu_count() or 4
+    
+    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+        frame_results = list(tqdm(executor.map(sum_corr_partial, range(n_corrs)), 
+                                 total=n_corrs, 
+                                 desc='Summing correlation maps'))
+    
+    # Combine results from all frames
     corrs_sum = {}
-
-    for i in trange(n_corrs, desc='Summing correlation maps'):
-
-        # Calculate window bounds for summing: odd = symmetric, even = asymmetric
-        i0 = max(0, i - (n_tosum - 1) // 2)
-        i1 = min(n_corrs, i + n_tosum // 2 + 1)
-        ref = shifts[i]  # Reference shift for current frame
-
-        for j in range(n_wins[0]):
-            for k in range(n_wins[1]):
-
-                # Collect all correlation maps to sum and their relative shifts
-                maps = []
-                sfts = []
-
-                for f in range(i0, i1):
-                    # Calculate shift difference (in pixels) relative to reference
-                    d = np.round(shifts[f] - ref).astype(int)
-
-                    # Extract correlation map from tuple (corr_map, map_center)
-                    corr_map, _ = corrs[(f, j, k)]
-                    maps.append(corr_map)
-                    sfts.append(d)
-
-                if len(maps) == 1:
-                    # Only one map to sum, no alignment needed
-                    smap = maps[0]
-                    ctr = np.array(smap.shape) // 2
-                else:
-                    # Calculate the expanded size needed to fit all shifted maps
-                    sh0 = maps[0].shape
-                    mn = np.min(sfts, axis=0)
-                    mx = np.max(sfts, axis=0)
-                    nshape = (sh0[0] + mx[0] - mn[0], sh0[1] + mx[1] - mn[1])
-
-                    # Calculate new center position in expanded map
-                    ctr = (sh0[0] // 2 - mn[0], sh0[1] // 2 - mn[1])
-                    smap = np.zeros(nshape)
-
-                    # Add each map at its shifted position in the expanded array
-                    for m, s in zip(maps, sfts):
-                        # Calculate start and end indices for placement
-                        sy, sx = s - mn
-                        ey, ex = sy + m.shape[0], sx + m.shape[1]
-                        smap[sy:ey, sx:ex] += m
-
-                # Store the summed map and its center for this window
-                corrs_sum[(i, j, k)] = (smap, ctr)
+    for frame_result in frame_results:
+        corrs_sum.update(frame_result)
+    
     return corrs_sum
     
 
@@ -449,6 +513,49 @@ def subpixel(corr: np.ndarray, peak: np.ndarray) -> np.ndarray:
     return peak.astype(np.float64) + np.array([y_corr, x_corr])
 
 
+def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int, find_peaks_kwargs: dict) -> tuple[int, np.ndarray, np.ndarray]:
+    """
+    Find peaks and calculate displacements for a single correlation map.
+    
+    Args:
+        i (int): Correlation map index
+        corrs (dict): Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
+        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        n_peaks (int): Number of peaks to find
+        ds_fac (int): Downsampling factor to account for in displacement calculation
+        find_peaks_kwargs (dict): Additional arguments for find_peaks function
+        
+    Returns:
+        tuple: (frame_index, frame_disps, frame_ints) for this frame
+    """
+    
+    # Get reference shift (from current frame) - same for all windows
+    ref_shift = shifts[i]
+    
+    # Initialize output arrays for this frame
+    frame_disps = np.full((n_wins[0], n_wins[1], n_peaks, 2), np.nan)
+    frame_ints = np.full((n_wins[0], n_wins[1], n_peaks), np.nan)
+    
+    for j in range(n_wins[0]):
+        for k in range(n_wins[1]):
+            # Get correlation map and center
+            corr_map, map_center = corrs[(i, j, k)]
+            
+            # Find peaks in the correlation map
+            peaks, peak_ints = find_peaks(corr_map, n_peaks=n_peaks, 
+                                               **find_peaks_kwargs)
+            
+            # Store intensities
+            frame_ints[j, k, :] = peak_ints
+            
+            # Calculate displacements for all peaks
+            frame_disps[j, k, :, :] = (ref_shift + 
+                                          (peaks - map_center) * ds_fac)
+    
+    return i, frame_disps, frame_ints
+
+
 def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int = 1, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
     """
     Find peaks in correlation maps and calculate displacements.
@@ -475,25 +582,20 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
     disps = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks, 2), np.nan)
     ints = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks), np.nan)
     
-    for i in tqdm(range(n_corrs), desc='Finding peaks'):
-        # Get reference shift (from current frame) - same for all windows
-        ref_shift = shifts[i]
-        
-        for j in range(n_wins[0]):
-            for k in range(n_wins[1]):
-                # Get correlation map and center
-                corr_map, map_center = corrs[(i, j, k)]
-                
-                # Find peaks in the correlation map
-                peaks, peak_ints = find_peaks(corr_map, n_peaks=n_peaks, 
-                                                   **find_peaks_kwargs)
-                
-                # Store intensities
-                ints[i, j, k, :] = peak_ints
-                
-                # Calculate displacements for all peaks
-                disps[i, j, k, :, :] = (ref_shift + 
-                                              (peaks - map_center) * ds_fac)
+    # Prepare arguments for multithreading
+    find_disp_partial = partial(find_disp, corrs=corrs, shifts=shifts, n_wins=n_wins, n_peaks=n_peaks, ds_fac=ds_fac, find_peaks_kwargs=find_peaks_kwargs)
+    
+    n_jobs = os.cpu_count() or 4
+    
+    with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+        frame_results = list(tqdm(executor.map(find_disp_partial, range(n_corrs)), 
+                                 total=n_corrs, 
+                                 desc='Finding peaks'))
+    
+    # Combine results from all frames
+    for frame_idx, frame_disps, frame_ints in frame_results:
+        disps[frame_idx] = frame_disps
+        ints[frame_idx] = frame_ints
     
     return disps, ints
     
