@@ -253,7 +253,7 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | N
         ds_fac (int): Downsampling factor (1 = no downsampling)
 
     Returns:
-        dict: Correlation maps as {(frame, j, k): (correlation_map, map_center)}
+        dict: Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
     """
     from scipy import signal as sig
 
@@ -294,13 +294,13 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
     Sum correlation maps with windowing and alignment.
 
     Args:
-        corrs (dict): Correlation maps from calc_corrs as {(frame, j, k): (correlation_map, map_center)}
+        corrs (dict): Correlation maps from calc_corrs as {(frame, win_y, win_x): (correlation_map, map_center)}
         shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
         n_tosum (int): Number of correlation maps to sum
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
 
     Returns:
-        dict: Summed correlation maps as {(frame, j, k): (summed_map, new_center)}
+        dict: Summed correlation maps as {(frame, win_y, win_x, k): (summed_map, new_center)}
     """
     
     # Always use dictionary storage
@@ -308,22 +308,28 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
     corrs_sum = {}
 
     for i in trange(n_corrs, desc='Summing correlation maps'):
+
         # Calculate window bounds for summing: odd = symmetric, even = asymmetric
         i0 = max(0, i - (n_tosum - 1) // 2)
         i1 = min(n_corrs, i + n_tosum // 2 + 1)
         ref = shifts[i]  # Reference shift for current frame
+
         for j in range(n_wins[0]):
             for k in range(n_wins[1]):
+
                 # Collect all correlation maps to sum and their relative shifts
                 maps = []
                 sfts = []
+
                 for f in range(i0, i1):
                     # Calculate shift difference (in pixels) relative to reference
                     d = np.round(shifts[f] - ref).astype(int)
+
                     # Extract correlation map from tuple (corr_map, map_center)
                     corr_map, _ = corrs[(f, j, k)]
                     maps.append(corr_map)
                     sfts.append(d)
+
                 if len(maps) == 1:
                     # Only one map to sum, no alignment needed
                     smap = maps[0]
@@ -334,34 +340,37 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
                     mn = np.min(sfts, axis=0)
                     mx = np.max(sfts, axis=0)
                     nshape = (sh0[0] + mx[0] - mn[0], sh0[1] + mx[1] - mn[1])
+
                     # Calculate new center position in expanded map
                     ctr = (sh0[0] // 2 - mn[0], sh0[1] // 2 - mn[1])
                     smap = np.zeros(nshape)
+
                     # Add each map at its shifted position in the expanded array
                     for m, s in zip(maps, sfts):
                         # Calculate start and end indices for placement
                         sy, sx = s - mn
                         ey, ex = sy + m.shape[0], sx + m.shape[1]
                         smap[sy:ey, sx:ex] += m
+
                 # Store the summed map and its center for this window
                 corrs_sum[(i, j, k)] = (smap, ctr)
     return corrs_sum
     
 
-def find_peaks(corr: np.ndarray, num_peaks: int = 1, min_dist: int = 5, floor: float | None = None):
+def find_peaks(corr: np.ndarray, n_peaks: int = 1, min_dist: int = 5, floor: float | None = None):
 
     """
     Find peaks in a correlation map.
 
     Args:
         corr (np.ndarray): 2D array of correlation values.
-        num_peaks (int): Number of peaks to find.
+        n_peaks (int): Number of peaks to find.
         min_dist (int): Minimum distance between peaks in pixels.
         floor (float | None): Optional floor threshold for peak detection.
 
     Returns:
         tuple[np.ndarray, np.ndarray]:
-            - peaks: Array of peak coordinates shaped (num_peaks, 2)
+            - peaks: Array of peak coordinates shaped (n_peaks, 2)
             - intensities: Intensities of the found peaks.
     """
 
@@ -373,29 +382,29 @@ def find_peaks(corr: np.ndarray, num_peaks: int = 1, min_dist: int = 5, floor: f
         # if floor < np.nanstd(corr_map, axis=None):
         #     print(f"Warning: floor {floor} is above the standard deviation.")
 
-    if num_peaks == 1:
+    if n_peaks == 1:
         # Find the single peak
         peaks = np.argwhere(np.amax(corr) == corr).astype(np.float64)
     else:
         # Find multiple peaks using peak_local_max
         peaks = peak_local_max(corr, min_distance=min_dist,
-                               num_peaks=num_peaks, exclude_border=True, threshold_abs=floor).astype(np.float64)
+                               num_peaks=n_peaks, exclude_border=True, threshold_abs=floor).astype(np.float64)
 
     # If a smaller number of peaks is found, pad with NaNs
-    if peaks.shape[0] < num_peaks:
-        peaks = np.pad(peaks, ((0, num_peaks - peaks.shape[0]), (0, 0)),
+    if peaks.shape[0] < n_peaks:
+        peaks = np.pad(peaks, ((0, n_peaks - peaks.shape[0]), (0, 0)),
                        mode='constant', constant_values=np.nan)
 
     # Calculate the intensities of the peaks
-    intensities = np.full(num_peaks, np.nan)
+    ints = np.full(n_peaks, np.nan)
     
     # Only calculate intensities for valid (non-NaN) peaks
     valid_mask = ~np.isnan(peaks).any(axis=1)
     if np.any(valid_mask):
         valid_peaks = peaks[valid_mask]
-        intensities[valid_mask] = corr[valid_peaks[:, 0].astype(int), valid_peaks[:, 1].astype(int)]
+        ints[valid_mask] = corr[valid_peaks[:, 0].astype(int), valid_peaks[:, 1].astype(int)]
 
-    return peaks, intensities
+    return peaks, ints
 
 
 def three_point_gauss(array: np.ndarray) -> float:
@@ -446,7 +455,7 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
     # TODO: Implement subpixel function! Should be easy.
 
     Args:
-        corrs (dict): Correlation maps as {(frame, j, k): (correlation_map, map_center)}
+        corrs (dict): Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
         shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_peaks (int): Number of peaks to find
@@ -476,11 +485,11 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
                 corr_map, map_center = corrs[(i, j, k)]
                 
                 # Find peaks in the correlation map
-                peaks, peak_intensities = find_peaks(corr_map, num_peaks=n_peaks, 
+                peaks, peak_ints = find_peaks(corr_map, n_peaks=n_peaks, 
                                                    **find_peaks_kwargs)
                 
                 # Store intensities
-                ints[i, j, k, :] = peak_intensities
+                ints[i, j, k, :] = peak_ints
                 
                 # Calculate displacements for all peaks
                 disps[i, j, k, :, :] = (ref_shift + 
