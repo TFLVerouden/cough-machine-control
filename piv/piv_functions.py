@@ -12,6 +12,39 @@ from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
 
 
+# TODO: Set up module.
+""""
+piv_functions/
+├── __init__.py
+├── correlation.py
+├── filtering.py
+├── io.py
+├── plotting.py
+├── processing.py
+└── utils.py
+
+E.g.:
+# Import all functions from submodules
+from .io import backup, read_img, read_imgs
+from .processing import downsample, split_n_shift
+from .correlation import calc_corr, calc_corrs, sum_corr, sum_corrs
+from .utils import find_peaks, three_point_gauss, subpixel, find_disp, find_disps
+from .filtering import filter_outliers, filter_neighbours, cart2polar, validate_n_nbs, first_valid, strip_peaks
+from .plotting import save_cfig
+from .processing import smooth
+
+# Optional: define __all__ for explicit exports
+__all__ = [
+    'backup', 'read_img', 'read_imgs',
+    'downsample', 'split_n_shift', 
+    'calc_corr', 'calc_corrs', 'sum_corr', 'sum_corrs',
+    'find_peaks', 'three_point_gauss', 'subpixel', 'find_disp', 'find_disps',
+    'filter_outliers', 'filter_neighbours', 'cart2polar', 'validate_n_nbs', 
+    'first_valid', 'strip_peaks', 'smooth', 'save_cfig'
+]
+
+"""
+
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
     """
     Load or save a backup file from/to the specified path.

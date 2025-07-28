@@ -145,6 +145,7 @@ piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
            time=time, disp1=disp1, disp1_unf=disp1_unf, disp1_spl=disp1_spl,
            int1_unf=int1_unf, n_corrs=n_corrs)
 
+# TODO: Move plot to function
 # Calculate velocities for plot
 vel1_unf = disp1_unf * res_avg / dt
 vel1 = disp1 * res_avg / dt
@@ -174,6 +175,10 @@ piv.save_cfig(proc_path, "disp1", test_mode=test_mode)
 
 # SECOND PASS: Split image into windows and correlate ==========================
 print(f"SECOND PASS: {n_wins2} windows")
+
+# TODO: Test downsampling in 2nd pass?
+# TODO: Window overlap?
+
 # Try to load existing backup data
 bckp2_loaded, loaded_vars2 = piv.backup(
     "load", proc_path, "pass2.npz", disp2_var_names, test_mode)
@@ -248,6 +253,8 @@ piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
 vel2_unf = disp2_unf * res_avg / dt
 vel2 = disp2 * res_avg / dt
 
+# TODO: Move plots to functions
+
 # # Plot the velocity profiles for randomly selected frames
 # np.random.seed(42)  # For reproducible results
 # sample_frames = np.random.choice(n_corrs, size=min(10, n_corrs), replace=False)
@@ -306,6 +313,9 @@ ax1.grid()
 
 piv.save_cfig(proc_path, "disp2_med",  test_mode=test_mode)
 
+
+# TODO: Move video creation to function
+
 # Set up video writer for velocity profiles
 if not test_mode:
     from matplotlib import animation as ani
@@ -345,7 +355,9 @@ if not test_mode:
     plt.close(fig_video)
     print(f"Video saved to {video_path}")
 
-# TODO: combine autocorrs might not be best, rather fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
+# TODO: 3rd pass!
+
+# TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 
 # Finally, show all figures
 plt.show()
