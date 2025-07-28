@@ -1,4 +1,5 @@
 import os
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
@@ -10,7 +11,12 @@ from scipy import signal as sig
 from scipy.interpolate import make_smoothing_spline
 from skimage.feature import peak_local_max
 from tqdm import trange, tqdm
+from matplotlib import animation as ani
 
+# Add the functions directory to the path and import CVD check
+sys.path.append(os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), 'functions'))
+import cvd_check as cvd
 
 # TODO: Set up module.
 """"
@@ -295,34 +301,39 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
     """
     
     # Split images into windows with shifts
-    wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before', overlap=overlap)
-    wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after', overlap=overlap)
+    wnd0, centres = split_n_shift(imgs[i], n_wins, shift=shifts[i],
+                                  shift_mode='before', overlap=overlap)
+    wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i],
+                            shift_mode='after', overlap=overlap)
+    # print(centres)
 
-    frame_corr_maps = {}
-    
-    # Calculate correlation maps for all windows
+    # Calculate correlation maps + window centres for all windows
+    corrs = {}
     for j in range(n_wins[0]):
         for k in range(n_wins[1]):
-            corr_map = sig.correlate(wnd1[j, k], wnd0[j, k], method='fft', mode='same')
-            map_center = centres[j, k] if centres is not None else centres_curr[j, k]
-            frame_corr_maps[(i, j, k)] = (corr_map, map_center)
-    
-    return frame_corr_maps
+            corr = sig.correlate(wnd1[j, k], wnd0[j, k],
+                                     method='fft', mode='same')
+            print(centres[j, k])
+            corrs[(i, j, k)] = (corr, centres[j, k])
+
+    return corrs
 
 
-def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | None = None, overlap: float = 0, ds_fac: int = 1):
+def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None, overlap: float = 0, ds_fac: int = 1):
     """
     Calculate correlation maps for all frames and windows.
 
     Args:
         imgs (np.ndarray): 3D array of images (frame, y, x)
-        n_wins (tuple[int, int]): Number of windows (n_y, n_x)
-        shifts (np.ndarray | None): Optional array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used.
+        n_wins (tuple[int, int]): Nr of windows (n_y, n_x)
+        shifts (np.ndarray | None): 2D array of shifts per window
+            (frame, y_shift, x_shift). If None, shift zero is used.
         overlap (float): Fractional overlap between windows (0 = no overlap)
         ds_fac (int): Downsampling factor (1 = no downsampling)
 
     Returns:
-        dict: Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
+        dict: Correlation maps as {(frame, win_y, win_x):
+            (correlation_map, map_center)}
     """
     n_corrs = len(imgs) - 1
 
@@ -422,15 +433,17 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
     return frame_corrs_sum
 
 
-def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, int]) -> dict:
+def sum_corrs(corrs: dict, n_tosum: int, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None) -> dict:
     """
     Sum correlation maps with windowing and alignment.
 
     Args:
-        corrs (dict): Correlation maps from calc_corrs as {(frame, win_y, win_x): (correlation_map, map_center)}
-        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
-        n_tosum (int): Number of correlation maps to sum (1 = no summation, even = asymmetric)
+        corrs (dict): Correlation maps from calc_corrs
+            as {(frame, win_y, win_x): (correlation_map, map_center)}
+        n_tosum (int): Nr of corr. maps to sum (1 = none, even = asymmetric)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        shifts (np.ndarray | None): 2D array of shifts per window
+            (frame, y_shift, x_shift). (0, 0, 0) if None
 
     Returns:
         dict: Summed correlation maps as {(frame, win_y, win_x, k): (summed_map, new_center)}
@@ -440,8 +453,12 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
     if n_tosum < 1 or not isinstance(n_tosum, int):
         raise ValueError("n_tosum must be a positive integer")
 
-    # Always use dictionary storage
+    # Determine number of frames from dictionary keys
     n_corrs = max(key[0] for key in corrs.keys()) + 1
+
+    # Handle shifts - default to zero if not provided
+    if shifts is None:
+        shifts = np.zeros((n_corrs, 2))
     
     # Prepare arguments for multithreading
     sum_corr_partial = partial(sum_corr, corrs=corrs, shifts=shifts, n_tosum=n_tosum, n_wins=n_wins, n_corrs=n_corrs)
@@ -623,16 +640,17 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
     return i, frame_disps, frame_ints
 
 
-def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks: int, ds_fac: int = 1, subpx: bool = False, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
+def find_disps(corrs: dict, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None, n_peaks: int = 1, ds_fac: int = 1, subpx: bool = False, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
     """
     Find peaks in correlation maps and calculate displacements.
 
     Args:
-        corrs (dict): Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
-        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        corrs (dict): Correlation maps 
+            as {(frame, win_y, win_x): (correlation_map, map_center)}
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
+        shifts (np.ndarray | None): 2D array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used.
         n_peaks (int): Number of peaks to find
-        ds_fac (int): Downsampling factor to account for in displacement calculation
+        ds_fac (int): Downsampling factor for  displacement calculation
         subpx (bool): If True, apply subpixel accuracy using Gaussian fitting
         **find_peaks_kwargs: Additional arguments for find_peaks function (min_distance, floor, etc.)
 
@@ -645,6 +663,10 @@ def find_disps(corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], n_peaks
     # Determine number of frames from dictionary keys
     n_corrs = max(key[0] for key in corrs.keys()) + 1
     
+    # Handle shifts - default to zero if not provided
+    if shifts is None:
+        shifts = np.zeros((n_corrs, 2))
+
     # Initialize output arrays
     disps = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks, 2), np.nan)
     ints = np.full((n_corrs, n_wins[0], n_wins[1], n_peaks), np.nan)
@@ -740,7 +762,7 @@ def filter_outliers(mode: str, coords: np.ndarray, a: float | np.ndarray | None 
     
     if verbose:
         # Print summary statistics
-        print(f"Post-processing: global filter removed {np.sum(~mask)} out of {coords.shape[0]} coordinates in mode '{mode}'")
+        print(f"Post-processing: global filter removed {np.sum(~mask)}/{coords.shape[0]} coordinates in mode '{mode}'")
 
     # Reshape back to original shape
     coords = coords.reshape(orig_shape)
@@ -1014,7 +1036,187 @@ def smooth(time: np.ndarray, disps: np.ndarray, col: str | int = 'both', lam: fl
     return disps_spl.reshape(orig_shape)
 
 
-def save_cfig(directory: str, filename: str, format: str = 'pdf', test_mode: bool = False, verbose: bool = True):
+def plot_vel_comp(disp_unf, disp_glo, disp_nbs, disp_spl, res, frame_nrs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+    # TODO Add docstring and typing
+    # Might break with horizontal windows.
+
+    # Define a time array
+    n_corrs = disp_unf.shape[0]
+    n_peaks = disp_unf.shape[3]
+    time = np.linspace((frame_nrs[0] - 1) * dt,
+                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+
+    # Convert displacement to velocity
+    vel_unf = disp_unf * res / dt
+    vel_glo = disp_glo * res / dt
+    vel_nbs = disp_nbs * res / dt
+    vel_spl = disp_spl * res / dt
+
+    # Scatter plot vx(t)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks)).flatten(),
+            vel_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (all candidate peaks)')
+    ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c=cvd.get_color(1),
+            label='vx (filtered globally)')
+    ax.plot(1000 * time, vel_nbs[:, 0, 0, 1], '.', ms=2, c='black',
+            label='vx (filtered neighbours)')
+    ax.plot(1000 * time, vel_spl[:, 0, 0, 1], c=cvd.get_color(1),
+            label='vx (smoothed for 2nd pass)')
+
+    # Also plot filtered vy(t)
+    ax.plot(1000 * time, vel_nbs[:, 0, 0, 0], 'o', ms=4, c=cvd.get_color(0), 
+            label='vy (filtered neighbours)')
+
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Velocity (m/s)')
+    ax.set_title('First pass')
+    ax.set(**kwargs)
+
+    ax.legend()
+    ax.grid()
+
+    if proc_path is not None and file_name is not None and not test_mode:
+        # Save the figure
+        save_cfig(proc_path, file_name, test_mode=test_mode, verbose=True)
+
+    return fig, ax
+
+
+def plot_vel_med(disp, res, frame_nrs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+    # TODO Add docstring and typing
+    # Might break with horizontal windows.
+
+    # Define a time array
+    n_corrs = disp.shape[0]
+    time = np.linspace((frame_nrs[0] - 1) * dt,
+                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+
+    # Convert displacement to velocity
+    vel = disp * res / dt
+
+    # Plot the median velocity in time, show the min and max as a shaded area
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Plot vy (vertical velocity)
+    ax.plot(time * 1000,
+            np.nanmedian(vel[:, :, :, 0], axis=(1, 2)), label='Median vy')
+    ax.fill_between(time * 1000,
+                    np.nanmin(vel[:, :, :, 0], axis=(1, 2)),
+                    np.nanmax(vel[:, :, :, 0], axis=(1, 2)),
+                    alpha=0.3, label='Min/max vy')
+
+    # Plot vx (horizontal velocity)
+    ax.plot(time * 1000,
+            np.nanmedian(vel[:, :, :, 1], axis=(1, 2)), label='Median vx')
+    ax.fill_between(time * 1000,
+                    np.nanmin(vel[:, :, :, 1], axis=(1, 2)),
+                    np.nanmax(vel[:, :, :, 1], axis=(1, 2)),
+                    alpha=0.3, label='Min/max vx')
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Velocity (m/s)')
+    ax.set_title('Second pass')
+    ax.set(**kwargs)
+
+    ax.legend()
+    ax.grid()
+
+    if proc_path is not None and file_name is not None and not test_mode:
+        # Save the figure
+        save_cfig(proc_path, file_name, test_mode=test_mode, verbose=True)
+
+    return fig, ax
+
+
+def plot_vel_prof(disp, res, frame_nrs, dt, centres, 
+                  mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, **kwargs):
+    # TODO: Write docstring
+    
+    # Define a time array
+    n_corrs = disp.shape[0]
+    time = np.linspace((frame_nrs[0] - 1) * dt,
+                       (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+    
+    # Convert displacement to velocity
+    vel = disp * res / dt
+  
+    # Raise error if one tries to make a video, but proc_path is not specified
+    if mode == "video" and (proc_path is None or file_name is None
+                             or test_mode):
+        raise ValueError("proc_path and file_name must be specified, and test_mode must be False to create a video.")
+
+    # Set up save path if subfolder is specified
+    if proc_path is not None and subfolder is not None and not test_mode:
+        save_path = os.path.join(proc_path, subfolder)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+    else:
+        if mode == "all":
+            # Error: we don't want to save all images to the root folder
+            raise RuntimeWarning(f"Are you sure you want to save {n_corrs} files directly to {proc_path}?")
+        save_path = proc_path
+    
+    # Determine which frames to process
+    if mode == "random":
+        np.random.seed(42)  # For reproducible results
+        frames_to_plot = np.sort(np.random.choice(n_corrs, size=min(10, n_corrs), replace=False))
+    elif mode == "all" or mode == "video":
+        frames_to_plot = range(n_corrs)
+    else:
+        raise ValueError(f"Unknown mode: {mode}. Use 'video', 'all', or 'random'.")
+    
+    # Set up video writer if needed
+    if mode == "video":
+        fig_video, ax_video = plt.subplots(figsize=(10, 6))
+        writer = ani.FFMpegWriter(fps=10)
+        video_path = os.path.join(proc_path, file_name+'.mp4')
+        video_context = writer.saving(fig_video, video_path, dpi=150)
+        frames_iter = trange(n_corrs, desc='Creating velocity profile video')
+    else:
+        video_context = None
+        frames_iter = frames_to_plot
+    
+    # Common plotting function
+    def plot_frame(frame_idx, ax):
+        y_pos = centres[:, 0, 0] * res * 1000
+        vx = vel[frame_idx, :, 0, 1]
+        vy = vel[frame_idx, :, 0, 0]
+        
+        ax.plot(vx, y_pos, '-o', c=cvd.get_color(1), label='vx')
+        ax.plot(vy, y_pos, '-o', c=cvd.get_color(0), label='vy')
+        ax.set_xlabel('Velocity (m/s)')
+        ax.set_ylabel('y position (mm)')
+        ax.set_title(f'Velocity profiles at frame {frame_idx + 1} ({time[frame_idx] * 1000:.2f} ms)')
+        ax.legend()
+        ax.grid()
+        ax.set(**kwargs)
+    
+    # Process frames
+    if video_context is not None:
+        # Video mode
+        with video_context:
+            for i in frames_iter:
+                ax_video.clear()
+                plot_frame(i, ax_video)
+                writer.grab_frame()
+        plt.close(fig_video)
+        print(f"Video saved to {video_path}")
+    else:
+        # Plot mode (random or all)
+        for frame_idx in frames_iter:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            plot_frame(frame_idx, ax)
+            
+            # Save if path is specified
+            if save_path is not None:
+                save_cfig(save_path, f"vel_prof_frame_{frame_idx:04d}", test_mode=test_mode)
+                # Close figure to save memory when plotting all frames
+                if mode == "all":
+                    plt.close(fig)
+
+    return fig, ax
+
+
+def save_cfig(directory: str, file_name: str, format: str = 'pdf', test_mode: bool = False, verbose: bool = True):
     """
     Save the current matplotlib figure to a file.
 
@@ -1036,8 +1238,8 @@ def save_cfig(directory: str, filename: str, format: str = 'pdf', test_mode: boo
     # Otherwise, save figure
     else:
         # Set directory and file format
-        filename = f"{filename}.{format}"
-        filepath = os.path.join(directory, filename)
+        file_name = f"{file_name}.{format}"
+        filepath = os.path.join(directory, file_name)
 
         # Save the figure
         plt.savefig(filepath, transparent=True, bbox_inches='tight',
