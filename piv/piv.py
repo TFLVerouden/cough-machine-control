@@ -25,23 +25,6 @@ dt = 1 / 40000  # [s]
 
 # Data processing settings
 v_max = [5, 45]  # [m/s]
-ds_fac = 4  # First pass downsampling factor
-# Number of correlation frames to sum in first pass (1 = no summation, even = asymmetric)
-sum_corrs1 = 21
-# Number of correlation frames to sum in second pass (1 = no summation, even = asymmetric)
-sum_corrs2 = 21
-n_peaks1 = 10  # Number of peaks to find in first pass correlation map
-n_wins1 = (1, 1)
-n_peaks2 = 10
-n_wins2 = (8, 1)  # Number of windows in second pass (rows, cols)
-
-# Validate that sum_corrs1 and sum_corrs2 are positive integers
-if sum_corrs1 < 1 or not isinstance(sum_corrs1, int):
-    raise ValueError(
-        "sum_corrs1 must be a positive integer (1 = no summation, odd = symmetric, even = asymmetric)")
-if sum_corrs2 < 1 or not isinstance(sum_corrs2, int):
-    raise ValueError(
-        "sum_corrs2 must be a positive integer (1 = no summation, odd = symmetric, even = asymmetric)")
 
 # File handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +59,15 @@ d_max = np.array(v_max) * dt / res_avg  # m/s -> px/frame
 
 
 # FIRST PASS: Full frame correlation ===========================================
+ds_fac1 = 4             # Downsampling factor
+sum_corrs1 = 21         # Number of correlation maps to sum
+n_peaks1 = 10           # Number of peaks to find in correlation map
+n_wins1 = (1, 1)        # Number of windows (rows, cols)
+min_dist1 = 5           # Minimum distance between peaks
+n_nbs1 = (41, 1, 1)     # Neighbourhood for local filtering
+nbs_thr1 = 1            # Threshold for neighbour filtering
+smooth_lam = 4e-7       # Smoothing lambda for splines
+
 print("FIRST PASS: full frame correlation")
 bckp1_loaded, loaded_vars = piv.backup(
     "load", proc_path, "pass1.npz", disp1_var_names, test_mode)
@@ -103,7 +95,7 @@ if not bckp1_loaded:
     # Step 1: Calculate correlation maps (with downsampling, no windows, no shifts)
     corr1 = piv.calc_corrs(imgs, n_wins1,
                            shifts=None,
-                           ds_fac=ds_fac)
+                           ds_fac=ds_fac1)
 
     # Step 2: Sum correlation maps with windowing
     corr1 = piv.sum_corrs(corr1,
@@ -116,8 +108,8 @@ if not bckp1_loaded:
                                          shifts=np.zeros((n_corrs, 2)),
                                          n_wins=n_wins1,
                                          n_peaks=n_peaks1,
-                                         ds_fac=ds_fac,
-                                         min_dist=5)
+                                         ds_fac=ds_fac1,
+                                         min_dist=min_dist1)
 
     # Save unfiltered displacements
     disp1 = disp1_unf.copy()
@@ -130,14 +122,14 @@ disp1 = piv.strip_peaks(disp1, axis=-2)
 print(
     f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
 disp1_nbs = piv.filter_neighbours(
-    disp1.copy(), thr=1, n_nbs=(41, 1, 1),  verbose=True)
+    disp1.copy(), thr=nbs_thr1, n_nbs=n_nbs1, verbose=True, mode='xy', replace=False)
 
 # Define time arrays beforehand
 time = np.linspace((frame_nrs[0] - 1) * dt,
                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
 
 # Smooth the x displacement in time
-disp1_spl = piv.smooth(time, disp1_nbs.copy(), lam=4e-7, type=int)
+disp1_spl = piv.smooth(time, disp1_nbs.copy(), lam=smooth_lam, type=int)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
@@ -172,13 +164,20 @@ ax.grid()
 piv.save_cfig(proc_path, "disp1", test_mode=test_mode)
 
 
-# SECOND PASS: Split image into windows and correlate ==========================
-print(f"SECOND PASS: {n_wins2} windows")
+# SECOND PASS: Split in 8 windows ==============================================
+ds_fac2 = 1             # Downsampling factor
+sum_corrs2 = 21         # Number of correlation maps to sum
+n_peaks2 = 10           # Number of peaks to find in correlation map
+n_wins2 = (8, 1)        # Number of windows (rows, cols)
+min_dist2 = 3           # Minimum distance between peaks
+pk_floor = 10           # Minimum peak intensity
+n_nbs2 = (51, 3, 1)     # Neighbourhood for local filtering
+nbs_thr2 = 5            # Threshold for neighbour filtering
 
 # TODO: Test downsampling in 2nd pass?
 # TODO: Window overlap?
 
-# Try to load existing backup data
+print(f"SECOND PASS: {n_wins2} windows")
 bckp2_loaded, loaded_vars2 = piv.backup(
     "load", proc_path, "pass2.npz", disp2_var_names, test_mode)
 
@@ -211,8 +210,8 @@ if not bckp2_loaded:
     disp2_unf, int2_unf = piv.find_disps(corr2, shifts=shifts,
                                          n_wins=n_wins2,
                                          n_peaks=n_peaks2,
-                                         ds_fac=1, floor=10,
-                                         min_dist=3, subpx=True)
+                                         ds_fac=ds_fac2, floor=pk_floor,
+                                         min_dist=min_dist2, subpx=True)
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
@@ -225,8 +224,6 @@ if not bckp2_loaded:
             centres[j, k] = centre
 
 # POST-PROCESSING
-# Define time arrays for second pass (same as first pass since we keep all frames)
-time2 = time.copy()
 
 # Basic global outlier removal of unreasonable displacements
 disp2 = piv.filter_outliers(
@@ -236,8 +233,7 @@ print(
     f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
 
 # Very light neighbour filtering to remove extremes and replace missing values
-disp2 = piv.filter_neighbours(disp2, thr=5, n_nbs=(
-    51, 3, 1), verbose=True, mode='r', replace=True)
+disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2, verbose=True, mode='r', replace=True)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
@@ -283,17 +279,17 @@ vel2 = disp2 * res_avg / dt
 fig1, ax1 = plt.subplots(figsize=(10, 6))
 
 # Plot vy (vertical velocity)
-ax1.plot(time2 * 1000,
+ax1.plot(time * 1000,
          np.nanmedian(vel2[:, :, :, 0], axis=(1, 2)), label='Median vy')
-ax1.fill_between(time2 * 1000,
+ax1.fill_between(time * 1000,
                  np.nanmin(vel2[:, :, :, 0], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 0], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vy')
 
 # Plot vx (horizontal velocity)
-ax1.plot(time2 * 1000,
+ax1.plot(time * 1000,
          np.nanmedian(vel2[:, :, :, 1], axis=(1, 2)), label='Median vx')
-ax1.fill_between(time2 * 1000,
+ax1.fill_between(time * 1000,
                  np.nanmin(vel2[:, :, :, 1], axis=(1, 2)),
                  np.nanmax(vel2[:, :, :, 1], axis=(1, 2)),
                  alpha=0.3, label='Min/Max vx')
@@ -340,7 +336,7 @@ if not test_mode:
             ax_video.set_xlim(v_max[0] * -1.1, v_max[1] * 1.1)
             ax_video.set_ylim(0, 21.12)
             ax_video.set_title(
-                f'Velocity profiles at frame {i + 1} ({time2[i] * 1000:.2f} ms)')
+                f'Velocity profiles at frame {i + 1} ({time[i] * 1000:.2f} ms)')
             ax_video.legend()
             ax_video.grid()
 
@@ -349,7 +345,13 @@ if not test_mode:
     plt.close(fig_video)
     print(f"Video saved to {video_path}")
 
-# TODO: 3rd pass!
+
+# THIRD PASS: Split in 24 windows ==============================================
+
+
+
+
+
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 

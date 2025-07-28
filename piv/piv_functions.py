@@ -429,13 +429,17 @@ def sum_corrs(corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tuple[int, 
     Args:
         corrs (dict): Correlation maps from calc_corrs as {(frame, win_y, win_x): (correlation_map, map_center)}
         shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
-        n_tosum (int): Number of correlation maps to sum
+        n_tosum (int): Number of correlation maps to sum (1 = no summation, even = asymmetric)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
 
     Returns:
         dict: Summed correlation maps as {(frame, win_y, win_x, k): (summed_map, new_center)}
     """
     
+    # Verify that n_tosum is a positive integer
+    if n_tosum < 1 or not isinstance(n_tosum, int):
+        raise ValueError("n_tosum must be a positive integer")
+
     # Always use dictionary storage
     n_corrs = max(key[0] for key in corrs.keys()) + 1
     
