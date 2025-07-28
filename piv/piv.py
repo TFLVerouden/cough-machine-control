@@ -20,7 +20,7 @@ cvd.set_cvd_friendly_colors()
 # Set experimental parameters
 test_mode = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frame_nrs = list(range(1, 6000)) if test_mode else list(range(1, 6000))
+frame_nrs = list(range(4500, 5500)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings
@@ -129,9 +129,8 @@ disp1 = piv.filter_outliers(
 disp1 = piv.strip_peaks(disp1, axis=-2)
 print(
     f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
-# TODO: Make it so neighbour filtering is done over an odd number of neighbours, counting the value itself. This is more consistent
 disp1_nbs = piv.filter_neighbours(
-    disp1.copy(), thr=1, n_nbs=(40, 0, 0),  verbose=True)
+    disp1.copy(), thr=1, n_nbs=(41, 1, 1),  verbose=True)
 
 # Define time arrays beforehand
 time = np.linspace((frame_nrs[0] - 1) * dt,
@@ -193,6 +192,7 @@ if not bckp2_loaded:
     # LOADING & CORRELATION
     # Ensure we have the images loaded (in case only second pass backup failed)
     if 'imgs' not in globals():
+
         # Load images from disk
         imgs = piv.read_imgs(data_path, frame_nrs, format='tif', lead_0=5,
                              timing=True)
@@ -201,23 +201,17 @@ if not bckp2_loaded:
     shifts = disp1_spl[:, 0, 0, :]  # Shape: (n_corrs, 2)
 
     # Step 1: Calculate correlation maps (no downsampling, with windows and shifts)
-    corr2 = piv.calc_corrs(imgs, n_wins2,
-                               shifts=shifts,
-                               ds_fac=1)
+    corr2 = piv.calc_corrs(imgs, n_wins2, shifts, overlap=0.2, ds_fac=1)
 
     # Step 2: Sum correlation maps with alignment and size expansion
-    corr2 = piv.sum_corrs(corr2,
-                                     shifts=shifts,
-                                     n_tosum=sum_corrs2,
-                                     n_wins=n_wins2)
+    corr2 = piv.sum_corrs(corr2, shifts=shifts, n_tosum=sum_corrs2,
+                          n_wins=n_wins2)
 
     # Step 3: Find peaks in summed correlation maps
-    disp2_unf, int2_unf = piv.find_disps(corr2,
-                                         shifts=shifts,
+    disp2_unf, int2_unf = piv.find_disps(corr2, shifts=shifts,
                                          n_wins=n_wins2,
                                          n_peaks=n_peaks2,
-                                         ds_fac=1,
-                                         floor=10, 
+                                         ds_fac=1, floor=10,
                                          min_dist=3)
 
     # Save unfiltered displacements
@@ -243,7 +237,7 @@ print(
 
 # Very light neighbour filtering to remove extremes and replace missing values
 disp2 = piv.filter_neighbours(disp2, thr=5, n_nbs=(
-    50, 2, 0), verbose=True, mode='r', replace=True)
+    51, 3, 1), verbose=True, mode='r', replace=True)
 
 # Save the displacements to a backup file
 piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,

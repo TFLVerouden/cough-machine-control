@@ -195,7 +195,7 @@ def downsample(imgs: np.ndarray, factor: int) -> np.ndarray:
                         w // factor, factor).sum(axis=(2, 4))
 
 
-def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap=0, shift=(0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
+def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, shift=(0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a 2D image array (y, x) into (overlapping) windows,
     with optional edge cut-off for shifted images.
@@ -221,6 +221,7 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap=0, shift=(0,
     # Calculate window size including overlap
     size_y = min(int(h // n_y * (1 + overlap)), h)
     size_x = min(int(w // n_x * (1 + overlap)), w)
+    # print(f"Window size: {size_y} x {size_x}, overlap: {overlap:.2f}")
 
     # Get the top-left corner of each window to create grid of window coords
     y_indices = np.linspace(0, h - size_y, num=n_y, dtype=int)
@@ -277,7 +278,7 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap=0, shift=(0,
     return windows, centres
 
 
-def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, centres: np.ndarray) -> dict:
+def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, overlap: float, centres: np.ndarray) -> dict:
     """
     Calculate correlation maps for a single set of frames.
 
@@ -286,6 +287,7 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
         imgs (np.ndarray): 3D array of images (frame, y, x)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         shifts (np.ndarray): Array of shifts per frame (frame, y_shift, x_shift)
+        overlap (float): Fractional overlap between windows (0 = no overlap)
         centres (np.ndarray): Window centres from first frame
         
     Returns:
@@ -293,9 +295,9 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
     """
     
     # Split images into windows with shifts
-    wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before')
-    wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after')
-    
+    wnd0, centres_curr = split_n_shift(imgs[i], n_wins, shift=shifts[i], shift_mode='before', overlap=overlap)
+    wnd1, _ = split_n_shift(imgs[i + 1], n_wins, shift=shifts[i], shift_mode='after', overlap=overlap)
+
     frame_corr_maps = {}
     
     # Calculate correlation maps for all windows
@@ -308,7 +310,7 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
     return frame_corr_maps
 
 
-def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | None = None, ds_fac: int = 1):
+def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | None = None, overlap: float = 0, ds_fac: int = 1):
     """
     Calculate correlation maps for all frames and windows.
 
@@ -316,6 +318,7 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | N
         imgs (np.ndarray): 3D array of images (frame, y, x)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         shifts (np.ndarray | None): Optional array of shifts per window (frame, y_shift, x_shift). If None, shift zero is used.
+        overlap (float): Fractional overlap between windows (0 = no overlap)
         ds_fac (int): Downsampling factor (1 = no downsampling)
 
     Returns:
@@ -332,11 +335,11 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray | N
         shifts = np.zeros((n_corrs, 2))
 
     # Get centres from first frame
-    _, centres = split_n_shift(imgs[0], n_wins, shift=shifts[0], shift_mode='before')
-    
+    _, centres = split_n_shift(imgs[0], n_wins, shift=shifts[0], shift_mode='before', overlap=overlap)
+
     # Prepare arguments for multithreading
-    calc_corr_partial = partial(calc_corr, imgs=imgs, n_wins=n_wins, shifts=shifts, centres=centres)
-    
+    calc_corr_partial = partial(calc_corr, imgs=imgs, n_wins=n_wins, shifts=shifts, overlap=overlap, centres=centres)
+
     n_jobs = os.cpu_count() or 4
     
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
@@ -745,14 +748,14 @@ def validate_n_nbs(n_nbs: int | str | tuple[int, int, int], max_shape: tuple[int
     Validate and process n_nbs parameter for filter_neighbours function.
 
     Args:
-        n_nbs (int | str | tuple): Number of neighbours specification
-            - int: Number of neighbours in each dimension (must be even).
+        n_nbs (int | str | tuple): Neighbourhood size specification (including center point)
+            - int: Neighbourhood size in each dimension (must be odd).
             - str: "all" to use the full dimension length.
-            - tuple: Three values specifying neighbours in each dimension.
+            - tuple: Three values specifying neighbourhood size in each dimension.
         max_shape (tuple[int, int, int] | None): Shape of the dimensions to use if n_nbs is "all"
 
     Returns:
-        tuple[int, int, int]: Processed n_nbs values
+        tuple[int, int, int]: Processed n_nbs values (neighbourhood sizes)
     """
 
     # Convert to list
@@ -766,18 +769,18 @@ def validate_n_nbs(n_nbs: int | str | tuple[int, int, int], max_shape: tuple[int
     # Process each dimension
     for i, n in enumerate(n_nbs):
         if n == "all":
-            # Use dimension length (make it even if necessary)
-            n_nbs[i] = max_shape[i] - 2 if max_shape[i] % 2 == 0 else max_shape[i] - 1
+            # Use dimension length (make it odd if necessary)
+            n_nbs[i] = max_shape[i] - 1 if max_shape[i] % 2 == 0 else max_shape[i]
         elif isinstance(n, int):
-            if n % 2 != 0:
-                raise ValueError(f"n_nbs must be even in each dimension. Got {n} for dimension {i}.")
+            if n % 2 == 0:
+                raise ValueError(f"n_nbs must be odd in each dimension (neighbourhood size including center). Got {n} for dimension {i}.")
         else:
             raise ValueError(f"Each element of n_nbs must be an integer or 'all'. Got {n} for dimension {i}.")
     
     return tuple(n_nbs)
 
 
-def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tuple[int, int, int] = 2, mode: str = "xy", replace: bool = False, verbose: bool = False):
+def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tuple[int, int, int] = 3, mode: str = "xy", replace: bool = False, verbose: bool = False):
 
     """
     Filter out coordinates that are too different from their neighbours.
@@ -785,7 +788,7 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
     Args:
         coords (np.ndarray): 4D coordinate array of shape (n_corrs, n_wins_y, n_wins_x, 2).
         thr (float): Threshold; how many standard deviations can a point be away from its neighbours.
-        n_nbs (int | str | tuple): Number of neighbours in each dimension to consider for filtering. Can be an integer, "all", or a tuple of three values (int or "all").
+        n_nbs (int | str | tuple): Size of neighbourhood in each dimension to consider for filtering (including center point). Can be an integer, "all", or a tuple of three values (int or "all").
         mode (str): Which coordinates should be within std*thr from the median:
             - "x": Compare x coordinates only
             - "y": Compare y coordinates only
@@ -814,7 +817,7 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
     # Get a set of sliding windows around each coordinate
     # Note this function is slow
     nbs = np.lib.stride_tricks.sliding_window_view(coords,
-    (n_nbs[0] + 1, n_nbs[1] + 1, n_nbs[2] + 1, 1))[..., 0]
+    (n_nbs[0], n_nbs[1], n_nbs[2], 1))[..., 0]
 
     # Iterate over each coordinate
     for i in range(n_corrs):
@@ -822,12 +825,12 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
             for k in range(n_wins_x):
 
                 # First handle the coordinates at the edges, which are not in the centre of a neighbourhood
-                i_nbs = (np.clip(i, n_nbs[0]//2, n_corrs - n_nbs[0]//2 - 1) 
-                         - n_nbs[0]//2)
-                j_nbs = (np.clip(j, n_nbs[1]//2, n_wins_y - n_nbs[1]//2 - 1) 
-                         - n_nbs[1]//2)
-                k_nbs = (np.clip(k, n_nbs[2]//2, n_wins_x - n_nbs[2]//2 - 1) 
-                         - n_nbs[2]//2)
+                i_nbs = (np.clip(i, (n_nbs[0] - 1)//2, n_corrs - (n_nbs[0] - 1)//2 - 1) 
+                         - (n_nbs[0] - 1)//2)
+                j_nbs = (np.clip(j, (n_nbs[1] - 1)//2, n_wins_y - (n_nbs[1] - 1)//2 - 1) 
+                         - (n_nbs[1] - 1)//2)
+                k_nbs = (np.clip(k, (n_nbs[2] - 1)//2, n_wins_x - (n_nbs[2] - 1)//2 - 1) 
+                         - (n_nbs[2] - 1)//2)
                 nb = nbs[i_nbs, j_nbs, k_nbs]
 
                 # Calculate the median and standard deviation
