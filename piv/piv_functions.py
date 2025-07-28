@@ -112,8 +112,7 @@ def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=F
     # If mode is not recognized, return False
     else:
         print(f"Error: Unrecognized mode '{mode}'. Use 'load' or 'save'.")
-        return False
-
+        return False, {}
 
 
 def read_img(file_path: str) -> np.ndarray | None:
@@ -201,10 +200,10 @@ def downsample(imgs: np.ndarray, factor: int) -> np.ndarray:
                         w // factor, factor).sum(axis=(2, 4))
 
 
-def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, shift=(0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
+def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, shift: tuple[int, int] | np.ndarray = (0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a 2D image array (y, x) into (overlapping) windows,
-    with optional edge cut-off for shifted images.
+    with automatic window size adjustments for shifted images.
 
     Args:
         img (np.ndarray): 2D array of image values (y, x).
@@ -296,7 +295,7 @@ def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndar
         overlap (float): Fractional overlap between windows (0 = no overlap)
         
     Returns:
-        dict: Correlation maps for this frame as {(frame, win_y, win_x): (correlation_map, map_center)}
+        dict: Correlation maps for this set of frames as {(frame, win_y, win_x): (correlation_map, map_center)}
     """
     
     # Split images into windows with shifts
@@ -1065,7 +1064,7 @@ def plot_vel_comp(disp_unf, disp_glo, disp_nbs, disp_spl, res, frame_nrs, dt, pr
     # ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks)).flatten(),
     #         vel_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (all candidate peaks)')
     # ax.plot(1000 * time, vel_unf[:, 0, 0, 0, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (brightest peak)')
-    ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c='gray',
+    ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c='gray', alpha=0.5,
             label='vx (filtered globally)')
     ax.plot(1000 * time, vel_nbs[:, 0, 0, 1], '.', ms=2, c=cvd.get_color(1),
             label='vx (filtered neighbours)')

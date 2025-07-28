@@ -80,7 +80,7 @@ if bckp1_loaded:
         globals()[var_name] = loaded_vars.get(var_name)
     print("Loaded existing backup data.")
 else:
-    
+
     # LOADING & CORRELATION
     # Load images from disk
     imgs = piv.read_imgs(data_path, frames, format='tif', lead_0=5,
@@ -154,10 +154,8 @@ if bckp2_loaded:
 else:
 
     # LOADING & CORRELATION
-    # Ensure we have the images loaded (in case only second pass backup failed)
+    # Ensure we have the images loaded
     if 'imgs' not in globals():
-
-        # Load images from disk
         imgs = piv.read_imgs(data_path, frames, format='tif', lead_0=5,
                              timing=True)
 
@@ -204,11 +202,11 @@ piv.plot_vel_med(disp2, res_avg, frames, dt,
                  ylim=(v_max[0] * -1.1, v_max[1] * 1.1),
                  proc_path=proc_path, file_name="pass2_v_med", test_mode=test_mode)
 
-# Plot some randomly selected velocity profiles
-piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='random', xlim=(-1, 30), ylim=(0, 21.12),
-                  proc_path=proc_path, file_name="pass2_v",
-                  subfolder='pass2', test_mode=test_mode)
+# # Plot some randomly selected velocity profiles
+# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+#                   mode='random', xlim=(-1, 30), ylim=(0, 21.12),
+#                   proc_path=proc_path, file_name="pass2_v",
+#                   subfolder='pass2', test_mode=test_mode)
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
@@ -218,6 +216,8 @@ piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
 
 
 # THIRD PASS: Split in 24 windows ==============================================
+plt.show()
+
 n_tosum3 = 2             # Number of correlation maps to sum
 n_peaks3 = 5             # Number of peaks to find in correlation map
 n_wins3 = (24, 1)        # Number of windows (rows, cols)
@@ -235,6 +235,34 @@ if bckp3_loaded:
     for var_name in disp3_var_names:
         globals()[var_name] = loaded_vars3.get(var_name)
     print("Loaded existing third pass backup data.")
+else:
+
+    # LOADING & CORRELATION
+    # Ensure we have the images loaded
+    if 'imgs' not in globals():
+        imgs = piv.read_imgs(data_path, frames, format='tif', lead_0=5,
+                             timing=True)
+
+    # Step 1: Calculate correlation maps (with windows and shifts)
+    corr3 = piv.calc_corrs(imgs, n_wins3, shifts=disp2[:, 0, 0, :],
+                           overlap=win_ov)
+
+    # Step 2: Sum correlation maps with alignment and size expansion
+    corr3_sum = piv.sum_corrs(corr3, n_tosum3, n_wins3,
+                              shifts=disp2[:, 0, 0, :])
+
+    # Step 3: Find peaks in summed correlation maps
+    disp3, int3_unf = piv.find_disps(corr3_sum, n_wins3, n_peaks=n_peaks3,
+                                     shifts=disp2[:, 0, 0, :],
+                                     floor=pk_floor, min_dist=min_dist3)
+
+    # Save unfiltered displacements
+    disp3_unf = disp3.copy()
+
+    # TODO: Get physical window positions for plotting (needs update for 4D shifts, or do a bit earlier in the process)
+    # _, win_pos3 = piv.split_n_shift(imgs[0], n_wins3, shift=?, shift_mode='before')
+
+
 
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
