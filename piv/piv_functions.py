@@ -942,7 +942,7 @@ def first_valid(arr: np.ndarray) -> float | int | np.generic:
         raise ValueError("Input must be a 1D array.")
 
 
-def strip_peaks(coords: np.ndarray, axis: int = -2) -> np.ndarray:
+def strip_peaks(coords: np.ndarray, axis: int = -2, verbose: bool = False) -> np.ndarray:
 
     """
     Reduce array dimensionality by selecting the first valid peak along an axis containing options.
@@ -952,15 +952,22 @@ def strip_peaks(coords: np.ndarray, axis: int = -2) -> np.ndarray:
         axis (int): Axis along which to reduce the array (default: second-to-last axis)
 
     Returns:
-        np.ndarray: Array with one axis reduced
+        np.ndarray: (N-1)-D array with one axis reduced
     """
 
     if coords.ndim < 3:
         return coords  # Nothing to strip
-
+    
     # Apply the first_valid function along the specified axis  
-    coords = np.apply_along_axis(first_valid, axis, coords)
-    return coords
+    coords_str = np.apply_along_axis(first_valid, axis, coords.copy())
+
+    # Report on the number of NaNs
+    if verbose:
+        n_nans_i = np.sum(np.any(np.isnan(coords[:, :, :, 0, :]), axis=-1))
+        n_nans_f = np.sum(np.any(np.isnan(coords_str), axis=-1))
+
+        print(f"Post-processing: {n_nans_i}/{np.prod(coords.shape[0:3])} most likely peak candidates invalid; left with {n_nans_f} after taking next-best peak")
+    return coords_str
 
 
 def smooth(time: np.ndarray, disps: np.ndarray, col: str | int = 'both', lam: float = 5e-7, type: type = int) -> np.ndarray:

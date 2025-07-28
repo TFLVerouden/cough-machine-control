@@ -118,9 +118,9 @@ if not bckp1_loaded:
 # Outlier removal
 disp1 = piv.filter_outliers(
     'semicircle_rect', disp1_unf, a=d_max[0], b=d_max[1], verbose=True)
-disp1 = piv.strip_peaks(disp1, axis=-2)
-print(
-    f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp1))}/{np.size(disp1)} NaNs.")
+disp1 = piv.strip_peaks(disp1, axis=-2, verbose=True)
+
+# Neighbour filtering
 disp1_nbs = piv.filter_neighbours(
     disp1.copy(), thr=nbs_thr1, n_nbs=n_nbs1, verbose=True, mode='xy', replace=False)
 
@@ -165,7 +165,6 @@ piv.save_cfig(proc_path, "disp1", test_mode=test_mode)
 
 
 # SECOND PASS: Split in 8 windows ==============================================
-ds_fac2 = 1             # Downsampling factor
 sum_corrs2 = 21         # Number of correlation maps to sum
 n_peaks2 = 10           # Number of peaks to find in correlation map
 n_wins2 = (8, 1)        # Number of windows (rows, cols)
@@ -173,9 +172,6 @@ min_dist2 = 3           # Minimum distance between peaks
 pk_floor = 10           # Minimum peak intensity
 n_nbs2 = (51, 3, 1)     # Neighbourhood for local filtering
 nbs_thr2 = 5            # Threshold for neighbour filtering
-
-# TODO: Test downsampling in 2nd pass?
-# TODO: Window overlap?
 
 print(f"SECOND PASS: {n_wins2} windows")
 bckp2_loaded, loaded_vars2 = piv.backup(
@@ -210,8 +206,8 @@ if not bckp2_loaded:
     disp2_unf, int2_unf = piv.find_disps(corr2, shifts=shifts,
                                          n_wins=n_wins2,
                                          n_peaks=n_peaks2,
-                                         ds_fac=ds_fac2, floor=pk_floor,
-                                         min_dist=min_dist2, subpx=True)
+                                         floor=pk_floor,
+                                         min_dist=min_dist2)
 
     # Save unfiltered displacements
     disp2 = disp2_unf.copy()
@@ -228,9 +224,7 @@ if not bckp2_loaded:
 # Basic global outlier removal of unreasonable displacements
 disp2 = piv.filter_outliers(
     'semicircle_rect', disp2_unf, a=d_max[0], b=d_max[1], verbose=True)
-disp2 = piv.strip_peaks(disp2, axis=-2)
-print(
-    f"Post-processing: kept only brightest candidate, left with {np.sum(np.isnan(disp2))}/{np.size(disp2)} NaNs.")
+disp2 = piv.strip_peaks(disp2, axis=-2, verbose=True)
 
 # Very light neighbour filtering to remove extremes and replace missing values
 disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2, verbose=True, mode='r', replace=True)
@@ -347,7 +341,8 @@ if not test_mode:
 
 
 # THIRD PASS: Split in 24 windows ==============================================
-
+# sum_corrs2 = 2
+# n_peaks  
 
 
 
