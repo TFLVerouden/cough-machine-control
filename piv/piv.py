@@ -21,7 +21,7 @@ cvd.set_cvd_friendly_colors()
 test_mode = True
 videos = False
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frames = list(range(1, 6000)) if test_mode else list(range(1, 6000))
+frames = list(range(1, 1000)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings
@@ -72,7 +72,7 @@ smooth_lam = 4e-7       # Smoothing lambda for splines
 
 print("FIRST PASS: full frame correlation")
 bckp1_loaded, loaded_vars = piv.backup(
-    "load", proc_path, "pass1.npz", disp1_var_names) # removed test_mode
+    "load", proc_path, "pass1.npz", disp1_var_names, test_mode) # removed test_mode
 
 if bckp1_loaded:
     # Extract loaded variables
@@ -144,7 +144,7 @@ nbs_thr2 = 5            # Threshold for neighbour filtering
 
 print(f"SECOND PASS: {n_wins2} windows")
 bckp2_loaded, loaded_vars2 = piv.backup(
-    "load", proc_path, "pass2.npz", disp2_var_names) # removed test_mode
+    "load", proc_path, "pass2.npz", disp2_var_names, test_mode) # removed test_mode
 
 if bckp2_loaded:
     # Extract loaded variables
