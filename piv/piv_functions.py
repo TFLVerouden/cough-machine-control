@@ -131,14 +131,15 @@ def read_img(file_path: str) -> np.ndarray | None:
     return img
 
 
-def read_imgs(data_path: str, frame_nrs: list[int], format: str = 'tif', lead_0: int = 5, timing: bool = True) -> np.ndarray:
+def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', lead_0: int = 5, timing: bool = True) -> np.ndarray:
 
     """
     Load selected images from a directory into a 3D numpy array.
 
     Args:
         data_path (str): Path to the directory containing images.
-        frame_nrs (list[int]): List of frame numbers to load.
+        frame_nrs (list[int] | str): List of frame numbers to load,
+            or "all" to load all images.
         format (str): File extension to load.
         lead_0 (int): Number of leading zeros in the file names.
         timing (bool): If True, show a progress bar while loading images.
@@ -155,15 +156,17 @@ def read_imgs(data_path: str, frame_nrs: list[int], format: str = 'tif', lead_0:
     files = natsorted(
             [f for f in os.listdir(data_path) if f.endswith('.' + format)])
 
-    # TODO: Make frame_nrs optional so it can also load all images.
-
-    # Filter files to include only those that match the specified frame numbers
-    files = [f for f in files if any(f.endswith(f"{nr:0{lead_0}d}.tif") for nr
-                                     in frame_nrs) and not f.startswith('.')]
+    # Handle "all" option or specific frame numbers
+    if frame_nrs == "all":
+        # Load all images - filter by format and exclude hidden files
+        files = [f for f in files if f.endswith('.' + format) and not f.startswith('.')]
+    else:
+        # Filter files to include only those that match the specified frame numbers
+        files = [f for f in files if any(f.endswith(f"{nr:0{lead_0}d}.{format}") for nr
+                                         in frame_nrs) and not f.startswith('.')]
+    
     if not files:
-        raise FileNotFoundError(f"No files found in {data_path} matching "
-                                f"frame numbers {frame_nrs} with type '"
-                                f"{format}'.")
+        raise FileNotFoundError(f"No files found in {data_path} with the specified criteria and format '{format}'.")
 
     # Read images into a 3D numpy array in parallel
     file_paths = [os.path.join(data_path, f) for f in files]
