@@ -51,6 +51,24 @@ __all__ = [
 
 """
 
+def get_time(frames: list[int], dt: float) -> np.ndarray:
+    """
+    Calculate time array for PIV displacements.
+    
+    PIV correlates consecutive frame pairs to get N-1 displacements from N frames.
+    Each displacement represents motion between frames i and i+1, timestamped at frame i+1.
+    
+    Args:
+        frames (list[int]): List of frame numbers (e.g., [400, 401, ..., 799])
+        dt (float): Time step between frames in seconds
+        
+    Returns:
+        np.ndarray: Time array with N-1 elements for N frames
+    """
+    n_disps = len(frames) - 1
+    return np.linspace(frames[0] * dt, (frames[0] + n_disps - 1) * dt, n_disps)
+
+
 def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
     """
     Load or save a backup file from/to the specified path.
@@ -523,7 +541,7 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
                     window_shifts = shifts[corr_idxs, j, k]
                 
                 # Calculate relative shifts for this window
-                rel_shifts = np.round(window_shifts - ref_shift).astype(int)
+                rel_shifts = (window_shifts - ref_shift).astype(int)
                 
                 # Collect all correlation maps for this window to determine shapes
                 all_corrs = []
@@ -1019,13 +1037,26 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
             for k in range(n_wins_x):
 
                 # First handle the coordinates at the edges, which are not in the centre of a neighbourhood
-                i_nbs = (np.clip(i, (n_nbs[0] - 1)//2, n_corrs - (n_nbs[0] - 1)//2 - 1) 
+                i_nbs = (np.clip(i, (n_nbs[0] - 1)//2, 
+                                 n_corrs - (n_nbs[0] - 1)//2 - 1) 
                          - (n_nbs[0] - 1)//2)
-                j_nbs = (np.clip(j, (n_nbs[1] - 1)//2, n_wins_y - (n_nbs[1] - 1)//2 - 1) 
+                j_nbs = (np.clip(j, (n_nbs[1] - 1)//2, 
+                                 n_wins_y - (n_nbs[1] - 1)//2 - 1) 
                          - (n_nbs[1] - 1)//2)
-                k_nbs = (np.clip(k, (n_nbs[2] - 1)//2, n_wins_x - (n_nbs[2] - 1)//2 - 1) 
+                k_nbs = (np.clip(k, (n_nbs[2] - 1)//2, 
+                                 n_wins_x - (n_nbs[2] - 1)//2 - 1) 
                          - (n_nbs[2] - 1)//2)
                 nb = nbs[i_nbs, j_nbs, k_nbs]
+
+                # If the neighbourhood is empty, skip to the next coordinate
+                if np.all(np.isnan(nb)):
+                    continue
+
+                # If entire neighbourhood is identical, replace and skip
+                if np.all(nb == nb[0, 0, 0, :]):
+                    if replace:
+                        coords_output[i, j, k, :] = nb[0, 0, 0, :]
+                    continue
 
                 # Calculate the median and standard deviation
                 med = np.nanmedian(nb, axis=(1, 2, 3))
@@ -1181,37 +1212,37 @@ def smooth(time: np.ndarray, disps: np.ndarray, col: str | int = 'both', lam: fl
     return disps_spl.reshape(orig_shape)
 
 
-def plot_vel_comp(disp_unf, disp_glo, disp_nbs, disp_spl, res, frame_nrs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+def plot_vel_comp(disp_glo, disp_nbs, disp_spl, res, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
     # TODO Add docstring and typing
     # Might break with horizontal windows.
 
-    # Define a time array
-    n_corrs = disp_unf.shape[0]
-    # n_peaks = disp_unf.shape[3]
-    time = np.linspace((frame_nrs[0] - 1) * dt,
-                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+    # Define a time array using helper function
+    time = get_time(frs, dt)
+
+    # If lengths don't match, assume all data was supplied; slice accordingly
+    if disp_glo.shape[0] != time.shape[0]:
+        disp_glo = disp_glo[frs[0]:frs[-1], :, :, :]
+        disp_nbs = disp_nbs[frs[0]:frs[-1], :, :, :]
+        disp_spl = disp_spl[frs[0]:frs[-1], :, :, :]
 
     # Convert displacement to velocity
-    # vel_unf = disp_unf * res / dt
     vel_glo = disp_glo * res / dt
     vel_nbs = disp_nbs * res / dt
     vel_spl = disp_spl * res / dt
 
     # Scatter plot vx(t)
     fig, ax = plt.subplots(figsize=(10, 6))
+
     # ax.plot(np.tile(time[:, None] * 1000, (1, n_peaks)).flatten(),
     #         vel_unf[:, 0, 0, :, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (all candidate peaks)')
     # ax.plot(1000 * time, vel_unf[:, 0, 0, 0, 1].flatten(), 'x', c='gray', alpha=0.5, ms=4, label='vx (brightest peak)')
+
     ax.plot(1000 * time, vel_glo[:, 0, 0, 1], 'o', ms=4, c='gray',
             label='vx (filtered globally)')
     ax.plot(1000 * time, vel_nbs[:, 0, 0, 1], '.', ms=2, c='black',
             label='vx (filtered neighbours)')
-
-    # Also plot filtered vy(t)
     ax.plot(1000 * time, vel_nbs[:, 0, 0, 0], c=cvd.get_color(0), 
             label='vy (filtered neighbours)')
-    
-    # Smoothed vy(t)
     ax.plot(1000 * time, vel_spl[:, 0, 0, 1], c=cvd.get_color(1),
         label='vx (smoothed for 2nd pass)')
 
@@ -1230,14 +1261,16 @@ def plot_vel_comp(disp_unf, disp_glo, disp_nbs, disp_spl, res, frame_nrs, dt, pr
     return fig, ax
 
 
-def plot_vel_med(disp, res, frame_nrs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+def plot_vel_med(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
     # TODO Add docstring and typing
     # Might break with horizontal windows.
 
     # Define a time array
-    n_corrs = disp.shape[0]
-    time = np.linspace((frame_nrs[0] - 1) * dt,
-                    (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+    time = get_time(frs, dt)
+
+    # If lengths don't match, assume all data was supplied; slice accordingly
+    if disp.shape[0] != time.shape[0]:
+        disp = disp[frs[0]:frs[-1], :, :, :]
 
     # Convert displacement to velocity
     vel = disp * res / dt
@@ -1275,14 +1308,13 @@ def plot_vel_med(disp, res, frame_nrs, dt, proc_path=None, file_name=None, test_
     return fig, ax
 
 
-def plot_vel_prof(disp, res, frame_nrs, dt, win_pos, 
+def plot_vel_prof(disp, res, frs, dt, win_pos, 
                   mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, **kwargs):
     # TODO: Write docstring
     
     # Define a time array
     n_corrs = disp.shape[0]
-    time = np.linspace((frame_nrs[0] - 1) * dt,
-                       (frame_nrs[0] - 1 + n_corrs - 1) * dt, n_corrs)
+    time = get_time(frs, dt)
     
     # Convert displacement to velocity
     vel = disp * res / dt
@@ -1358,9 +1390,8 @@ def plot_vel_prof(disp, res, frame_nrs, dt, win_pos,
             if save_path is not None:
                 save_cfig(save_path, file_name + f"_{frame_idx:04d}", test_mode=test_mode)
                 
-                # Close figure to save memory when plotting all frames
-                if mode == "all":
-                    plt.close(fig)
+                # Close figure
+                plt.close(fig)
 
 
 def save_cfig(directory: str, file_name: str, format: str = 'pdf', test_mode: bool = False, verbose: bool = True):

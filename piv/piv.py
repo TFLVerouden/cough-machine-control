@@ -20,12 +20,13 @@ cvd.set_cvd_friendly_colors()
 # Set experimental parameters
 test_mode = False
 videos = False
+rnd_plots = True
 meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frames = list(range(400, 800)) if test_mode else list(range(1, 6000))
+frames = list(range(650, 850)) if test_mode else list(range(1, 6000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings
-v_max = [5, 45]  # [m/s]
+v_max = [5, 40]  # [m/s]
 
 # File handling
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -72,7 +73,7 @@ smooth_lam = 4e-7       # Smoothing lambda for splines
 
 print("FIRST PASS: full frame correlation")
 bckp1_loaded, loaded_vars = piv.backup(
-    "load", proc_path, "pass1.npz", disp1_var_names, test_mode) # removed test_mode
+    "load", proc_path, "pass1.npz", disp1_var_names) # removed test_mode
 
 if bckp1_loaded:
     # Extract loaded variables
@@ -100,34 +101,33 @@ else:
                                  ds_fac=ds_fac1, min_dist=min_dist1)
     disp1_unf = disp1.copy()
 
-    # POST-PROCESSING
-    # Outlier removal
-    disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, 
-                                a=d_max[0], b=d_max[1], verbose=True)
-    disp1 = piv.strip_peaks(disp1, axis=-2, verbose=True)
-    disp1_glo = disp1.copy()
+# POST-PROCESSING
+# Outlier removal
+disp1 = piv.filter_outliers('semicircle_rect', disp1_unf, 
+                            a=d_max[0], b=d_max[1], verbose=True)
+disp1 = piv.strip_peaks(disp1, axis=-2, verbose=True)
+disp1_glo = disp1.copy()
 
-    # Neighbour filtering
-    disp1 = piv.filter_neighbours(disp1, thr=nbs_thr1, n_nbs=n_nbs1, 
-                                mode='xy', replace=False, verbose=True)
-    disp1_nbs = disp1.copy()
+# Neighbour filtering
+disp1 = piv.filter_neighbours(disp1, thr=nbs_thr1, n_nbs=n_nbs1, 
+                            mode='xy', replace=False, verbose=True)
+disp1_nbs = disp1.copy()
 
-    # Define time array
-    time = np.linspace((frames[0] - 1) * dt,
-                    (frames[0] - 1 + len(frames) - 2) * dt, len(frames) - 1)
+# Define time array
+time = piv.get_time(frames, dt)
 
-    # Smooth the x displacement in time
-    disp1 = piv.smooth(time, disp1, lam=smooth_lam, type=int)
+# Smooth the x displacement in time
+disp1 = piv.smooth(time, disp1, lam=smooth_lam, type=int)
 
-    # Save the displacements to a backup file
-    piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
-            disp1_unf=disp1_unf, int1_unf=int1_unf,
-            disp1_glo=disp1_glo, disp1_nbs=disp1_nbs,
-            disp1=disp1, time=time)
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass1.npz", test_mode=test_mode,
+        disp1_unf=disp1_unf, int1_unf=int1_unf,
+        disp1_glo=disp1_glo, disp1_nbs=disp1_nbs,
+        disp1=disp1, time=time)
 
 # PLOTTING
 # Plot a post-processing comparison of the x velocities in time
-piv.plot_vel_comp(disp1_unf, disp1_glo, disp1_nbs, disp1, res_avg, frames, 
+piv.plot_vel_comp(disp1_glo, disp1_nbs, disp1, res_avg, frames, 
                  dt, ylim=(v_max[0] * -1.1, v_max[1] * 1.1),
                  proc_path=proc_path, file_name="pass1_v-t", test_mode=test_mode)
 
@@ -144,7 +144,7 @@ nbs_thr2 = 5            # Threshold for neighbour filtering
 
 print(f"SECOND PASS: {n_wins2} windows")
 bckp2_loaded, loaded_vars2 = piv.backup(
-    "load", proc_path, "pass2.npz", disp2_var_names, test_mode) # removed test_mode
+    "load", proc_path, "pass2.npz", disp2_var_names) # removed test_mode
 
 if bckp2_loaded:
     # Extract loaded variables
@@ -183,21 +183,21 @@ else:
 
     # Note: The correlation map centers (used for displacement calculation) are stored separately in each correlation map as the second element of the tuple
 
-    # POST-PROCESSING
-    # Outlier removal
-    disp2 = piv.filter_outliers('semicircle_rect', disp2_unf,
-                                a=d_max[0], b=d_max[1], verbose=True)
-    disp2 = piv.strip_peaks(disp2, axis=-2, verbose=True)
-    disp2_glo = disp2.copy()
+# POST-PROCESSING
+# Outlier removal
+disp2 = piv.filter_outliers('semicircle_rect', disp2_unf,
+                            a=d_max[0], b=d_max[1], verbose=True)
+disp2 = piv.strip_peaks(disp2, axis=-2, verbose=True)
+disp2_glo = disp2.copy()
 
-    # Very light neighbour filtering to remove extremes and replace missing values
-    disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2,
-                                mode='r', replace=True, verbose=True)
+# Very light neighbour filtering to remove extremes and replace missing values
+disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2,
+                            mode='r', replace=True, verbose=True)
 
-    # Save the displacements to a backup file
-    piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
-            disp2_unf=disp2_unf, int2_unf=int2_unf,
-            win_pos2=win_pos2, disp2_glo=disp2_glo, disp2=disp2)
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass2.npz", test_mode=test_mode,
+        disp2_unf=disp2_unf, int2_unf=int2_unf,
+        win_pos2=win_pos2, disp2_glo=disp2_glo, disp2=disp2)
 
 # PLOTTING
 # Plot the median, min and max velocity in time
@@ -206,15 +206,15 @@ piv.plot_vel_med(disp2, res_avg, frames, dt,
                  title='Second pass',
                  proc_path=proc_path, file_name="pass2_v_med", test_mode=test_mode)
 
-# # Plot some randomly selected velocity profiles
-# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-#                   mode='random', xlim=(-1, 30), ylim=(0, 21.12),
-#                   proc_path=proc_path, file_name="pass2_v",
-#                   subfolder='pass2', test_mode=test_mode)
+# Plot some randomly selected velocity profiles
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='random', xlim=(-5, 40), ylim=(0, 21.12),
+                  proc_path=proc_path, file_name="pass2_v",
+                  subfolder='pass2', test_mode=test_mode) if rnd_plots else None
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='video', xlim=(-1, 30), ylim=(0, 21.12),
+                  mode='video', xlim=(-5, 40), ylim=(0, 21.12),
                   proc_path=proc_path, file_name="pass2_v",
                   test_mode=test_mode) if videos else None
 
@@ -226,14 +226,14 @@ n_wins3 = (24, 1)        # Number of windows (rows, cols)
 win_ov3 = 0             # Overlap between windows
 min_dist3 = 3            # Minimum distance between peaks
 pk_floor3 = 20           # Minimum peak intensity
-d_max = 1.5 * d_max      # Less strict filtering
+d_max[1] = 1.5 * d_max[1] # Less strict filtering in x-direction
 
-# n_nbs3 = (51, 1, 1)     # Neighbourhood for local filtering
-# nbs_thr3 = 5            # Threshold for neighbour filtering
+n_nbs3 = (1, 3, 1)     # Neighbourhood for local filtering
+nbs_thr3 = 3            # Threshold for neighbour filtering
 
 print(f"THIRD PASS: {n_wins3} windows")
 bckp3_loaded, loaded_vars3 = piv.backup(
-    "load", proc_path, "pass3.npz", disp2_var_names, test_mode=True)
+    "load", proc_path, "pass3.npz", disp3_var_names, test_mode)
 
 if bckp3_loaded:
     # Extract loaded variables
@@ -269,33 +269,40 @@ else:
     # Get physical window positions for plotting (from first frame)
     _, win_pos3 = piv.split_n_shift(imgs[0], n_wins3)
 
-    # POST-PROCESSING
-    # Outlier removal
-    disp3 = piv.filter_outliers('semicircle_rect', disp3_unf,
-                                a=d_max[0], b=d_max[1], verbose=True)
-    disp3 = piv.strip_peaks(disp3, axis=-2, verbose=True)
-    disp3_glo = disp2.copy()
+# POST-PROCESSING
+# Outlier removal
+disp3 = piv.filter_outliers('semicircle_rect', disp3_unf,
+                            a=d_max[0], b=d_max[1], verbose=True)
+disp3 = piv.strip_peaks(disp3, axis=-2, verbose=True)
+disp3_glo = disp3.copy()
 
-    # Very light neighbour filtering to remove extremes and replace missing values
-    disp3 = piv.filter_neighbours(disp3, thr=100, n_nbs=1,
-                                mode='r', replace=True, verbose=True)
+# Neighbour filtering # TODO
+disp3 = piv.filter_neighbours(disp3, thr=nbs_thr3, n_nbs=n_nbs3,
+                            mode='x', replace=False, verbose=True)
 
-    # Save the displacements to a backup file
-    piv.backup("save", proc_path, "pass3.npz", test_mode=test_mode,
-            disp3_unf=disp3_unf, int3_unf=int3_unf,
-            win_pos3=win_pos3, disp3_glo=disp3_glo, disp3=disp3)
+# Save the displacements to a backup file
+piv.backup("save", proc_path, "pass3.npz", test_mode=test_mode,
+        disp3_unf=disp3_unf, int3_unf=int3_unf,
+        win_pos3=win_pos3, disp3_glo=disp3_glo, disp3=disp3)
 
 # PLOTTING
-piv.plot_vel_med(disp3, res_avg, frames, dt,
+piv.plot_vel_med(disp3_glo, res_avg, frames, dt,
                     ylim=(v_max[0] * -1.1, v_max[1] * 1.1),
                     title='Third pass',
                     proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 
-piv.plot_vel_prof(disp3, res_avg, frames, dt, win_pos3,
+piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
                     mode='random', xlim=(-5, 40), ylim=(0, 21.12),
-                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode)
+                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode) if rnd_plots else None
+
+piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
+                    mode='video', xlim=(-5, 40), ylim=(0, 21.12),
+                    proc_path=proc_path, file_name="pass3_v",
+                    test_mode=test_mode) if videos else None
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 
 # Finally, show all figures
 plt.show()
+
+print('Done!')
