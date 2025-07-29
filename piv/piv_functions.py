@@ -351,6 +351,52 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, 
     return wins, win_pos
 
 
+def disp2shift(n_wins: tuple[int, int], disp: np.ndarray) -> np.ndarray:
+    """
+    Distribute displacement values over a larger number of windows.
+    
+    This function takes displacement values from a smaller window grid and 
+    distributes them to a larger window grid by replicating values across
+    multiple windows.
+    
+    Args:
+        n_wins (tuple[int, int]): Target number of windows (n_y, n_x)
+        disp (np.ndarray): Displacement array with shape (n_frames, n_y_source, n_x_source, 2)
+    
+    Returns:
+        np.ndarray: Shift array with shape (n_frames, n_y_target, n_x_target, 2)
+                   compatible with split_n_shift function
+    """
+    n_y_target, n_x_target = n_wins
+    
+    # Validate input shape
+    if disp.ndim != 4 or disp.shape[3] != 2:
+        raise ValueError(f"Displacement array must have 4 dimensions (n_frames, n_y, n_x, 2), got {disp.shape}")
+    
+    n_frames, n_y_source, n_x_source, _ = disp.shape
+    
+    # Calculate how many target windows each source window should cover
+    y_ratio = n_y_target / n_y_source
+    x_ratio = n_x_target / n_x_source
+    
+    # Initialize output array
+    shifts = np.zeros((n_frames, n_y_target, n_x_target, 2))
+    
+    # Distribute displacement values across target windows
+    for i in range(n_y_source):
+        for j in range(n_x_source):
+            # Calculate target window range for this source window
+            y0 = int(i * y_ratio)
+            y1 = int((i + 1) * y_ratio)
+            x0 = int(j * x_ratio)  
+            x1 = int((j + 1) * x_ratio)
+            
+            # Assign the displacement to all target windows in this range
+            shifts[:, y0:y1, x0:x1, :] = disp[:, i:i+1, j:j+1, :]
+    
+    return shifts
+
+
 def calc_corr(i: int, imgs: np.ndarray, n_wins: tuple[int, int], shifts: np.ndarray, overlap: float) -> dict:
     """
     Calculate correlation maps for a single set of frames.
@@ -440,7 +486,7 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
     Args:
         i (int): Frame index
         corrs (dict): Correlation maps from calc_corrs
-        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        shifts (np.ndarray): Array of shifts - can be 2D (frame, 2) or 4D (frame, win_y, win_x, 2)
         n_tosum (int): Number of correlation maps to sum
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_corrs (int): Total number of correlation frames
@@ -452,11 +498,7 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
     # Calculate window bounds for summing: odd = symmetric, even = asymmetric
     i0 = max(0, i - (n_tosum - 1) // 2)
     i1 = min(n_corrs, i + n_tosum // 2 + 1)
-    ref_shift = shifts[i]  # Reference shift for current frame
-    
-    # Pre-calculate frame indices and relative shifts
     corr_idxs = np.arange(i0, i1)
-    rel_shifts = np.round(shifts[corr_idxs] - ref_shift).astype(int)
     n_tosum = len(corr_idxs)
     
     # For each window...
@@ -472,27 +514,48 @@ def sum_corr(i: int, corrs: dict, shifts: np.ndarray, n_tosum: int, n_wins: tupl
             
             # Multiple frames case - need alignment and summing
             else:
-                # Get first correlation map to determine base shape
-                first_corr, _ = corrs[(corr_idxs[0], j, k)]
-                base_shape = first_corr.shape
+                # Extract shifts for this specific window
+                if shifts.ndim == 2:  # 2D shifts: same for all windows
+                    ref_shift = shifts[i]
+                    window_shifts = shifts[corr_idxs]
+                else:  # 4D shifts: different per window
+                    ref_shift = shifts[i, j, k]
+                    window_shifts = shifts[corr_idxs, j, k]
+                
+                # Calculate relative shifts for this window
+                rel_shifts = np.round(window_shifts - ref_shift).astype(int)
+                
+                # Collect all correlation maps for this window to determine shapes
+                all_corrs = []
+                all_shapes = []
+                for frame_idx in corr_idxs:
+                    corr, _ = corrs[(frame_idx, j, k)]
+                    all_corrs.append(corr)
+                    all_shapes.append(corr.shape)
+                
+                # Find the maximum shape needed to accommodate all correlation maps
+                max_shape = (max(shape[0] for shape in all_shapes),
+                            max(shape[1] for shape in all_shapes))
                 
                 # Calculate the expanded size needed to fit all shifted maps
                 shift_min = np.min(rel_shifts, axis=0)
                 shift_max = np.max(rel_shifts, axis=0)
-                expanded_shape = (base_shape[0] + shift_max[0] - shift_min[0],
-                                base_shape[1] + shift_max[1] - shift_min[1])
+                
+                # Ensure we get scalar integers for shape calculations
+                shift_range_y = int(shift_max[0] - shift_min[0])
+                shift_range_x = int(shift_max[1] - shift_min[1])
+                expanded_shape = (max_shape[0] + shift_range_y,
+                                max_shape[1] + shift_range_x)
                 
                 # Pre-allocate the summed correlation map
-                corr_summed = np.zeros(expanded_shape, dtype=first_corr.dtype)
+                corr_summed = np.zeros(expanded_shape, dtype=all_corrs[0].dtype)
                 
-                # Calculate new center position in expanded map
-                cntr = (base_shape[0] // 2 - shift_min[0],
-                        base_shape[1] // 2 - shift_min[1])
+                # Calculate new center position in expanded map (based on max shape)
+                cntr = (max_shape[0] // 2 - int(shift_min[0]),
+                        max_shape[1] // 2 - int(shift_min[1]))
                 
                 # Sum each correlation map at its shifted position
-                for frame_idx, shift in zip(corr_idxs, rel_shifts):
-                    corr, _ = corrs[(frame_idx, j, k)]
-                    
+                for corr, shift in zip(all_corrs, rel_shifts):
                     # Calculate placement indices
                     sy, sx = shift - shift_min
                     ey, ex = sy + corr.shape[0], sx + corr.shape[1]
@@ -666,7 +729,7 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
     Args:
         i (int): Correlation map index
         corrs (dict): Correlation maps as {(frame, win_y, win_x): (correlation_map, map_center)}
-        shifts (np.ndarray): 2D array of shifts (frame, y_shift, x_shift)
+        shifts (np.ndarray): Array of shifts - can be 2D (frame, 2) or 4D (frame, win_y, win_x, 2)
         n_wins (tuple[int, int]): Number of windows (n_y, n_x)
         n_peaks (int): Number of peaks to find
         ds_fac (int): Downsampling factor to account for in displacement calculation
@@ -677,15 +740,18 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
         tuple: (frame_index, frame_disps, frame_ints) for this frame
     """
     
-    # Get reference shift (from current frame) - same for all windows
-    ref_shift = shifts[i]
-    
     # Initialize output arrays for this frame
     frame_disps = np.full((n_wins[0], n_wins[1], n_peaks, 2), np.nan)
     frame_ints = np.full((n_wins[0], n_wins[1], n_peaks), np.nan)
     
     for j in range(n_wins[0]):
         for k in range(n_wins[1]):
+            # Get reference shift for this specific window
+            if shifts.ndim == 2:  # 2D shifts: same for all windows
+                ref_shift = shifts[i]
+            else:  # 4D shifts: different per window
+                ref_shift = shifts[i, j, k]
+            
             # Get correlation map and its center (zero-displacement reference point)
             # NOTE: map_center is NOT the physical window position - it's the reference 
             # point in the correlation map coordinate system for calculating displacements
@@ -964,6 +1030,10 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
                 # Calculate the median and standard deviation
                 med = np.nanmedian(nb, axis=(1, 2, 3))
                 std = np.nanstd(nb, axis=(1, 2, 3))
+                
+                # If std is 0 or NaN, skip outlier detection
+                if np.any(np.isnan(std)) or np.any(std == 0):
+                    continue
 
                 # Check if the coordinate is already NaN in the input
                 coord = coords[i, j, k, :]
@@ -1192,7 +1262,7 @@ def plot_vel_med(disp, res, frame_nrs, dt, proc_path=None, file_name=None, test_
                     alpha=0.3, label='Min/max vx')
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Velocity (m/s)')
-    ax.set_title('Second pass')
+    ax.set_title('Median velocity in time')
     ax.set(**kwargs)
 
     ax.legend()
