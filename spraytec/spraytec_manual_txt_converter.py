@@ -26,11 +26,10 @@ def split_array_by_header_marker(arr, marker='Date-Time'):
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(current_dir,"auto_export_test.txt")
-print(path)
+
 save_base_path = os.path.join(current_dir, "individual_data_files")
 file = np.loadtxt(path,dtype=str,delimiter=',')
-print(file.shape)
-print(file[:,0])
+
 
 split_sections = split_array_by_header_marker(file)
 
@@ -40,12 +39,13 @@ if only_last_file == "y":
 
     last_file = split_sections[-1]
     time_created= last_file[1,0]
+    filename= last_file[1,1]
     dt = datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
 
     # Format as YYYY_MM_DD_HH_MM
     file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
 
-    save_path = os.path.join(save_base_path,file_name_time + ".txt")
+    save_path = os.path.join(save_base_path,file_name_time + "_" + filename + ".txt")
     np.savetxt(save_path,last_file,fmt='%s',delimiter=',')
 else: 
     all_files = input("Do you want so save all data (y/n)").strip().lower()
@@ -54,13 +54,13 @@ else:
 
             file = section
             time_created= file[1,0]
-        
+            filename= file[1,1]
             dt = datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
 
             # Format as YYYY_MM_DD_HH_MM
             file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
 
-            save_path = os.path.join(save_base_path,file_name_time + ".txt")
+            save_path = os.path.join(save_base_path,file_name_time + "_" + filename + ".txt")
             np.savetxt(save_path,file,fmt='%s',delimiter=',')
 
     else:
@@ -69,14 +69,16 @@ else:
             
             file = section
             time_created= file[1,0]
+            filename= file[1,1]
+
             save_this_file = input(f"This is file {i}, created at {time_created}, do you want to save it? (y/n)").strip().lower()
             if save_this_file== "y":
                 dt = datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
 
                 # Format as YYYY_MM_DD_HH_MM
                 file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
-
-                save_path = os.path.join(save_base_path,file_name_time + ".txt")
+                
+                save_path = os.path.join(save_base_path,file_name_time + "_" + filename + ".txt")
                 np.savetxt(save_path,file,fmt='%s',delimiter=',')
             i+=1
 
