@@ -55,7 +55,16 @@ def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, 
     n_y, n_x = n_wins
 
     # Handle both uniform and non-uniform shifts
-    shift_array = np.asarray(shift, dtype=int)
+    shift_array = np.asarray(shift)
+    
+    # Handle NaN values before casting to int
+    if np.any(np.isnan(shift_array)):
+        # Replace NaN values with 0 (no shift for invalid windows)
+        shift_array = np.nan_to_num(shift_array, nan=0.0)
+    
+    # Now safely cast to int
+    shift_array = shift_array.astype(int)
+    
     if shift_array.ndim == 1:  # Uniform shift (dy, dx)
         # Convert to non-uniform format
         dy, dx = shift_array
