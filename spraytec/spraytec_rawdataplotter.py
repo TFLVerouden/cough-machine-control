@@ -6,6 +6,9 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 from matplotlib.colors import LogNorm
+from matplotlib.gridspec import GridSpec
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
 
 #we use this fur future compatibility
 pd.set_option('future.no_silent_downcasting', True)
@@ -87,7 +90,7 @@ plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {rou
 plt.xscale('log')
 plt.yscale('log')
 plt.grid(which='both', linestyle='--', linewidth=0.5)
-plt.ylim(0,40)
+plt.ylim(1e-1,40)
 plt.xlim(bin_edges[0],bin_edges[-1])
 # plt.show()
 
@@ -105,14 +108,14 @@ plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {rou
 plt.xscale('log')
 plt.yscale('log')
 plt.grid(which='both', linestyle='--', linewidth=0.5)
-plt.ylim(0,40)
+plt.ylim(1e-1,40)
 plt.xlim(bin_edges[0],bin_edges[-1])
 # plt.show()
 
 #Over time plot
 len_arr= df_filtered.shape[0]
 dates = np.array([],dtype=str)
-percentages_all = np.zeros((len(columns_scattervalues),len_arr))
+percentages_all = np.zeros((len(columns_scattervalues),len_arr)) ### (diameter_values,time)
 
 times = np.zeros(len_arr)
 transmissions = np.zeros(len_arr)
@@ -136,7 +139,7 @@ for i in df_filtered.index:
     date= df_filtered.loc[i,"Date-Time"]
     dates = np.append(dates,date)
     percentages = df_filtered.loc[i,columns_scattervalues].values
-    percentages_all[:,i] = percentages
+    percentages_all[:,i] = percentages  
     t_start = df_filtered.loc[i,"Time (relative)"]
     times[i] = t_start
     t_end = t_start + df_filtered.loc[i,"Duration"]
@@ -179,6 +182,8 @@ for i in df_filtered.index:
 # plt.grid(which= "both")
 # plt.show()
 
+
+
 def edges_from_centers(centers):
     edges = np.zeros(len(centers) + 1)
     edges[1:-1] = (centers[:-1] + centers[1:]) / 2
@@ -188,39 +193,94 @@ def edges_from_centers(centers):
 
 time_edges = np.append(times,t_end)
 diameter_edges = edges_from_centers(bin_centers)
-
+n_percentages = percentages_all/ (bin_centers.reshape(-1,1)*1E-6)**3
+n_percentages  = n_percentages/ np.sum(n_percentages,axis=0)*100
 # Make meshgrid of edges
 X, Y = np.meshgrid(time_edges, diameter_edges)
 
 vmin = 0
 vmax = 40
 
-fig, ax = plt.subplots(figsize=(9,6))
 
-pcm = ax.pcolormesh(X, Y, percentages_all,
+#fig, ax = plt.subplots(2,1,sharex=True,sharey=True,figsize=(9,6))
+fig = plt.figure(figsize=(9, 6))
+
+
+#gs = GridSpec(3, 1, figure=fig, height_ratios=[1, 1, 0.3])  # Smaller 3rd row
+gs = GridSpec(3, 2, width_ratios=[20, 1], height_ratios=[1, 1, 0.3], figure=fig)
+
+ax0 = fig.add_subplot(gs[0, 0])
+ax1 = fig.add_subplot(gs[1, 0],sharex=ax0,sharey=ax0)
+ax2 = fig.add_subplot(gs[2, 0],sharex=ax0)  # Span both columns
+cax0 = fig.add_subplot(gs[0, 1])
+cax1 = fig.add_subplot(gs[1, 1])
+# cax0 = inset_axes(ax0, width="2%", height="100%", loc="right", borderpad=-1)
+# cax1 = inset_axes(ax1, width="2%", height="100%", loc="right", borderpad=-1)
+
+
+plt.setp(ax0.get_xticklabels(), visible=False)
+plt.setp(ax1.get_xticklabels(), visible=False)
+pcm = ax0.pcolormesh(X, Y, percentages_all,
                     norm=LogNorm(vmin=1e-1, vmax=5e1),
                     cmap= 'grey_r')
 
-ax.set_yscale('log')
-ax.set_xlabel('Time (s)')
-ax.set_ylabel(r'Diameter ($\mu$m)')
-ax.set_xlim(0,0.2)
-ax.set_ylim(bin_centers[0], bin_centers[-1])
+ax0.set_yscale('log')
+# ax0.set_xlabel('Time (s)')
+ax0.set_ylabel(r'D ($\mu$m)')
+ax0.set_xlim(0,0.2)
+ax0.set_ylim(bin_centers[0], bin_centers[-1])
 
 
-ax2 = ax.twinx()
-ax2.plot(times,100-transmissions,c="r")
-ax2.set_ylim(0,100)
-ax2.set_ylabel("Reflected (%)")
-cbar = plt.colorbar(pcm, ax=ax)
+# ax2 = ax.twinx()
+# ax2.plot(times,100-transmissions,c="r")
+# ax2.set_ylim(0,100)
+# ax2.set_ylabel("Reflected (%)")
+cbar = plt.colorbar(pcm, cax=cax0)
 
-cbar.set_label('PDF (Volume Percentage)')
-pos = cbar.ax.get_position()  # get current position [x0, y0, width, height]
+cbar.set_label('PDF (Volume %)')
+# pos = cbar.ax.get_position()  # get current position [x0, y0, width, height]
+
+# # Move the colorbar right by increasing x0 and x1:
+# new_pos = [pos.x0 + 0.05, pos.y0, pos.width, pos.height]
+# cbar.ax.set_position(new_pos)
+
+### Number percentage
+
+pcm2 = ax1.pcolormesh(X, Y, n_percentages,
+                    norm=LogNorm(vmin=1e-1, vmax=5e1),
+                    cmap= 'grey_r')
+
+ax1.set_yscale('log')
+
+ax1.set_ylabel(r'D ($\mu$m)')
+ax1.set_xlim(0,0.2)
+ax1.set_ylim(bin_centers[0], bin_centers[-1])
+
+
+# ax2 = ax.twinx()
+# ax2.plot(times,100-transmissions,c="r")
+# ax2.set_ylim(0,100)
+# ax2.set_ylabel("Reflected (%)")
+
+cbar2 = plt.colorbar(pcm2, cax=cax1)
+
+cbar2.set_label('PDF (Number %)')
+# pos = cbar2.ax.get_position()  # get current position [x0, y0, width, height]
 
 # Move the colorbar right by increasing x0 and x1:
-new_pos = [pos.x0 + 0.05, pos.y0, pos.width, pos.height]
-cbar.ax.set_position(new_pos)
+# new_pos = [pos.x0 + 0.05, pos.y0, pos.width, pos.height]
+# cbar2.ax.set_position(new_pos)
+
+###Transmission
+ax2.plot(times,transmissions,c="r")
+ax2.set_ylim(60,100)
+ax2.set_xlim(0,0.2)
+ax2.set_ylabel("T (%)")
+ax2.set_aspect('auto') 
+ax2.set_xlabel('Time (s)')
+
+
 full_save_path = os.path.join(save_path,filename)
-plt.savefig(full_save_path+".png")
-# plt.show()
+plt.savefig(full_save_path+".png",dpi=800)
+#plt.show()
 
