@@ -130,9 +130,11 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
     vel = disp * res / dt
   
     # Raise error if one tries to make a video, but proc_path is not specified
-    if mode == "video" and (proc_path is None or file_name is None
-                             or test_mode):
-        raise ValueError("proc_path and file_name must be specified, and test_mode must be False to create a video.")
+    if mode == "video":
+        if test_mode:
+            return
+        elif proc_path is None or file_name is None:
+            raise ValueError("proc_path and file_name must be specified to create a video.")
 
     # Set up save path if subfolder is specified
     if proc_path is not None and subfolder is not None and not test_mode:

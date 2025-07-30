@@ -219,15 +219,17 @@ piv.plot_vel_med(disp2, res_avg, frames, dt,
 
 # Plot some randomly selected velocity profiles
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='random', xlim=(-5, 40), ylim=(0, 21.12),
+                  mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+                  ylim=(0, 21.12),
                   proc_path=proc_path, file_name="pass2_v",
                   subfolder='pass2', test_mode=test_mode) if rnd_plots else None
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='video', xlim=(-5, 40), ylim=(0, 21.12),
+                  mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+                  ylim=(0, 21.12),
                   proc_path=proc_path, file_name="pass2_v",
-                  test_mode=test_mode) if videos else None
+                  test_mode=not videos)
 
 
 # THIRD PASS: Split in 24 windows ==============================================
@@ -307,13 +309,13 @@ piv.plot_vel_med(disp3_glo, res_avg, frames, dt,
                     proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 
 piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
-                    mode='random', xlim=(-5, 40), ylim=(0, 21.12),
+                    mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
                     proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode) if rnd_plots else None
 
 piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
-                    mode='video', xlim=(-5, 40), ylim=(0, 21.12),
+                    mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
                     proc_path=proc_path, file_name="pass3_v",
-                    test_mode=test_mode) if videos else None
+                    test_mode=not videos)
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 
