@@ -21,9 +21,9 @@ cvd.set_cvd_friendly_colors()
 test_mode = False
 videos = True
 rnd_plots = True
-meas_series = 'PIV250623'
-meas_name = '250624_1338_80ms_nozzlepress1bar'
-cal_name = '250624_calibration_PIV_500micron'
+meas_series = 'PIV250723'
+meas_name = 'PIV_2bar_80ms_refill'
+cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
 frames = list(range(650, 850)) if test_mode else "all"
 dt = 1 / 40000  # [s]
 
@@ -48,7 +48,7 @@ var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs',
 
 # In the current directory, create a folder for processed data
 # named the same as the final part of the data_path
-proc_path = os.path.join(current_dir, 'processed', os.path.basename(data_path))
+proc_path = os.path.join(current_dir, 'processed', meas_series, meas_name)
 if not os.path.exists(proc_path) and not test_mode:
     os.makedirs(proc_path)
 
