@@ -21,8 +21,8 @@ cvd.set_cvd_friendly_colors()
 test_mode = False
 videos = False
 rnd_plots = True
-meas_name = '250624_1431_80ms_nozzlepress1bar_cough05bar'
-frames = list(range(650, 850)) if test_mode else list(range(1, 6000))
+meas_name = '250623_1608_secondtest'
+frames = list(range(650, 850)) if test_mode else list(range(1, 5000))
 dt = 1 / 40000  # [s]
 
 # Data processing settings
@@ -221,6 +221,7 @@ piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
 
 # THIRD PASS: Split in 24 windows ==============================================
 n_tosum3 = 4             # Number of correlation maps to sum -> 1 ms mov.av.
+# TODO: Nope, can be 40
 n_peaks3 = 5             # Number of peaks to find in correlation map
 n_wins3 = (24, 1)        # Number of windows (rows, cols)
 win_ov3 = 0             # Overlap between windows
@@ -230,6 +231,9 @@ d_max[1] = 1.5 * d_max[1] # Less strict filtering in x-direction
 
 n_nbs3 = (1, 3, 1)     # Neighbourhood for local filtering
 nbs_thr3 = 3            # Threshold for neighbour filtering
+
+# TODO: subpixel correction
+# TODO: Plot v_center
 
 print(f"THIRD PASS: {n_wins3} windows")
 bckp3_loaded, loaded_vars3 = piv.backup(
