@@ -2,11 +2,14 @@ import numpy as np
 import cv2 as cv
 from scipy import spatial
 import os
+from matplotlib import pyplot as plt
+from piv_functions.io import backup
 
 
 def all_distances(points):
     if points.ndim != 2 or points.shape[1] != 2:
-        raise ValueError("Input points must be a 2D array with shape (n_points, 2)")
+        raise ValueError(
+            "Input points must be a 2D array with shape (n_points, 2)")
     return spatial.distance.cdist(points, points, 'euclidean')
 
 
@@ -34,7 +37,10 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 
     # Load the image and convert it to grayscale
     img = cv.imread(path, cv.IMREAD_UNCHANGED)
-    img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+
+    # If the number of channels is greater than 1, convert to grayscale
+    if img.ndim > 2 and img.shape[2] > 1:
+        img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
     img = cv.normalize(img, None, 0, 255, cv.NORM_MINMAX).astype(np.uint8)
     orig_shape = img.shape
 
@@ -58,6 +64,9 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
     while True:
         grid_found, centres = cv.findCirclesGrid(
             img, tuple(grid_size), flags=cv.CALIB_CB_SYMMETRIC_GRID)
+
+        # Print the current grid size being tested
+        print(f"Trying {grid_size[0]} ᳵ {grid_size[1]} grid...", end='\r')
 
         if grid_found and not max_columns_found:
             # Increase the number of columns if the maximum hasn't been reached
@@ -95,7 +104,8 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 
     mask = np.eye(*dist_pixel.shape, dtype=bool).__invert__()
     res_avg = np.average(all_res[mask], weights=dist_pixel[mask])
-    res_std = np.sqrt(np.average((all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
+    res_std = np.sqrt(np.average(
+        (all_res[mask]-res_avg)**2, weights=dist_pixel[mask]))
 
     # Print the resolution and standard deviation
     print(f"Resolution (+- std): {res_avg*1000:.{print_prec}f} +- "
@@ -105,15 +115,45 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
     print(f"Frame size: {orig_shape[0]*res_avg*1000:.{print_prec//2}f} x "
           f"{orig_shape[1]*res_avg*1000:.{print_prec//2}f} mm²")
 
-    # Save the resolution and standard deviation to a file
+    # Save comprehensive calibration data to npz file
     if save:
-        with open(path.replace('.tif', '_res_std.txt'), 'wb') as f:
-            np.savetxt(f,[res_avg, res_std])
-    print("Resolution saved to disk.")
+        backup(mode='save', proc_path=path,
+               filename=path.replace('.tif', '_cal.npz'),
+               # Original file information
+               original_file_path=path,
+               original_image_shape=orig_shape,
+               # ROI information
+               roi_used=np.array(roi),
+               # Calibration parameters
+               spacing_m=spacing,
+               init_grid=np.array(init_grid),
+               binary_threshold=binary_thr,
+               blur_kernel=np.array(blur_ker),
+               open_kernel=np.array(open_ker),
+               # Resolution results
+               resolution_avg_m_per_px=res_avg,
+               resolution_std_m_per_px=res_std,
+               resolution_avg_mm_per_px=res_avg * 1000,
+               resolution_std_mm_per_px=res_std * 1000,
+               # Frame size in mm
+               frame_size_mm=np.array([orig_shape[1] * res_avg * 1000,
+                                       orig_shape[0] * res_avg * 1000]),
+               # Grid detection results
+               final_grid_size=np.array(grid_size),
+               grid_centres_pixel=centres,
+               grid_points_real=grid_points,
+               # Distance matrices for reference
+               distance_real_m=dist_real,
+               distance_pixel_px=dist_pixel,
+               )
 
-    # TODO: Optionally plot the results
     if plot:
-        print("Plotting is not implemented in this function.")
+        fig, ax = plt.subplots()
+        ax.imshow(img, cmap='gray')
+        ax.scatter(centres[:, 0], centres[:, 1], c='g', s=30)
+        ax.set_title(f"Grid Calibration: {grid_size[0]} cols x {grid_size[1]} "
+                     f"rows.\n Resolution: {res_avg*1000:.{print_prec}f} mm/px")
+        plt.show()
 
     return res_avg, res_std
 
@@ -121,13 +161,12 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
 if __name__ == "__main__":
     # Get the directory containing the file
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    cal_path = os.path.join(current_dir, "calibration", "250624_calibration_PIV_500micron.tif")
+    cal_path = os.path.join(current_dir, "calibration",
+                            "250624_calibration_PIV_500micron.tif")
 
     # Define calibration parameters
     cal_spacing = 0.0005  # m
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
-    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=False)
-
-    # Resolution (+- std): 0.0508 +- 0.0001 mm/px
+    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=True, plot=True)
