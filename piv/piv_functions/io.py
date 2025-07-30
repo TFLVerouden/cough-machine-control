@@ -15,68 +15,84 @@ from natsort import natsorted
 from tqdm import tqdm
 
 
-def backup(mode: str, proc_path: str, filename: str, var_names=None, test_mode=False, **kwargs) -> tuple[bool, dict]:
+def save_backup(proc_path: str, file_name: str, 
+                test_mode=False, **kwargs) -> bool:
     """
-    Load or save a backup file from/to the specified path.
+    Save a backup file to the specified path.
 
     Args:
-        mode (str): 'load' or 'save' to specify the operation.
         proc_path (str): Path to the directory containing the backup file.
         filename (str): Name of the backup file to load/save.
-        test_mode (bool): If True, do not load/save the file.
-        var_names (list): List of variable names to load (for load mode).
-        **kwargs: Variables to save (for save mode). Use as: backup("save", path, file, var1=value1, var2=value2, ...)
+        test_mode (bool, optional): If True, do nothing.
+        **kwargs: Variables to save. Use as: backup(path, file, var1=value1, var2=value2, ...)
 
     Returns:
-        For load mode: loaded_vars (dict)
-        For save mode: success (bool)
+        success (bool): Whether the operation was successful.
     """
-    # If in test mode, return appropriate values
+    # Skip if in test mode
     if test_mode:
-        return False, {}
+        return False
 
-    # Load mode
-    elif mode == 'load':
-        # Check if the file exists
-        filepath = os.path.join(proc_path, filename)
-        if not os.path.exists(filepath):
-            print(f"Warning: backup file {filename} not found in {proc_path}.")
-            return False, {}
+    # Check for empty kwargs
+    if not kwargs:
+        print("Warning: No variables provided for saving.")
+        return False
+    
+    # Check whether the supplied file name already has an extension
+    if not file_name.endswith('.npz'):
+        file_name += '.npz'
 
-        # Load the data from the .npz file
+    # Save the variables to a .npz file
+    file_path = os.path.join(proc_path, file_name)
+    np.savez(file_path, **kwargs)
+    print(f"Saved data to {file_path}")
+    return True
+
+
+def load_backup(proc_path: str, file_name: str, var_names=None,
+                test_mode=False) -> dict:
+    """
+    Load a backup file from the specified path.
+
+    Args:
+        proc_path (str): Path to the directory containing the backup file.
+        filename (str): Name of the backup file to load/save.
+        var_names (list, optional): List of variable names to load. If None, loads all variables.
+        test_mode (bool, optional): If True, do nothing.
+
+    Returns:
+        loaded_vars (dict): Empty if nothing was loaded.
+    """
+    # Skip if in test mode
+    if test_mode:
+        return {}
+
+    # Check whether the supplied file name already has an extension
+    if not file_name.endswith('.npz'):
+        file_name += '.npz'
+    file_path = os.path.join(proc_path, file_name)
+
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        print(f"Warning: backup file {file_path} not found.")
+        return {}
+
+    # Load the data from the .npz file
+    loaded_vars = {}
+    with np.load(file_path) as data:
+        if var_names is None:
+            # Load all variables in the file
+            for k in data.files:
+                loaded_vars[k] = data[k]
         else:
-            loaded_vars = {}
-            with np.load(filepath) as data:
-                if var_names is None:
-                    # Load all variables in the file
-                    for k in data.files:
-                        loaded_vars[k] = data[k]
+            # Load only requested variables
+            for k in var_names:
+                if k in data:
+                    loaded_vars[k] = data[k]
                 else:
-                    # Load only requested variables
-                    for k in var_names:
-                        if k in data:
-                            loaded_vars[k] = data[k]
-                        else:
-                            print(f"Warning: {k} not found in {filepath}")
-            print(f"Loaded data from {filepath}")
-            return True, loaded_vars
-
-    # Save mode
-    elif mode == 'save':
-        if not kwargs:
-            print("Warning: No variables provided for saving.")
-            return False, {}
-        
-        # Save the variables to a .npz file
-        filepath = os.path.join(proc_path, filename)
-        np.savez(filepath, **kwargs)
-        print(f"Saved data to {filepath}")
-        return True, {}
-
-    # If mode is not recognized, return False
-    else:
-        print(f"Error: Unrecognized mode '{mode}'. Use 'load' or 'save'.")
-        return False, {}
+                    print(f"Warning: {k} not found in {file_path}")
+    print(f"Loaded data from {file_path}")
+    return loaded_vars
 
 
 def read_img(file_path: str) -> np.ndarray | None:
@@ -95,7 +111,7 @@ def read_img(file_path: str) -> np.ndarray | None:
     return img
 
 
-def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', lead_0: int = 5, timing: bool = True) -> np.ndarray:
+def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', lead_0: int = 5, only_count: bool = False, timing: bool = True) -> np.ndarray:
 
     """
     Load selected images from a directory into a 3D numpy array.
@@ -106,10 +122,11 @@ def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', l
             or "all" to load all images.
         format (str): File extension to load.
         lead_0 (int): Number of leading zeros in the file names.
+        only_count (bool): If True, only count the number of images without loading them.
         timing (bool): If True, show a progress bar while loading images.
 
     Returns:
-        np.ndarray: 3D array of images (image_index, y, x).
+        np.ndarray | int: 3D array of images (image_index, y, x) or the number of images found.
     """
 
     # Check if the directory exists
@@ -131,6 +148,9 @@ def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', l
     
     if not files:
         raise FileNotFoundError(f"No files found in {data_path} with the specified criteria and format '{format}'.")
+
+    if only_count:
+        return len(files)
 
     # Read images into a 3D numpy array in parallel
     file_paths = [os.path.join(data_path, f) for f in files]

@@ -7,6 +7,7 @@ removing outliers, smoothing data, and other post-processing operations.
 
 import numpy as np
 from scipy.interpolate import make_smoothing_spline
+from tqdm import trange
 
 
 def filter_outliers(mode: str, coords: np.ndarray, a: float | np.ndarray | None = None, b: float | None = None, verbose: bool = False):
@@ -133,7 +134,7 @@ def validate_n_nbs(n_nbs: int | str | tuple[int, int, int], max_shape: tuple[int
     return tuple(n_nbs)
 
 
-def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tuple[int, int, int] = 3, mode: str = "xy", replace: bool = False, verbose: bool = False):
+def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tuple[int, int, int] = 3, mode: str = "xy", replace: bool = False, verbose: bool = False, timing: bool = False) -> np.ndarray:
 
     """
     Filter out coordinates that are too different from their neighbours.
@@ -149,6 +150,7 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
             - "r": Compare vector lengths only
         replace (bool): Replace outliers and pre-existing NaN values with the median of neighbours.
         verbose (bool): If True, print summary statistics about filtering.
+        timing (bool): If True, print timing information for the filtering process.
 
     Returns:
         np.ndarray: Filtered coordinates with invalid points set to NaN or replaced with median.
@@ -173,7 +175,7 @@ def filter_neighbours(coords: np.ndarray, thr: float = 1, n_nbs: int | str | tup
     (n_nbs[0], n_nbs[1], n_nbs[2], 1))[..., 0]
 
     # Iterate over each coordinate
-    for i in range(n_corrs):
+    for i in trange(n_corrs, desc="Filtering neighbours", disable=not timing):
         for j in range(n_wins_y):
             for k in range(n_wins_x):
 

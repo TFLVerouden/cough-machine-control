@@ -31,6 +31,47 @@ def downsample(imgs: np.ndarray, factor: int) -> np.ndarray:
                         w // factor, factor).sum(axis=(2, 4))
 
 
+def crop(imgs: np.ndarray, roi: tuple[int, int, int, int], units: str='px') -> np.ndarray:
+    """"
+    Crop a single image or a stack of images.
+    
+    Args:
+        imgs (np.ndarray): 2D image (y, x) or 3D stack (image_index, y, x).
+        roi (tuple[int, int, int, int]): Region of interest as (y_start, y_end, x_start, x_end). If y_end or x_end is negative, they are interpreted as an offset from the end of the image.
+        units (str): Units for the ROI coordinates ('px' for pixels, 'mm' for millimeters or 'frac' for fractional coordinates).
+
+    Returns:
+        np.ndarray: Cropped image or stack of images.
+    """
+
+    if units is not 'px':
+        raise NotImplementedError("Only pixel-based cropping is currently supported.")
+    
+    # Check if the input is a 3D array
+    if imgs.ndim != 3:
+        raise ValueError("Input must be a 3D array of images (image_index, y, x).")
+    
+    # Validate ROI dimensions
+    if len(roi) != 4:
+        raise ValueError("ROI must be a tuple of four integers (y_start, y_end, x_start, x_end).")
+    
+    y_start, y_end, x_start, x_end = roi
+    
+    # Handle negative indices for y_end and x_end
+    if y_end < 0:
+        y_end = imgs.shape[1] + y_end
+    if x_end < 0:
+        x_end = imgs.shape[2] + x_end
+    
+    # Validate ROI bounds
+    if not (0 <= y_start < imgs.shape[1] and 0 <= y_end <= imgs.shape[1] and
+            0 <= x_start < imgs.shape[2] and 0 <= x_end <= imgs.shape[2]):
+        raise ValueError("ROI coordinates are out of bounds of the image dimensions.")
+    
+    # Crop the images
+    return imgs[:, y_start:y_end, x_start:x_end]
+
+
 def split_n_shift(img: np.ndarray, n_wins: tuple[int, int], overlap: float = 0, shift: tuple[int, int] | np.ndarray = (0, 0), shift_mode: str = 'before', plot: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """
     Split a 2D image array (y, x) into (overlapping) windows,
