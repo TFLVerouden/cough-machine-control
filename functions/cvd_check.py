@@ -146,6 +146,17 @@ def set_cvd_friendly_colors(style="adjusted", do_reset=False, do_print=False):
         print("Current colormap:", current_cmap)
 
 
+def get_color(n):
+    """
+    Returns the nth color from the current Matplotlib color cycle.
+    
+    :param n: Index of the color to retrieve (0-indexed).
+    :return: Color string (hex format) from the current color cycle.
+    """
+    current_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    return current_colors[n % len(current_colors)]
+
+
 if __name__ == "__main__":
     # Define a function to plot the color cycle
     import os

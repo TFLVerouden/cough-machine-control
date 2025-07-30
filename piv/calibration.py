@@ -128,6 +128,6 @@ if __name__ == "__main__":
     cal_roi = [50, 725, 270, 375]
 
     # Run the calibration function
-    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=True)
+    calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=False)
 
     # Resolution (+- std): 0.0508 +- 0.0001 mm/px
