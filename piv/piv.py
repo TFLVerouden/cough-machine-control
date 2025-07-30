@@ -20,7 +20,7 @@ cvd.set_cvd_friendly_colors()
 # Set experimental parameters
 test_mode = False
 videos = True
-rnd_plots = True
+new_bckp = True
 meas_series = 'PIV250723'
 meas_name = 'PIV_2bar_80ms_refill'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
@@ -71,7 +71,7 @@ n_tosum1 = 40           # Number of correlation maps to sum
 n_peaks1 = 10           # Number of peaks to find in correlation map
 n_wins1 = (1, 1)        # Number of windows (rows, cols)
 min_dist1 = 5           # Minimum distance between peaks
-v_max1 = [10, 60]       # Global filter m/s
+v_max1 = [10, 75]       # Global filter m/s
 n_nbs1 = (41, 1, 1)     # Neighbourhood for local filtering
 nbs_thr1 = 1            # Threshold for neighbour filtering
 smooth_lam = 4e-7       # Smoothing lambda for splines
@@ -79,7 +79,8 @@ smooth_lam = 4e-7       # Smoothing lambda for splines
 print("FIRST PASS: full frame correlation")
 # Load existing backup data if available
 
-loaded_vars = piv.load_backup(proc_path, "pass1.npz", test_mode=test_mode)
+loaded_vars = piv.load_backup(proc_path, "pass1.npz", var_names[1],
+                              test_mode=(test_mode or new_bckp))
 if loaded_vars:
     for var_name in var_names[1]:
         globals()[var_name] = loaded_vars.get(var_name)
@@ -146,12 +147,16 @@ n_wins2 = (8, 1)        # Number of windows (rows, cols)
 win_ov2 = 0.2           # Overlap between windows
 min_dist2 = 3           # Minimum distance between peaks
 pk_floor2 = 20          # Minimum peak intensity
-v_max2 = [10, 60]       # Global filter m/s
+v_max2 = [10, 75]       # Global filter m/s
 n_nbs2 = (51, 3, 1)     # Neighbourhood for local filtering
 nbs_thr2 = 5            # Threshold for neighbour filtering
 
+# TODO: Plot rejected stuff!!
+# TODO: Plot v_center
+
 print(f"SECOND PASS: {n_wins2} windows")
-loaded_vars = piv.load_backup(proc_path, "pass2.npz", var_names[2], test_mode=test_mode)
+loaded_vars = piv.load_backup(proc_path, "pass2.npz", var_names[2],
+                              test_mode=(test_mode or new_bckp))
 
 if loaded_vars:
     # Extract loaded variables
@@ -222,7 +227,7 @@ piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
                   mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
                   ylim=(0, 21.12),
                   proc_path=proc_path, file_name="pass2_v",
-                  subfolder='pass2', test_mode=test_mode) if rnd_plots else None
+                  subfolder='pass2', test_mode=test_mode)
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
@@ -239,14 +244,13 @@ n_wins3 = (24, 1)        # Number of windows (rows, cols)
 win_ov3 = 0             # Overlap between windows
 min_dist3 = 3            # Minimum distance between peaks
 pk_floor3 = 20           # Minimum peak intensity
-v_max3 = [10, 60]       # Global filter m/s
+v_max3 = [10, 75]       # Global filter m/s
 n_nbs3 = (1, 3, 1)     # Neighbourhood for local filtering
 nbs_thr3 = 3            # Threshold for neighbour filtering
 
-# TODO: Plot v_center
-
 print(f"THIRD PASS: {n_wins3} windows")
-loaded_vars = piv.load_backup(proc_path, "pass3.npz", var_names[3], test_mode)
+loaded_vars = piv.load_backup(proc_path, "pass3.npz", var_names[3],
+                              test_mode=(test_mode or new_bckp))
 
 if loaded_vars:
     for var_name in var_names[3]:
@@ -310,7 +314,7 @@ piv.plot_vel_med(disp3_glo, res_avg, frames, dt,
 
 piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
                     mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
-                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode) if rnd_plots else None
+                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode)
 
 piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
                     mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
