@@ -181,7 +181,7 @@ def find_disp(i: int, corrs: dict, shifts: np.ndarray, n_wins: tuple[int, int], 
     return i, frame_disps, frame_ints
 
 
-def find_disps(corrs: dict, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None, n_peaks: int = 1, ds_fac: int = 1, subpx: bool = False, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
+def find_disps(corrs: dict, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray | None = None, n_peaks: int = 1, ds_fac: int = 1, subpx: bool = False, verbose: bool = True, **find_peaks_kwargs) -> tuple[np.ndarray, np.ndarray]:
     """
     Find peaks in correlation maps and calculate displacements.
 
@@ -227,4 +227,8 @@ def find_disps(corrs: dict, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray
         disps[frame_idx] = frame_disps
         ints[frame_idx] = frame_ints
     
+    # If verbose, print how many displacements were not found
+    if verbose:
+        n_nan_disps = np.sum(np.all(np.isnan(disps), axis=(-2, -1)))
+        print(f"Finding peaks: {n_nan_disps}/{n_corrs * n_wins[0] * n_wins[1]} windows did not yield any displacements.")
     return disps, ints
