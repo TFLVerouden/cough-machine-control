@@ -222,7 +222,7 @@ plt.setp(ax0.get_xticklabels(), visible=False)
 plt.setp(ax1.get_xticklabels(), visible=False)
 pcm = ax0.pcolormesh(X, Y, percentages_all,
                     norm=LogNorm(vmin=1e-1, vmax=5e1),
-                    cmap= 'grey_r')
+                    cmap= 'Blues')
 
 ax0.set_yscale('log')
 # ax0.set_xlabel('Time (s)')
@@ -230,7 +230,7 @@ ax0.set_ylabel(r'D ($\mu$m)')
 ax0.set_xlim(0,0.2)
 ax0.set_ylim(bin_centers[0], bin_centers[-1])
 
-
+ax0.grid(which='major',linestyle="--",alpha=0.8)
 # ax2 = ax.twinx()
 # ax2.plot(times,100-transmissions,c="r")
 # ax2.set_ylim(0,100)
@@ -248,10 +248,10 @@ cbar.set_label('PDF (Volume %)')
 
 pcm2 = ax1.pcolormesh(X, Y, n_percentages,
                     norm=LogNorm(vmin=1e-1, vmax=5e1),
-                    cmap= 'grey_r')
+                    cmap= 'Blues')
 
 ax1.set_yscale('log')
-
+ax1.grid(which='major',linestyle="--",alpha=0.8)
 ax1.set_ylabel(r'D ($\mu$m)')
 ax1.set_xlim(0,0.2)
 ax1.set_ylim(bin_centers[0], bin_centers[-1])
