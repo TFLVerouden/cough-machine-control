@@ -19,8 +19,8 @@ cvd.set_cvd_friendly_colors()
 
 # Set experimental parameters
 test_mode = False
-videos = True
-new_bckp = True
+videos = False
+new_bckp = False
 meas_series = 'PIV250723'
 meas_name = 'PIV_2bar_80ms_refill'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
@@ -41,7 +41,7 @@ if user == "tommieverouden":
         '/Users/tommieverouden/Documents/Current data', meas_series, meas_name)
 elif user == "sikke":
     data_path = os.path.join('D:\\Experiments\\PIV\\', meas_series, meas_name)
-
+print(f"data_path: {data_path}")
 # Data saving settings
 var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs', 
               'disp1', 'time'], ['disp2_unf', 'int2_unf', 'win_pos2', 'disp2_glo', 'disp2'], ['disp3_unf', 'int3_unf', 'win_pos3', 'disp3_glo', 'disp3']]
@@ -81,6 +81,7 @@ print("FIRST PASS: full frame correlation")
 
 loaded_vars = piv.load_backup(proc_path, "pass1.npz", var_names[1],
                               test_mode=(test_mode or new_bckp))
+
 if loaded_vars:
     for var_name in var_names[1]:
         globals()[var_name] = loaded_vars.get(var_name)
@@ -305,7 +306,7 @@ piv.save_backup(proc_path, "pass3.npz", test_mode=test_mode,
                 nbs_thr3=nbs_thr3)
 
 # PLOTTING
-piv.plot_vel_med(disp3_glo, res_avg, frames, dt,
+piv.plot_vel_Gupta(disp3_glo, res_avg, frames, dt,
                     ylim=(v_max3[0] * -1.1, v_max3[1] * 1.1),
                     title=f'Third pass - {meas_name}',                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 

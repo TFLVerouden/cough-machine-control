@@ -34,7 +34,7 @@ from .postprocessing import (
     filter_outliers, filter_neighbours, validate_n_nbs, 
     first_valid, strip_peaks, smooth
 )
-from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof
+from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof,plot_vel_Gupta
 from .utils import cart2polar, get_time, disp2shift
 from .calibration import calibrate_grid, all_distances
 
