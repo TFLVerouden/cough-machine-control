@@ -52,7 +52,7 @@ if user == "tommieverouden":
         '/Users/tommieverouden/Documents/Current data', meas_series, meas_name)
 elif user == "sikke":
     data_path = os.path.join('D:\\Experiments\\PIV\\', meas_series, meas_name)
-
+print(f"data_path: {data_path}")
 # Data saving settings
 var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs', 
               'disp1', 'time'], ['disp2_unf', 'int2_unf', 'win_pos2', 'disp2_glo', 'disp2'], ['disp3_unf', 'int3_unf', 'win_pos3', 'disp3_glo', 'disp3']]
@@ -96,6 +96,7 @@ print("\nFIRST PASS: full frame correlation")
 
 loaded_vars = piv.load_backup(proc_path, "pass1.npz", var_names[1],
                               test_mode=(test_mode or new_bckp))
+
 if loaded_vars:
     for var_name in var_names[1]:
         globals()[var_name] = loaded_vars.get(var_name)

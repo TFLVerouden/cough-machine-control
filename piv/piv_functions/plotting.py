@@ -20,6 +20,7 @@ import cvd_check as cvd
 
 from .utils import get_time
 from .io import save_cfig
+from .Gupta_comparison import Gupta_plotter
 
 
 def plot_vel_comp(disp_glo, disp_nbs, disp_spl, res, frs, dt, proc_path=None, file_name=None, test_mode=False, 
@@ -84,6 +85,9 @@ def plot_vel_comp(disp_glo, disp_nbs, disp_spl, res, frs, dt, proc_path=None, fi
 def plot_vel_med(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
     # TODO Add docstring and typing
     # Might break with horizontal windows.
+    
+
+
 
     # Define a time array
     time = get_time(frs, dt)
@@ -112,6 +116,7 @@ def plot_vel_med(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=F
 
     # Plot vy (vertical velocity)
     ax.plot(time * 1000, med_vy, label='Median vy')
+
     ax.fill_between(time * 1000, min_vy, max_vy, alpha=0.3, label='Min/max vy')
 
     # Plot vx (horizontal velocity)
@@ -129,6 +134,69 @@ def plot_vel_med(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=F
     if proc_path is not None and file_name is not None and not test_mode:
         # Save the figure
         save_cfig(proc_path, file_name, test_mode=test_mode, verbose=True)
+
+    return fig, ax
+
+def plot_vel_Gupta(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+    # TODO Add docstring and typing
+    # Might break with horizontal windows.
+    
+
+
+
+    # Define a time array
+    time = get_time(frs, dt)
+    #Gupta PLOTTER, Abe
+    Flowrate_Gupta,time_Gupta = Gupta_plotter("Male",70,1.90)
+    A_coughmachine = 4e-4 #m^2
+    
+    v_Gupta = Flowrate_Gupta / A_coughmachine / 1000 # v (m/s) = Q (L/s) / A(m), divide Q by a 1000
+    ####
+    
+
+    # If lengths don't match, assume all data was supplied; slice accordingly
+    if disp.shape[0] != time.shape[0]:
+        disp = disp[frs[0]:frs[-1], :, :, :]
+
+    # Convert displacement to velocity
+    vel = disp * res / dt
+
+    # Plot the median velocity in time, show the min and max as a shaded area
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    # Calculate statistics with warning suppression for all-NaN slices
+    with np.errstate(invalid='ignore'):
+        # Plot vy (vertical velocity)
+        med_vy = np.nanmedian(vel[:, :, :, 0], axis=(1, 2))
+        min_vy = np.nanmin(vel[:, :, :, 0], axis=(1, 2))
+        max_vy = np.nanmax(vel[:, :, :, 0], axis=(1, 2))
+        
+        # Plot vx (horizontal velocity)
+        med_vx = np.nanmedian(vel[:, :, :, 1], axis=(1, 2))
+        min_vx = np.nanmin(vel[:, :, :, 1], axis=(1, 2))
+        max_vx = np.nanmax(vel[:, :, :, 1], axis=(1, 2))
+
+    # Plot vy (vertical velocity)
+    ax.plot(time * 1000, med_vy, label='Median vy')
+    ax.plot(time_Gupta*1000,v_Gupta,label="Gupta",c='k')
+    ax.fill_between(time * 1000, min_vy, max_vy, alpha=0.3, label='Min/max vy')
+
+    # Plot vx (horizontal velocity)
+    ax.plot(time * 1000, med_vx, label='Median vx')
+    ax.fill_between(time * 1000, min_vx, max_vx, alpha=0.3, label='Min/max vx')
+
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Velocity (m/s)')
+    ax.set_title('Median velocity in time')
+    ax.set(**kwargs)
+
+    ax.legend()
+    ax.grid()
+    plt.show()
+
+    # if proc_path is not None and file_name is not None and not test_mode:
+        # Save the figure
+        #save_cfig(proc_path, file_name, test_mode=test_mode, verbose=True)
 
     return fig, ax
 
