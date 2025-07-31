@@ -25,7 +25,7 @@ def split_array_by_header_marker(arr, marker='Date-Time'):
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
-path = os.path.join(current_dir,"auto_export_test.txt")
+path = os.path.join(current_dir,"SPRAYTEC_APPEND_FILE.txt")
 
 save_base_path = os.path.join(current_dir, "individual_data_files")
 file = np.loadtxt(path,dtype=str,delimiter=',')
