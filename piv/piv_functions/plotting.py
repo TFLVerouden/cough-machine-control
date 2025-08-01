@@ -20,7 +20,6 @@ import cvd_check as cvd
 
 from .utils import get_time
 from .io import save_cfig
-from .Gupta_comparison import Gupta_plotter
 
 
 def plot_vel_comp(disp_glo, disp_nbs, disp_spl, res, frs, dt, proc_path=None, file_name=None, test_mode=False, 
@@ -311,7 +310,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
                 plt.close(fig)
 
 
-def plot_flow_rate(q, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+def plot_flow_rate(q, frs, dt, q_model=None, t_model=None, proc_path=None, file_name=None, test_mode=False, **kwargs):
     # TODO: Add docstring and typing
     
     # Define a time array
@@ -324,7 +323,11 @@ def plot_flow_rate(q, frs, dt, proc_path=None, file_name=None, test_mode=False, 
     # Plot the flow rate in time
     fig, ax = plt.subplots(figsize=(10, 6))
     
-    ax.plot(time * 1000, q * 1000, label='Flow rate (m³/s)')
+    # If a model is provided, plot it
+    if q_model is not None and t_model is not None:
+        ax.plot(t_model * 1000, q_model, label='Gupta et al., 2009', c=cvd.get_color(2))
+
+    ax.plot(time * 1000, q * 1000, label='Flow rate')
     
     ax.set_xlabel('Time (ms)')
     ax.set_ylabel('Flow rate (L/s)')

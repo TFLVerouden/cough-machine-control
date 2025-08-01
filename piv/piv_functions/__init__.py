@@ -34,6 +34,7 @@ from .postprocessing import (filter_outliers, filter_neighbours, first_valid, st
 from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof, plot_flow_rate,plot_vel_Gupta
 from .utils import cart2polar, get_time, disp2shift, vel2flow
 from .calibration import calibrate_grid, all_distances
+from .modelling import Gupta_model
 
 # Define what gets imported with "from piv_functions import *"
 __all__ = [
@@ -57,10 +58,13 @@ __all__ = [
     'plot_vel_comp', 'plot_vel_med', 'plot_vel_prof', 'plot_flow_rate',
     
     # Utility functions
-    'cart2polar', 'get_time', 'disp2shift', 'vel2flow',
-    
+    'cart2polar', 'get_time', 'disp2shift', 'vel2flow', 'Gupta_model',
+
     # Calibration functions
-    'calibrate_grid', 'load_calibration', 'all_distances'
+    'calibrate_grid', 'load_calibration', 'all_distances',
+
+    # Modelling functions
+    'Gupta_model'
 ]
 
 # Version information

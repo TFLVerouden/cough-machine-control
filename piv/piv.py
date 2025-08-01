@@ -38,6 +38,11 @@ cal_bin_thr = 200  # Binarization threshold for calibration
 cal_blur_ker = (5, 5)  # Blur kernel size for calibration
 cal_open_ker = (3, 3)  # Opening kernel size for calibration
 
+# Set cough model parameters
+model_gender = "male"
+model_mass = 70  # kg
+model_height = 1.90  # m
+
 # Get current date and time for saving
 run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -348,15 +353,16 @@ piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
 # Calculate flow rate
 q = piv.vel2flow(disp3_nbs, depth, frame_w)
 
-# TODO: Import Gupta model data
+# Import Gupta model data
+q_model, time_model = piv.Gupta_model(model_gender, model_mass, model_height)
 
 # Plot flow rate in time, save to file
-piv.plot_flow_rate(q, frames, dt, ylim=(0, np.nanmax(q) * 1100),
+piv.plot_flow_rate(q, frames, dt, q_model=q_model, t_model=time_model, ylim=(0, np.nanmax(q) * 1100),
                     title=f'Flow rate - {meas_name}',
                     proc_path=proc_path, file_name="flow_rate",
                     test_mode=test_mode)
 piv.save_backup(proc_path, "flow_rate.npz", test_mode=test_mode,
-                flow_rate_Lps=q, time_s=time)
+                flow_rate_Lps=q, time_s=time, flow_rate_Gupta_Lps=q_model, time_model_s=time_model)
 
 # Save all parameters to a backup file
 piv.save_backup(proc_path, "params.npz", test_mode=test_mode,
