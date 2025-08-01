@@ -9,6 +9,7 @@ from datetime import datetime
 
 import piv_functions as piv
 
+print("\n\nStarting PIV analysis...")
 # Add the functions directory to the path and import CVD check
 sys.path.append(os.path.join(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))), 'functions'))
@@ -19,13 +20,23 @@ cvd.set_cvd_friendly_colors()
 
 # Set experimental parameters
 test_mode = False
-videos = True
-new_bckp = True
+videos = False
+random_profiles = False
+new_bckp = False
 meas_series = 'PIV250723'
-meas_name = 'PIV_2bar_80ms_refill'
+meas_name = 'PIV_1bar_80ms_closedtank'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
-frames = list(range(650, 850)) if test_mode else "all"
+frames = list(range(500, 800)) if test_mode else "all"
 dt = 1 / 40000  # [s]
+depth = 0.01  # [m] Depth of the channel
+
+# Set calibration parameters
+cal_spacing = 0.0005  # [m] Calibration grid spacing
+cal_roi = [45, 825, 225, 384]  # [px] Region of interest for calibration
+cal_init_grid = (7, 5)  # Initial grid size for calibration
+cal_bin_thr = 200  # Binarization threshold for calibration
+cal_blur_ker = (5, 5)  # Blur kernel size for calibration
+cal_open_ker = (3, 3)  # Opening kernel size for calibration
 
 # Get current date and time for saving
 run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -41,7 +52,7 @@ if user == "tommieverouden":
         '/Users/tommieverouden/Documents/Current data', meas_series, meas_name)
 elif user == "sikke":
     data_path = os.path.join('D:\\Experiments\\PIV\\', meas_series, meas_name)
-
+print(f"data_path: {data_path}")
 # Data saving settings
 var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs', 
               'disp1', 'time'], ['disp2_unf', 'int2_unf', 'win_pos2', 'disp2_glo', 'disp2'], ['disp3_unf', 'int3_unf', 'win_pos3', 'disp3_glo', 'disp3']]
@@ -51,23 +62,27 @@ var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs',
 proc_path = os.path.join(current_dir, 'processed', meas_series, meas_name)
 if not os.path.exists(proc_path) and not test_mode:
     os.makedirs(proc_path)
+    print(f"Created directory for processed data: {proc_path}")
 
-# Read calibration data
+# Read or create calibration data
 data_cal = piv.load_backup(cal_path, cal_name)
 if data_cal:
     res_avg = data_cal.get('resolution_avg_m_per_px')
+    frame_w = data_cal.get('frame_size_m')[0]  # Already in meters
 else:
-    raise FileNotFoundError("Calibration data not found.")
+    cal_im_path = os.path.join(cal_path, f"{cal_name}.tif")
+    res_avg, _, frame_size = piv.calibrate_grid(cal_im_path, cal_spacing, roi=cal_roi, init_grid=cal_init_grid, binary_thr=cal_bin_thr, blur_ker=cal_blur_ker, open_ker=cal_open_ker, save=True, plot=True)
+    frame_w = frame_size[0]  # Width in meters
 
 # Count number of frames to be used
 if frames == "all":
-    nr_frames = piv.read_imgs(data_path, "all", format='tif', 
-                              lead_0=5,only_count=True, timing=False)
+    nr_frames = piv.read_imgs(data_path, "all", format='tif',
+                              lead_0=5, only_count=True, timing=False)
     frames = list(range(1, nr_frames + 1))
 
 # FIRST PASS: Full frame correlation ===========================================
 ds_fac1 = 4             # Downsampling factor
-n_tosum1 = 40           # Number of correlation maps to sum
+n_tosum1 = 20           # Number of correlation maps to sum
 n_peaks1 = 10           # Number of peaks to find in correlation map
 n_wins1 = (1, 1)        # Number of windows (rows, cols)
 min_dist1 = 5           # Minimum distance between peaks
@@ -76,11 +91,12 @@ n_nbs1 = (41, 1, 1)     # Neighbourhood for local filtering
 nbs_thr1 = 1            # Threshold for neighbour filtering
 smooth_lam = 4e-7       # Smoothing lambda for splines
 
-print("FIRST PASS: full frame correlation")
+print("\nFIRST PASS: full frame correlation")
 # Load existing backup data if available
 
 loaded_vars = piv.load_backup(proc_path, "pass1.npz", var_names[1],
                               test_mode=(test_mode or new_bckp))
+
 if loaded_vars:
     for var_name in var_names[1]:
         globals()[var_name] = loaded_vars.get(var_name)
@@ -137,24 +153,23 @@ piv.save_backup(proc_path, "pass1.npz", test_mode=test_mode,
 # Plot a post-processing comparison of the x velocities in time
 piv.plot_vel_comp(disp1_glo, disp1_nbs, disp1, res_avg, frames, 
                  dt, ylim=(v_max1[0] * -1.1, v_max1[1] * 1.1),
-                 proc_path=proc_path, file_name="pass1_v-t", test_mode=test_mode)
+                 disp_rejected=disp1_unf,
+                 proc_path=proc_path, file_name="pass1_v-t",
+                 title=f'First pass - {meas_name}', test_mode=test_mode)
 
 
 # SECOND PASS: Split in 8 windows ==============================================
-n_tosum2 = 40           # Number of correlation maps to sum
+n_tosum2 = 20           # Number of correlation maps to sum
 n_peaks2 = 10           # Number of peaks to find in correlation map
 n_wins2 = (8, 1)        # Number of windows (rows, cols)
 win_ov2 = 0.2           # Overlap between windows
-min_dist2 = 3           # Minimum distance between peaks
-pk_floor2 = 20          # Minimum peak intensity
 v_max2 = [10, 75]       # Global filter m/s
 n_nbs2 = (51, 3, 1)     # Neighbourhood for local filtering
 nbs_thr2 = 5            # Threshold for neighbour filtering
 
-# TODO: Plot rejected stuff!!
 # TODO: Plot v_center
 
-print(f"SECOND PASS: {n_wins2} windows")
+print(f"\nSECOND PASS: {n_wins2} windows")
 loaded_vars = piv.load_backup(proc_path, "pass2.npz", var_names[2],
                               test_mode=(test_mode or new_bckp))
 
@@ -184,8 +199,7 @@ else:
 
     # Step 3: Find peaks in summed correlation maps
     disp2, int2_unf = piv.find_disps(corr2_sum, n_wins2, n_peaks=n_peaks2, 
-                                     shifts=shifts2,
-                                     floor=pk_floor2, min_dist=min_dist2)
+                                     shifts=shifts2)
 
     # Save unfiltered displacements
     disp2_unf = disp2.copy()
@@ -210,8 +224,8 @@ disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2,
 # Save the displacements to a backup file
 piv.save_backup(proc_path, "pass2.npz", test_mode=test_mode,
         n_tosum2=n_tosum2, n_peaks2=n_peaks2, n_wins2=n_wins2,
-                win_ov2=win_ov2, min_dist2=min_dist2, d_max2=d_max2,
-                pk_floor2=pk_floor2, n_nbs2=n_nbs2,
+                win_ov2=win_ov2, d_max2=d_max2,
+                n_nbs2=n_nbs2,
                 nbs_thr2=nbs_thr2, disp2_unf=disp2_unf, int2_unf=int2_unf,
         win_pos2=win_pos2, disp2_glo=disp2_glo, disp2=disp2)
 
@@ -219,36 +233,36 @@ piv.save_backup(proc_path, "pass2.npz", test_mode=test_mode,
 # Plot the median, min and max velocity in time
 piv.plot_vel_med(disp2, res_avg, frames, dt,
                  ylim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                 title='Second pass',
+                 title=f'Second pass - {meas_name}',
                  proc_path=proc_path, file_name="pass2_v_med", test_mode=test_mode)
 
 # Plot some randomly selected velocity profiles
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
                   mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                  ylim=(0, 21.12),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp2_unf,
                   proc_path=proc_path, file_name="pass2_v",
-                  subfolder='pass2', test_mode=test_mode)
+                  subfolder='pass2', test_mode=not random_profiles)
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
                   mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                  ylim=(0, 21.12),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp2_unf,
                   proc_path=proc_path, file_name="pass2_v",
                   test_mode=not videos)
 
 
 # THIRD PASS: Split in 24 windows ==============================================
-n_tosum3 = 40             # Number of correlation maps to sum -> 1 ms mov.av.
+n_tosum3 = 20             # Number of correlation maps to sum -> 0.5 ms mov.av.
 n_peaks3 = 5             # Number of peaks to find in correlation map
 n_wins3 = (24, 1)        # Number of windows (rows, cols)
 win_ov3 = 0             # Overlap between windows
-min_dist3 = 3            # Minimum distance between peaks
-pk_floor3 = 20           # Minimum peak intensity
 v_max3 = [10, 75]       # Global filter m/s
 n_nbs3 = (1, 3, 1)     # Neighbourhood for local filtering
-nbs_thr3 = 3            # Threshold for neighbour filtering
+nbs_thr3 = (4, 6)            # Threshold for neighbour filtering
 
-print(f"THIRD PASS: {n_wins3} windows")
+print(f"\nTHIRD PASS: {n_wins3} windows")
 loaded_vars = piv.load_backup(proc_path, "pass3.npz", var_names[3],
                               test_mode=(test_mode or new_bckp))
 
@@ -261,22 +275,22 @@ else:
     # Ensure we have the images loaded
     if 'imgs' not in globals():
         imgs = piv.read_imgs(data_path, frames, format='tif', lead_0=5,
-                             timing=True)
+                                timing=True)
 
     # Convert displacements from pass 2 to shifts for pass 3
     shifts3 = piv.disp2shift(n_wins3, disp2)
 
     # Step 1: Calculate correlation maps (with windows and shifts)
     corr3 = piv.calc_corrs(imgs, n_wins3, shifts=shifts3,
-                           overlap=win_ov3)
+                            overlap=win_ov3)
 
     # Step 2: Sum correlation maps with alignment and size expansion
     corr3_sum = piv.sum_corrs(corr3, n_tosum3, n_wins3,
-                              shifts=shifts3)
+                                shifts=shifts3)
 
     # Step 3: Find peaks in summed correlation maps
     disp3, int3_unf = piv.find_disps(corr3_sum, n_wins3, n_peaks=n_peaks3,
-                                     shifts=shifts3, floor=pk_floor3, min_dist=min_dist3, subpx=True)
+                                        shifts=shifts3, subpx=True)
 
     # Save unfiltered displacements
     disp3_unf = disp3.copy()
@@ -289,12 +303,12 @@ else:
 d_max3 = np.array(v_max3) * dt / res_avg
 disp3 = piv.filter_outliers('semicircle_rect', disp3_unf,
                             a=d_max3[0], b=d_max3[1], verbose=True)
-disp3 = piv.strip_peaks(disp3, axis=-2, verbose=True)
 disp3_glo = disp3.copy()
 
-# # Neighbour filtering
-# disp3 = piv.filter_neighbours(disp3, thr=nbs_thr3, n_nbs=n_nbs3,
-#                             mode='x', replace=False, verbose=True)
+# Neighbour filtering
+disp3 = piv.filter_neighbours(disp3, thr=nbs_thr3, thr_unit="pxs", n_nbs=n_nbs3, mode='xy', replace="closest", verbose=True, timing=True)
+disp3 = piv.strip_peaks(disp3, axis=-2, verbose=True)
+disp3_nbs = disp3.copy()
 
 # Save the displacements to a backup file
 piv.save_backup(proc_path, "pass3.npz", test_mode=test_mode,
@@ -302,35 +316,55 @@ piv.save_backup(proc_path, "pass3.npz", test_mode=test_mode,
         win_pos3=win_pos3, disp3_glo=disp3_glo, disp3=disp3,                 
                 n_tosum3=n_tosum3,
                 n_peaks3=n_peaks3, n_wins3=n_wins3,
-                win_ov3=win_ov3, min_dist3=min_dist3,
-                pk_floor3=pk_floor3, d_max3=d_max3, n_nbs3=n_nbs3,
+                win_ov3=win_ov3,
+                 d_max3=d_max3, n_nbs3=n_nbs3,
                 nbs_thr3=nbs_thr3)
 
 # PLOTTING
-piv.plot_vel_med(disp3_glo, res_avg, frames, dt,
+piv.plot_vel_med(disp3_nbs, res_avg, frames, dt,
                     ylim=(v_max3[0] * -1.1, v_max3[1] * 1.1),
-                    title='Third pass',
-                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
+                    title=f'Third pass - {meas_name}',                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 
-piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
-                    mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
-                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode)
+piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
+                    mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
+                    disp_rejected=disp3_unf,
+                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=not random_profiles)
 
-piv.plot_vel_prof(disp3_glo, res_avg, frames, dt, win_pos3,
-                    mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
+piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
+                    mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
+                    disp_rejected=disp3_unf,
                     proc_path=proc_path, file_name="pass3_v",
                     test_mode=not videos)
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
 
+# FLOW RATE CALCULATION
+# Example of how to calculate volumetric flow rates from velocity data:
+# depth_m = 0.001  # Depth in meters (e.g., 1 mm)
+# vel3 = disp3_nbs * res_avg / dt  # Convert displacement to velocity
+# flow_m3s = piv.vel2flow(vel3, depth_m, frame_width_m)  # Flow rate in m³/s
+# flow_Ls = flow_m3s * 1000  # Convert to L/s
+
+# Calculate flow rate
+q = piv.vel2flow(disp3_nbs, depth, frame_w)
+
+# TODO: Import Gupta model data
+
+# Plot flow rate in time, save to file
+piv.plot_flow_rate(q, frames, dt, ylim=(0, np.nanmax(q) * 1100),
+                    title=f'Flow rate - {meas_name}',
+                    proc_path=proc_path, file_name="flow_rate",
+                    test_mode=test_mode)
+piv.save_backup(proc_path, "flow_rate.npz", test_mode=test_mode,
+                flow_rate_Lps=q, time_s=time)
+
 # Save all parameters to a backup file
 piv.save_backup(proc_path, "params.npz", test_mode=test_mode,
                 date_saved=run_date, meas_series=meas_series, meas_name=meas_name,
-                cal_name=cal_name, dt=dt, frames_start=frames[0], frames_end=frames[-1], res_avg=res_avg
-)
+                cal_name=cal_name, dt=dt, frames_start=frames[0], frames_end=frames[-1], res_avg=res_avg)
 
-print('Done!')
 
 # Finally, show all figures
+print('Done!')
 plt.show()
 

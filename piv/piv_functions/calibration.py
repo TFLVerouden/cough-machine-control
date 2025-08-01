@@ -10,7 +10,7 @@ import cv2 as cv
 from scipy import spatial
 import os
 from matplotlib import pyplot as plt
-from .io import load_backup, save_backup
+from .io import save_backup, save_cfig
 
 
 def all_distances(points):
@@ -92,7 +92,7 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
             img, tuple(grid_size), flags=cv.CALIB_CB_SYMMETRIC_GRID)
         
         # Print the current grid size being tested
-        print(f"Trying {grid_size[0]} × {grid_size[1]} grid...", end='\r')
+        print(f"Trying {grid_size[1]} × {grid_size[0]} grid...", end='\r')
 
         if grid_found and not max_columns_found:
             # Increase the number of columns if the maximum hasn't been reached
@@ -113,7 +113,7 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
                 grid_size[1] -= 1
                 break
 
-    print(f"Grid found: {grid_size[0]} cols × {grid_size[1]} rows")
+    print(f"Grid found: {grid_size[1]} cols × {grid_size[0]} rows")
 
     # Reshape the detected centers and generate grid points in real-world units
     centres = centres.reshape(-1, 2)
@@ -137,19 +137,15 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
           f"{res_std*1000:.{print_prec}f} mm/px")
 
     # Calculate calibration image size
-    print(f"Frame size: {orig_shape[0]*res_avg*1000:.{print_prec//2}f} × "
-          f"{orig_shape[1]*res_avg*1000:.{print_prec//2}f} mm²")
+    frame_size = np.array([orig_shape[0] * res_avg, orig_shape[1] * res_avg])  # in m
+    print(f"Frame size: {frame_size[0]*1000:.{print_prec//2}f} × "
+          f"{frame_size[1]*1000:.{print_prec//2}f} mm²")
 
     # Save comprehensive calibration data to npz file
-    if save:
-        # Prepare output directory and filename
-        output_dir = os.path.dirname(path)
-        base_filename = os.path.splitext(os.path.basename(path))[0]
-        npz_filename = f"{base_filename}_calibration.npz"
-        
+    if save:     
         # Save all calibration data
         save_backup(proc_path=path,
-                    filename=path.replace('.tif', '.npz'),
+                    file_name=path.replace('.tif', '.npz'),
                     # Original file information
                     original_file_path=path,
                     original_image_shape=orig_shape,
@@ -166,9 +162,8 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
                     resolution_std_m_per_px=res_std,
                     resolution_avg_mm_per_px=res_avg * 1000,
                     resolution_std_mm_per_px=res_std * 1000,
-                    # Frame size in mm
-                    frame_size_mm=np.array([orig_shape[1] * res_avg * 1000,
-                                            orig_shape[0] * res_avg * 1000]),
+                    # Frame size in m
+                    frame_size_m=frame_size,
                     # Grid detection results
                     final_grid_size=np.array(grid_size),
                     grid_centres_pixel=centres,
@@ -177,7 +172,6 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
                     distance_real_m=dist_real,
                     distance_pixel_px=dist_pixel,
                     )    
-    print("Calibration complete.")
 
     # Optionally plot the results
     if plot:
@@ -190,10 +184,16 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
         ax.set_ylabel('Pixels')
         plt.tight_layout()
         plt.show()
+        
+        if save:
+            save_cfig(path, path.replace('.tif', ''))
 
-    return res_avg, res_std
+    print("Calibration complete.")
+
+    return res_avg, res_std, frame_size
 
 if __name__ == "__main__":
+    # CALIBRATION 250624
     # Get the directory containing the file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     cal_path = os.path.join(current_dir, "calibration",
@@ -205,3 +205,13 @@ if __name__ == "__main__":
 
     # Run the calibration function
     calibrate_grid(cal_path, cal_spacing, roi=cal_roi, save=True, plot=True)
+
+    # CALIBRATION 250723
+    cal_path = os.path.join(current_dir, "calibration",
+                            "calibration_PIV_500micron_2025_07_23_C001H001S0001.tif")
+    
+    # Adjust calibration parameters
+    cal_roi = [45, 825, 225, 384]
+    
+    # Re-run the calibration function
+    calibrate_grid(cal_path, cal_spacing, roi=[45, 825, 225, 384], init_grid=(7, 5), binary_thr=200, blur_ker=(5, 5), save=True, plot=True)

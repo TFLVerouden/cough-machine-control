@@ -160,7 +160,7 @@ def read_imgs(data_path: str, frame_nrs: list[int] | str, format: str = 'tif', l
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
         imgs = list(tqdm(executor.map(read_img, file_paths), 
                         total=len(file_paths), 
-                        desc='Reading images'))
+                        desc='Reading images      '))
 
     # Convert list of images to a numpy array
     imgs = np.array(imgs, dtype=np.uint64)

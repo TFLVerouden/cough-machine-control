@@ -67,11 +67,11 @@ def estimator(gender,weight,height):
     PVT, CPFR, CEV
     """
 
-    if gender == "Male":
+    if gender.lower() == "Male".lower():
         CPFR = -8.890 + 6.3952 * height + 0.0346 * weight
         CEV = 0.138 * CPFR + 0.2983
         PVT = (1.360 * CPFR + 65.860)*1E-3
-    elif gender == "Female":
+    elif gender.lower() == "Female".lower():
         CPFR = -3.9702 + 4.6265 * height
         CEV = 0.0204 * CPFR - 0.043
         PVT = (3.152 * CPFR + 64.631)*1E-3

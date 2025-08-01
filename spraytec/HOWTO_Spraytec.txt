@@ -1,0 +1,26 @@
+
+*Getting a measurement*
+1.	Open SOP -> With external triggering
+2.	Do the calibration
+3.	Click on start
+4.	Cough using the cough machine, this will trigger the Spraytec
+5.	The spraytec protocol will collect an average of every 2ms and export this data
+6.	The data will automatically be appended to a .txt file called “SPRAYTEC_APPEND_FILE.txt” in the directory spraytec in the cough-machine-control github
+7.	Use Spraytec_manual_txt_converter.py or cough again using the valve_control.py to make a separate .txt file
+8.	Use Spraytec_rawdataplotter.py for graphs over time
+
+*Average over complete measurements*
+1.	After a cough double click on the measurement
+2.	Click on the raw measurement (no average yet). Go to edit-> Advanced average
+3.	Choose Selection-> All
+4.	Choose average between marks or timed intervals, Use average scatter data and concentration weighted average
+5.	Set average over timed intervals of 1000 ms
+6.	You should now have one line in your .psh graph in the Spraytec software
+7.	Click on this measurement and give it a suitable name
+8.	Go to File-> Export
+9.	Select Text 
+10.	Either click configure to double check if values are right (Add all, comma separated) or click OK
+11.	Save the .txt file in Cough-machine-control-spraytec-Averages as YMDHM and its name
+12.	Use Spraytec_averaging.py to make plots
+
+
