@@ -70,7 +70,7 @@ __all__ = [
 # Version information
 __version__ = "1.0.0"
 __author__ = "Tommie Verouden"
-__email__ = "your.email@example.com"
+__email__ = "t.f.l.verouden@utwente.nl"
 
 # Module-level documentation
 __doc__ = """
