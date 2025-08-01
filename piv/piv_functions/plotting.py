@@ -241,3 +241,33 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
                 
                 # Close figure
                 plt.close(fig)
+
+
+def plot_flow_rate(q, frs, dt, proc_path=None, file_name=None, test_mode=False, **kwargs):
+    # TODO: Add docstring and typing
+    
+    # Define a time array
+    time = get_time(frs, dt)
+
+    # If lengths don't match, assume all data was supplied; slice accordingly
+    if q.shape[0] != time.shape[0]:
+        q = q[frs[0]:frs[-1]]
+
+    # Plot the flow rate in time
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    ax.plot(time * 1000, q * 1000, label='Flow rate (m³/s)')
+    
+    ax.set_xlabel('Time (ms)')
+    ax.set_ylabel('Flow rate (L/s)')
+    ax.set_title('Flow rate in time')
+    ax.set(**kwargs)
+
+    ax.legend(loc='upper right')
+    ax.grid()
+
+    if proc_path is not None and file_name is not None and not test_mode:
+        # Save the figure
+        save_cfig(proc_path, file_name, test_mode=test_mode, verbose=True)
+
+    return fig, ax

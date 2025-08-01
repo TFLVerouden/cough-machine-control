@@ -30,12 +30,9 @@ from .io import save_backup, load_backup, read_img, read_imgs, save_cfig
 from .preprocessing import downsample, split_n_shift
 from .correlation import calc_corr, calc_corrs, sum_corr, sum_corrs
 from .displacement import find_peaks, three_point_gauss, subpixel, find_disp, find_disps
-from .postprocessing import (
-    filter_outliers, filter_neighbours, 
-    first_valid, strip_peaks, smooth
-)
-from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof
-from .utils import cart2polar, get_time, disp2shift
+from .postprocessing import (filter_outliers, filter_neighbours, first_valid, strip_peaks, smooth)
+from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof, plot_flow_rate
+from .utils import cart2polar, get_time, disp2shift, vel2flow
 from .calibration import calibrate_grid, all_distances
 
 # Define what gets imported with "from piv_functions import *"
@@ -57,10 +54,10 @@ __all__ = [
     'first_valid', 'strip_peaks', 'smooth',
     
     # Plotting functions
-    'plot_vel_comp', 'plot_vel_med', 'plot_vel_prof',
+    'plot_vel_comp', 'plot_vel_med', 'plot_vel_prof', 'plot_flow_rate',
     
     # Utility functions
-    'cart2polar', 'get_time', 'disp2shift',
+    'cart2polar', 'get_time', 'disp2shift', 'vel2flow',
     
     # Calibration functions
     'calibrate_grid', 'load_calibration', 'all_distances'

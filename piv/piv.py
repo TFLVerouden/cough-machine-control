@@ -20,7 +20,8 @@ cvd.set_cvd_friendly_colors()
 
 # Set experimental parameters
 test_mode = False
-videos = True
+videos = False
+random_profiles = False
 new_bckp = False
 meas_series = 'PIV250723'
 meas_name = 'PIV_1bar_80ms_closedtank'
@@ -240,7 +241,7 @@ piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
                   ylim=(0, frame_w * 1000),
                   disp_rejected=disp2_unf,
                   proc_path=proc_path, file_name="pass2_v",
-                  subfolder='pass2', test_mode=test_mode)
+                  subfolder='pass2', test_mode=not random_profiles)
 
 # Plot all velocity profiles in video
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
@@ -326,7 +327,7 @@ piv.plot_vel_med(disp3_nbs, res_avg, frames, dt,
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                     mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
                     disp_rejected=disp3_unf,
-                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode)
+                    proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=not random_profiles)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                     mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
@@ -344,16 +345,25 @@ piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
 # flow_Ls = flow_m3s * 1000  # Convert to L/s
 
 # Calculate flow rate
+q = piv.vel2flow(disp3_nbs, depth, frame_w)
 
+# TODO: Import Gupta model data
+
+# Plot flow rate in time, save to file
+piv.plot_flow_rate(q, frames, dt, ylim=(0, np.nanmax(q) * 1100),
+                    title=f'Flow rate - {meas_name}',
+                    proc_path=proc_path, file_name="flow_rate",
+                    test_mode=test_mode)
+piv.save_backup(proc_path, "flow_rate.npz", test_mode=test_mode,
+                flow_rate_Lps=q, time_s=time)
 
 # Save all parameters to a backup file
 piv.save_backup(proc_path, "params.npz", test_mode=test_mode,
                 date_saved=run_date, meas_series=meas_series, meas_name=meas_name,
-                cal_name=cal_name, dt=dt, frames_start=frames[0], frames_end=frames[-1], res_avg=res_avg
-)
+                cal_name=cal_name, dt=dt, frames_start=frames[0], frames_end=frames[-1], res_avg=res_avg)
 
-print('Done!')
 
 # Finally, show all figures
+print('Done!')
 plt.show()
 

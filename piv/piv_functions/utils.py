@@ -90,3 +90,27 @@ def cart2polar(coords: np.ndarray) -> np.ndarray:
     # Stack the results to form a new array
     polar_coords = np.stack((r, phi), axis=-1)
     return polar_coords
+
+
+def vel2flow(vel: np.ndarray, d: float, w: float) -> np.ndarray:
+    """
+    Convert velocity profile to volumetric flow rate.
+    
+    Integrates the velocity field over the cross-sectional area to calculate
+    the total volumetric flow rate for each frame. If ANY velocity value is NaN,
+    the corresponding flow rate will be NaN.
+    
+    Args:
+        vel (np.ndarray): Velocity array with shape (n_frames, n_y, n_x, 2)
+                         where vel[..., 0] is vy and vel[..., 1] is vx
+        d (float): Depth of the measurement field in meters (out-of-plane dimension)
+        w (float): Width of the full measurement field in meters (frame width)
+    
+    Returns:
+        np.ndarray: Flow rate array with shape (n_frames,) in m³/s
+                   Multiply by 1000 to get L/s
+    """    
+    vx_sum = np.nanmean(vel[..., 1], axis=(1, 2))  # Average over windows
+    flow_rate = vx_sum * d * w  # Calculate flow rate in m³/s
+
+    return flow_rate
