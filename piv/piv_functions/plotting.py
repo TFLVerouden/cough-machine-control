@@ -71,7 +71,7 @@ def plot_vel_comp(disp_glo, disp_nbs, disp_spl, res, frs, dt, proc_path=None, fi
     ax.set_title('First pass')
     ax.set(**kwargs)
 
-    ax.legend()
+    ax.legend(loc='upper right')
     ax.grid()
 
     if proc_path is not None and file_name is not None and not test_mode:
@@ -123,7 +123,7 @@ def plot_vel_med(disp, res, frs, dt, proc_path=None, file_name=None, test_mode=F
     ax.set_title('Median velocity in time')
     ax.set(**kwargs)
 
-    ax.legend()
+    ax.legend(loc='upper right')
     ax.grid()
 
     if proc_path is not None and file_name is not None and not test_mode:
@@ -183,7 +183,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         writer = ani.FFMpegWriter(fps=10)
         video_path = os.path.join(proc_path, file_name+'.mp4')
         video_context = writer.saving(fig_video, video_path, dpi=150)
-        frames_iter = trange(n_corrs, desc='Creating velocity profile video')
+        frames_iter = trange(n_corrs, desc='Rendering video     ')
     else:
         video_context = None
         frames_iter = frames_to_plot
@@ -215,7 +215,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         ax.set_xlabel('Velocity (m/s)')
         ax.set_ylabel('y position (mm)')
         ax.set_title(f'Velocity profiles at frame {frame_idx + 1} ({time[frame_idx] * 1000:.2f} ms)')
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.grid()
         ax.set(**kwargs)
     
