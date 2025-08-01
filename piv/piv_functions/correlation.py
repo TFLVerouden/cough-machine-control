@@ -89,7 +89,7 @@ def calc_corrs(imgs: np.ndarray, n_wins: tuple[int, int] = (1, 1), shifts: np.nd
     n_jobs = os.cpu_count() or 4
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
         frame_results = list(tqdm(
-            executor.map(calc_corr_partial, range(n_corrs)), total=n_corrs, desc='Calculating correlation maps'))
+            executor.map(calc_corr_partial, range(n_corrs)), total=n_corrs, desc='Correlating windows '))
 
     # Combine results from all frames
     corrs = {}
@@ -224,7 +224,7 @@ def sum_corrs(corrs: dict, n_tosum: int, n_wins: tuple[int, int] = (1, 1), shift
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
         frame_results = list(tqdm(executor.map(sum_corr_partial, range(n_corrs)), 
                                  total=n_corrs, 
-                                 desc='Summing correlation maps'))
+                                 desc='Summing correlations'))
     
     # Combine results from all frames
     corrs_sum = {}

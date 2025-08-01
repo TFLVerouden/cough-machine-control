@@ -220,7 +220,7 @@ def find_disps(corrs: dict, n_wins: tuple[int, int] = (1, 1), shifts: np.ndarray
     with ThreadPoolExecutor(max_workers=n_jobs) as executor:
         frame_results = list(tqdm(executor.map(find_disp_partial, range(n_corrs)), 
                                  total=n_corrs, 
-                                 desc='Finding peaks'))
+                                 desc='Finding peaks       '))
     
     # Combine results from all frames
     for frame_idx, frame_disps, frame_ints in frame_results:
