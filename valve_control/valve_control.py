@@ -47,13 +47,13 @@ def Spraytec_data_saved_check():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     parent_path = os.path.dirname(current_dir)  # one level up
     spraytec_path = os.path.join(parent_path,"spraytec")
-    path = os.path.join(spraytec_path,"SPRAYTEC_APPPEND_FILE.txt")
+    path = os.path.join(spraytec_path,"SPRAYTEC_APPEND_FILE.txt")
     save_path = os.path.join(spraytec_path, "individual_data_files")
     file = np.loadtxt(path,dtype=str,delimiter=',')
     split_sections = split_array_by_header_marker(file)
     last_file = split_sections[-1]
     time_created= last_file[1,0]
-    filename= file[1,1]
+    filename= last_file[1,1]
     dt = datetime.datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
     # Format as YYYY_MM_DD_HH_MM
     file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
