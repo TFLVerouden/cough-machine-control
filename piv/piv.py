@@ -23,10 +23,19 @@ test_mode = False
 videos = True
 new_bckp = False
 meas_series = 'PIV250723'
-meas_name = 'PIV_2bar_80ms_closedtank'
+meas_name = 'PIV_1bar_80ms_closedtank'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
 frames = list(range(500, 800)) if test_mode else "all"
 dt = 1 / 40000  # [s]
+depth = 0.01  # [m] Depth of the channel
+
+# Set calibration parameters
+cal_spacing = 0.0005  # [m] Calibration grid spacing
+cal_roi = [45, 825, 225, 384]  # [px] Region of interest for calibration
+cal_init_grid = (7, 5)  # Initial grid size for calibration
+cal_bin_thr = 200  # Binarization threshold for calibration
+cal_blur_ker = (5, 5)  # Blur kernel size for calibration
+cal_open_ker = (3, 3)  # Opening kernel size for calibration
 
 # Get current date and time for saving
 run_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -52,18 +61,22 @@ var_names = [[],['disp1_unf', 'int1_unf', 'disp1_glo', 'disp1_nbs',
 proc_path = os.path.join(current_dir, 'processed', meas_series, meas_name)
 if not os.path.exists(proc_path) and not test_mode:
     os.makedirs(proc_path)
+    print(f"Created directory for processed data: {proc_path}")
 
-# Read calibration data
+# Read or create calibration data
 data_cal = piv.load_backup(cal_path, cal_name)
 if data_cal:
     res_avg = data_cal.get('resolution_avg_m_per_px')
+    frame_w = data_cal.get('frame_size_m')[0]  # Already in meters
 else:
-    raise FileNotFoundError("Calibration data not found.")
+    cal_im_path = os.path.join(cal_path, f"{cal_name}.tif")
+    res_avg, _, frame_size = piv.calibrate_grid(cal_im_path, cal_spacing, roi=cal_roi, init_grid=cal_init_grid, binary_thr=cal_bin_thr, blur_ker=cal_blur_ker, open_ker=cal_open_ker, save=True, plot=True)
+    frame_w = frame_size[0]  # Width in meters
 
 # Count number of frames to be used
 if frames == "all":
-    nr_frames = piv.read_imgs(data_path, "all", format='tif', 
-                              lead_0=5,only_count=True, timing=False)
+    nr_frames = piv.read_imgs(data_path, "all", format='tif',
+                              lead_0=5, only_count=True, timing=False)
     frames = list(range(1, nr_frames + 1))
 
 # FIRST PASS: Full frame correlation ===========================================
@@ -224,18 +237,18 @@ piv.plot_vel_med(disp2, res_avg, frames, dt,
 # Plot some randomly selected velocity profiles
 piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
                   mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                  ylim=(0, 21.12),
+                  ylim=(0, frame_w * 1000),
                   disp_rejected=disp2_unf,
                   proc_path=proc_path, file_name="pass2_v",
                   subfolder='pass2', test_mode=test_mode)
 
 # Plot all velocity profiles in video
-# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-#                   mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-#                   ylim=(0, 21.12),
-#                   disp_rejected=disp2_unf,
-#                   proc_path=proc_path, file_name="pass2_v",
-#                   test_mode=not videos)
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp2_unf,
+                  proc_path=proc_path, file_name="pass2_v",
+                  test_mode=not videos)
 
 
 # THIRD PASS: Split in 24 windows ==============================================
@@ -311,17 +324,27 @@ piv.plot_vel_med(disp3_nbs, res_avg, frames, dt,
                     title=f'Third pass - {meas_name}',                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
-                    mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
+                    mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
                     disp_rejected=disp3_unf,
                     proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=test_mode)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
-                    mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, 21.12),
+                    mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
                     disp_rejected=disp3_unf,
                     proc_path=proc_path, file_name="pass3_v",
                     test_mode=not videos)
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
+
+# FLOW RATE CALCULATION
+# Example of how to calculate volumetric flow rates from velocity data:
+# depth_m = 0.001  # Depth in meters (e.g., 1 mm)
+# vel3 = disp3_nbs * res_avg / dt  # Convert displacement to velocity
+# flow_m3s = piv.vel2flow(vel3, depth_m, frame_width_m)  # Flow rate in m³/s
+# flow_Ls = flow_m3s * 1000  # Convert to L/s
+
+# Calculate flow rate
+
 
 # Save all parameters to a backup file
 piv.save_backup(proc_path, "params.npz", test_mode=test_mode,
