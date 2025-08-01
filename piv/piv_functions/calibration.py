@@ -167,8 +167,8 @@ def calibrate_grid(path, spacing, roi=None, init_grid=(4, 4), binary_thr=100,
                     resolution_avg_mm_per_px=res_avg * 1000,
                     resolution_std_mm_per_px=res_std * 1000,
                     # Frame size in mm
-                    frame_size_mm=np.array([orig_shape[1] * res_avg * 1000,
-                                            orig_shape[0] * res_avg * 1000]),
+                    frame_size_mm=np.array([orig_shape[0] * res_avg * 1000,
+                                            orig_shape[1] * res_avg * 1000]),
                     # Grid detection results
                     final_grid_size=np.array(grid_size),
                     grid_centres_pixel=centres,
