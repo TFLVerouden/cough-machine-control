@@ -1,3 +1,6 @@
+"""
+Shows first entry the graph and over time an imshow of the spraytec data
+"""
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
