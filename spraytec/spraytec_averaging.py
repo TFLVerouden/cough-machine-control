@@ -1,3 +1,7 @@
+"""
+Produces the average plots of the spraytec data
+"""
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -72,8 +76,8 @@ for file in txt_files:
     date= df_filtered.loc[0,"Date-Time"]
 
     percentages = df_filtered.loc[0,columns_scattervalues]
-    t_start = df_filtered.loc[0,"Time (relative)"]
-    t_end = t_start + df_filtered.loc[0,"Duration"]
+    t_end = df_filtered.loc[0,"Time (relative)"]
+    t_start = t_end - df_filtered.loc[0,"Duration"]
     transmission = df_filtered.loc[0,"Transmission"]
 
     ###Extracting

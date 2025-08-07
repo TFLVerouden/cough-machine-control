@@ -35,6 +35,8 @@ v_skewnesses = []
 n_means = []
 n_stds = []
 n_skewnesses = []
+t_starts =[]
+t_ends =[]
 keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+\.txt")
@@ -57,7 +59,10 @@ for file in matching_files:
 
     columns_scattervalues = df.loc[:,"% V (0.100-0.117µm)":"% V (857.698-1000.002µm)"].columns.tolist()
 
-    print(columns_scattervalues)
+
+    t_end = df.loc[0,"Time (relative)"]    
+    t_start= t_end - df.loc[0,"Duration"]
+    
     percentages = df.loc[0,columns_scattervalues]
     bin_centers = np.array([])
     for column in columns_scattervalues:
@@ -79,17 +84,22 @@ for file in matching_files:
     number_variance = np.sum(n_percentages/100 * (bin_centers - number_mean)**2)
     number_std = np.sqrt(number_variance)
     number_skewness = np.sum(n_percentages * (bin_centers - number_mean)**3) / (number_std**3)
+
     v_means.append(mean)
     v_stds.append(std)
     v_skewnesses.append(skewness)
     n_means.append(number_mean)
     n_stds.append(number_std)
     n_skewnesses.append(number_skewness)
+    t_starts.append(t_start)
+    t_ends.append(t_end)
 
     # print(f"Volume,mean: {mean:.2f},std: {std:.2f},skewness: {skewness}")
     # print(f"Number: mean: {number_mean:.2f},std: {number_std:.2f}, skewness: {number_skewness}")
 
 stats = {
+    "t_start" : t_starts,
+    "t_ends" : t_ends,
     "v_means": v_means,
     "v_stds": v_stds,
     "v_skewnesses": v_skewnesses,
