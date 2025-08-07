@@ -147,7 +147,7 @@ def plot_vel_Gupta(disp, res, frs, dt, proc_path=None, file_name=None, test_mode
     time = get_time(frs, dt)
     #Gupta PLOTTER, Abe
     Flowrate_Gupta,time_Gupta = Gupta_plotter("Male",70,1.90)
-    A_coughmachine = 4e-4 #m^2
+    A_coughmachine = 2e-4 #m^2
     
     v_Gupta = Flowrate_Gupta / A_coughmachine / 1000 # v (m/s) = Q (L/s) / A(m), divide Q by a 1000
     ####

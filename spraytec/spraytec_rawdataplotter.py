@@ -1,3 +1,6 @@
+"""
+Shows first entry the graph and over time an imshow of the spraytec data
+"""
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -58,8 +61,8 @@ time_chosen = 1
 
 date= df_filtered.loc[time_chosen,"Date-Time"]
 percentages = df_filtered.loc[time_chosen,columns_scattervalues]
-t_start = df_filtered.loc[time_chosen,"Time (relative)"]
-t_end = t_start + df_filtered.loc[time_chosen,"Duration"]
+t_end = df_filtered.loc[time_chosen,"Time (relative)"]
+t_start = t_end - df_filtered.loc[time_chosen,"Duration"]
 transmission = df_filtered.loc[time_chosen,"Transmission"]
 
 ###Extracting
@@ -140,9 +143,10 @@ for i in df_filtered.index:
     dates = np.append(dates,date)
     percentages = df_filtered.loc[i,columns_scattervalues].values
     percentages_all[:,i] = percentages  
-    t_start = df_filtered.loc[i,"Time (relative)"]
+    t_end = df_filtered.loc[i,"Time (relative)"]
+    
+    t_start= t_end - df_filtered.loc[i,"Duration"]
     times[i] = t_start
-    t_end = t_start + df_filtered.loc[i,"Duration"]
     transmission = df_filtered.loc[i,"Transmission"]
     transmissions[i] = transmission
 
