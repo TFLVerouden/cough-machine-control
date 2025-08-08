@@ -1,6 +1,7 @@
 """
 This file finds all number and volume means,stds and skewnesses for a given keyphrase and makes a csv of these values
 """
+keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 import numpy as np
 import pandas as pd
@@ -38,9 +39,9 @@ n_skewnesses = []
 t_starts =[]
 t_ends =[]
 num_records =[]
-keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
-pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+\.txt")
+
+pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+(?:_.*)?\.txt")
 
 # Filter matching files
 matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]

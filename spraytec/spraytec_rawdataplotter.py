@@ -1,6 +1,7 @@
 """
 Shows first entry the graph and over time an imshow of the spraytec data
 """
+keyphrase = "PEO0dot03"  ##change this for different statistics
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -30,8 +31,8 @@ save_path = os.path.join(cwd,"results_spraytec","time_plots")
 
 
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
-keyphrase = "PEO0dot25"  ##change this for different statistics
-pattern = re.compile(rf"\d{{4}}_\d{{2}}_\d{{2}}_\d{{2}}_\d{{2}}_{re.escape(keyphrase)}_\d+\.txt")
+
+pattern = re.compile(rf"\d{{4}}_\d{{2}}_\d{{2}}_\d{{2}}_\d{{2}}_{re.escape(keyphrase)}_\d+(?:_.*)?\.txt")
 
 # Filter matching files
 matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]
