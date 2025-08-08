@@ -26,7 +26,7 @@ plt.rcParams.update({'font.size': 14})
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
-save_path = os.path.join(cwd,"results_spraytec","Averages")
+save_path = os.path.join(cwd,"results_spraytec","csv")
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
 
 v_means = []
@@ -37,7 +37,8 @@ n_stds = []
 n_skewnesses = []
 t_starts =[]
 t_ends =[]
-keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+num_records =[]
+keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+\.txt")
 
@@ -62,7 +63,7 @@ for file in matching_files:
 
     t_end = df.loc[0,"Time (relative)"]    
     t_start= t_end - df.loc[0,"Duration"]
-    
+    num_record =df.loc[0,"Number of records in average "]
     percentages = df.loc[0,columns_scattervalues]
     bin_centers = np.array([])
     for column in columns_scattervalues:
@@ -93,6 +94,7 @@ for file in matching_files:
     n_skewnesses.append(number_skewness)
     t_starts.append(t_start)
     t_ends.append(t_end)
+    num_records.append(num_record)
 
     # print(f"Volume,mean: {mean:.2f},std: {std:.2f},skewness: {skewness}")
     # print(f"Number: mean: {number_mean:.2f},std: {number_std:.2f}, skewness: {number_skewness}")
@@ -100,6 +102,7 @@ for file in matching_files:
 stats = {
     "t_start" : t_starts,
     "t_ends" : t_ends,
+    "num_records": num_records,
     "v_means": v_means,
     "v_stds": v_stds,
     "v_skewnesses": v_skewnesses,
@@ -109,6 +112,7 @@ stats = {
 }
 
 full_save_path = os.path.join(save_path, keyphrase + ".csv")
+print(f"saved at: {full_save_path}")
 num_rows = len(v_means)
 with open(full_save_path, 'w', newline='') as f:
     writer = csv.writer(f)

@@ -1,5 +1,5 @@
 """
-Produces the average plots of the spraytec data
+Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
 
 import numpy as np
@@ -28,14 +28,17 @@ path = os.path.join(cwd,"Averages")
 print(f"Path: {path}")
 save_path = os.path.join(cwd,"results_spraytec","Averages")
 print(f"Save path {save_path}")
-keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
 pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+\.txt")
 
 # Filter matching files
 matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]
-###Loop over all
+save_path = os.path.join(save_path,keyphrase)
+
+# Create folder if it doesn't exist
+os.makedirs(save_path, exist_ok=True)
 
 
 # #NOW WE CHOSE with a dialog!!!!
@@ -47,10 +50,10 @@ matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]
 
 # print("You picked:", file)
 #### The loop over all files
-for file in txt_files:
+for file in matching_files:
 
     filename = file.split('\\')[-1].replace('.txt', '')
- 
+
     #From here we read the data
 
     df = pd.read_table(file,delimiter=",",encoding='latin1')
@@ -60,7 +63,7 @@ for file in txt_files:
     for col in df.columns:
         # Try converting each column to numeric, coercing errors to NaN
         df[col] = pd.to_numeric(df[col], errors='ignore')
-    important_columns= ["Date-Time","Transmission", "Duration","Time (relative)"]
+    important_columns= ["Date-Time","Transmission", "Duration","Time (relative)","Number of records in average "]
 
     columns_scattervalues = df.loc[:,"% V (0.100-0.117µm)":"% V (857.698-1000.002µm)"].columns.tolist()
 
@@ -79,7 +82,7 @@ for file in txt_files:
     t_end = df_filtered.loc[0,"Time (relative)"]
     t_start = t_end - df_filtered.loc[0,"Duration"]
     transmission = df_filtered.loc[0,"Transmission"]
-
+    num_records = df_filtered.loc[0,"Number of records in average "]
     ###Extracting
     bin_centers = np.array([])
     for column in columns_scattervalues:
@@ -124,7 +127,7 @@ for file in txt_files:
     # Add labels
 
     ax1.set_ylabel("Volume PDF (%)")
-    ax1.set_title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
+    ax1.set_title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
     ax1.set_xscale('log')
     #plt.yscale('log')
 
@@ -162,6 +165,6 @@ for file in txt_files:
     full_save_path = os.path.join(save_path,filename)
     print(f"full path: {full_save_path}")
     
-    plt.savefig(full_save_path+".pdf")
+    plt.savefig(full_save_path+".svg")
 
     
