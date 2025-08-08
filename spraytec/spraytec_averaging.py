@@ -1,6 +1,7 @@
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
+keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 import numpy as np
 import pandas as pd
@@ -28,10 +29,10 @@ path = os.path.join(cwd,"Averages")
 print(f"Path: {path}")
 save_path = os.path.join(cwd,"results_spraytec","Averages")
 print(f"Save path {save_path}")
-keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+
 
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
-pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+\.txt")
+pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+(?:_.*)?\.txt")
 
 # Filter matching files
 matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]
