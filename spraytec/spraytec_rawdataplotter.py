@@ -1,7 +1,7 @@
 """
 Shows first entry the graph and over time an imshow of the spraytec data
 """
-keyphrase = "PEO0dot03"  ##change this for different statistics
+keyphrase = "PEO_1percent"  ##change this for different statistics
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt

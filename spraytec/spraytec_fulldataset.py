@@ -1,7 +1,7 @@
 """
 This file finds all number and volume means,stds and skewnesses for a given keyphrase and makes a csv of these values
 """
-keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_1percent_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 import numpy as np
 import pandas as pd
@@ -27,6 +27,8 @@ plt.rcParams.update({'font.size': 14})
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
+path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
+
 save_path = os.path.join(cwd,"results_spraytec","csv")
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
 
