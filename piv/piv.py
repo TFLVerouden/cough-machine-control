@@ -20,11 +20,11 @@ cvd.set_cvd_friendly_colors()
 
 # Set experimental parameters
 test_mode = False
-videos = False
-random_profiles = False
+videos = True
+random_profiles = True
 new_bckp = False
 meas_series = 'PIV250723'
-meas_name = 'PIV_1bar_80ms_closedtank'
+meas_name = 'PIV_1dot5bar_80ms_refill'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
 frames = list(range(500, 800)) if test_mode else "all"
 dt = 1 / 40000  # [s]
@@ -40,7 +40,7 @@ cal_open_ker = (3, 3)  # Opening kernel size for calibration
 
 # Set cough model parameters
 model_gender = "male"
-model_mass = 70  # kg
+model_mass = 80  # kg
 model_height = 1.90  # m
 
 # Get current date and time for saving
