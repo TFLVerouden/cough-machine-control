@@ -1,7 +1,7 @@
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_1percent_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
 
 import numpy as np
 import pandas as pd
@@ -27,9 +27,11 @@ cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
 
-path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
+#path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
 print(f"Path: {path}")
 save_path = os.path.join(cwd,"results_spraytec","Serie_Averages")
+series_savepath = os.path.join(save_path,"npz_files")
+os.makedirs(series_savepath, exist_ok=True)
 print(f"Save path {save_path}")
 
 
@@ -185,5 +187,13 @@ print(f"filename: {filename}")
 full_save_path = os.path.join(save_path,filename)
 print(f"full path: {full_save_path}")
 
+
 plt.savefig(full_save_path+"_seriesaverage.svg")
 
+###saving this set to plot in one frame
+full_series_savepath = os.path.join(series_savepath,keyphrase)
+bin_edges =np.array(bin_edges)
+total_n_percentages = np.array(total_n_percentages)
+
+bin_widths = np.array(bin_widths)
+np.savez(full_series_savepath,n_percentages=total_n_percentages,bins=bin_edges[:-1],bin_widths=bin_widths)
