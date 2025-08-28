@@ -93,7 +93,7 @@ def movie_maker(folder,savefolder,start_frame = 0,output_name="animation",scale=
         except OSError as e:
             print(f"Error: {e}")
 
-def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,roi=None,delete_png=True,flip= "vertical",output_name="Video",process_png=True):
+def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,delete_png=True,flip= "vertical",output_name="Video",process_png=True):
     scale = calibration.get_calibration(folder_path)
     print(f"scale: {scale:.5f} mm/pix")
     folders = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
@@ -125,8 +125,8 @@ savefolder =os.path.join(folder,"Videos")
 output_name = folder.split('_Camera')[0]
 output_name = output_name.split('\\')[-1]
 roi = [500,950,100,550] #xstart,xend, ystart, yend
-movie_maker_folder_loop(folder_path= folder,savefolder=savefolder,fps=20000,cropped_value=0,roi=roi,output_name=output_name,delete_png=False)
-movie_maker_folder_loop(folder,savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=False)
+movie_maker_folder_loop(folder_path= folder,savefolder=savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=False)
+#movie_maker_folder_loop(folder,savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=False)
 
 #movie_maker_folder_loop(folder_path=folder_path,csv_file=csv_file,savefolder=savefolder,scale=scale,fps=20000,delete_png=False,process_png=False)
 temp_savefolder = os.path.join(savefolder,output_name,"processed_png")
