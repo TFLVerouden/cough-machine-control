@@ -1,13 +1,23 @@
+import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_1percent_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "waterjet"  ##change this for different statistics
+
+cwd = os.path.dirname(os.path.abspath(__file__))
+
+path = os.path.join(cwd,"Averages")
+path = os.path.join(path,"Unweighted","water_jet") #for the unweighted ones
+#path = os.path.join(path,"weighted") #for the weighted ones
+
+print(f"Path: {path}")
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
-import os
+
 import tkinter as tk
 from tkinter import filedialog
 from matplotlib.colors import LogNorm
@@ -23,11 +33,7 @@ matplotlib.use("TkAgg")  # Or "Agg", "Qt5Agg", "QtAgg"
 plt.rcParams.update({'font.size': 14})
 
 #FINDING THE FILES
-cwd = os.path.dirname(os.path.abspath(__file__))
 
-path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
-print(f"Path: {path}")
 save_path = os.path.join(cwd,"results_spraytec","Averages")
 print(f"Save path {save_path}")
 
@@ -115,28 +121,7 @@ for file in matching_files:
 
     ### VOLUME PERCENTAGES
 
-    fig,(ax1,ax2) = plt.subplots(2,1,sharex=True,sharey=True)
-    ####OPTINAL CUMSUM INClUSION, change (ax1,ax2 to ax)
-    #cdf_v = np.cumsum(percentages)
-    #ax[0].plot(bin_centers,cdf_v,c='r')
-    #ax[0].set_ylabel("Volume CDF (%)")
-
-    #ax1 = plt.twinx(ax=ax[0])
-    #### ENDS HERE
-    ax1.grid(which='both', linestyle='--', linewidth=0.5)
-    ax1.bar(bin_edges[:-1], percentages, width=bin_widths, align='edge', edgecolor='black')
-
-    # Add labels
-
-    ax1.set_ylabel("Volume PDF (%)")
-    ax1.set_title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
-    ax1.set_xscale('log')
-    #plt.yscale('log')
-
-    ax1.set_ylim(1e-1,40)
-    ax1.set_xlim(bin_edges[0],bin_edges[-1])
-
-
+    fig= plt.figure(figsize= (6,4))
 
     #NUMBER PERCENTAGES
     n_percentages = percentages/ (bin_centers*1E-6)**3
@@ -152,21 +137,21 @@ for file in matching_files:
     # ax[1].set_ylabel("Number CDF (%)")
     # ax2= plt.twinx(ax=ax[1])
     #ENDS HERE
-    ax2.bar(bin_edges[:-1], n_percentages, width=bin_widths, align='edge', edgecolor='black')
+    plt.bar(bin_edges[:-1], n_percentages, width=bin_widths, align='edge', edgecolor='black')
 
     # Add labels
-    ax2.set_xlabel(r"Diameter ($\mu$m)")
-    ax2.set_ylabel("Number PDF (%)")
-    #plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
-    ax2.set_xscale('log')
+    plt.xlabel(r"Diameter ($\mu$m)")
+    plt.ylabel("Number PDF (%)")
+    plt.title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
+    plt.xscale('log')
     #plt.yscale('log')
-    ax2.grid(which='both', linestyle='--', linewidth=0.5)
-    ax2.set_ylim(1e-1,40)
-    ax2.set_xlim(bin_edges[0],bin_edges[-1])
+    plt.grid(which='both', linestyle='--', linewidth=0.5)
+    plt.ylim(1e-1,40)
+    plt.xlim(bin_edges[0],bin_edges[-1])
     print(f"filename: {filename}")
     full_save_path = os.path.join(save_path,filename)
     print(f"full path: {full_save_path}")
-    
+    plt.tight_layout()
     plt.savefig(full_save_path+".svg")
 
     

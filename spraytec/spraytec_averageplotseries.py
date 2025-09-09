@@ -1,13 +1,22 @@
+import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_0dot03_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+
+#FINDING THE FILES
+cwd = os.path.dirname(os.path.abspath(__file__))
+
+path = os.path.join(cwd,"Averages")
+path = os.path.join(path,"Unweighted","0dot25") #for the unweighted ones
+#path = os.path.join(path,"Weighted") #for the weighted ones
+print(f"Path: {path}")
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
-import os
+
 import tkinter as tk
 from tkinter import filedialog
 from matplotlib.colors import LogNorm
@@ -22,13 +31,7 @@ pd.set_option('future.no_silent_downcasting', True)
 matplotlib.use("TkAgg")  # Or "Agg", "Qt5Agg", "QtAgg"
 plt.rcParams.update({'font.size': 14})
 
-#FINDING THE FILES
-cwd = os.path.dirname(os.path.abspath(__file__))
 
-path = os.path.join(cwd,"Averages")
-
-#path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
-print(f"Path: {path}")
 save_path = os.path.join(cwd,"results_spraytec","Serie_Averages")
 series_savepath = os.path.join(save_path,"npz_files")
 os.makedirs(series_savepath, exist_ok=True)
@@ -42,6 +45,9 @@ pattern = re.compile(rf"average_{re.escape(keyphrase)}_\d+(?:_.*)?\.txt")
 matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))and "skip" not in os.path.basename(f)]
 save_path = os.path.join(save_path,keyphrase)
 
+if not matching_files:
+    print("none found")
+    quit()
 # Create folder if it doesn't exist
 os.makedirs(save_path, exist_ok=True)
 
@@ -136,9 +142,17 @@ total_v_percentages =np.array(total_v_percentages)
 
 
 min_records =5
+max_records = 200
 weights= np.array(weights)
+print(np.shape(total_n_percentages))
+print(np.max(total_n_percentages,axis=1))
+
+max_n_check = np.max(total_n_percentages,axis=1)
+max_n_limit = 75
+print(max_n_check<max_n_limit)
 #weights = np.ones(len(weights))*10
-mask = weights> min_records
+mask = (weights> min_records) & (weights<max_records) & (max_n_check<max_n_limit)
+print(mask)
 
 #weights = np.ones(len(weights))*10
 weights= weights[:, np.newaxis]
@@ -154,39 +168,39 @@ total_v_percentages = total_v_percentages/sum(total_v_percentages)*100
 
 # recalculated_npercentages = recalculated_npercentages/sum(recalculated_npercentages)*100
 
-fig,(ax1,ax2) = plt.subplots(2,1,sharex=True,sharey=True)
 
-ax1.grid(which='both', linestyle='--', linewidth=0.5)
-ax1.bar(bin_edges[:-1], total_v_percentages, width=bin_widths, align='edge', edgecolor='black')
+fig = plt.figure(figsize=(6,4))
+# plt.grid(which='both', linestyle='--', linewidth=0.5)
+# plt.bar(bin_edges[:-1], total_v_percentages, width=bin_widths, align='edge', edgecolor='black')
+
+# # Add labels
+
+# plt.ylabel("Volume PDF (%)")
+# #ax1.set_title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
+# plt.xscale('log')
+# #plt.yscale('log')
+
+# plt.ylim(1e-1,40)
+# plt.xlim(bin_edges[0],bin_edges[-1])
+
+
+
+
+plt.bar(bin_edges[:-1], total_n_percentages, width=bin_widths, align='edge', edgecolor='black')
 
 # Add labels
-
-ax1.set_ylabel("Volume PDF (%)")
-#ax1.set_title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
-ax1.set_xscale('log')
-#plt.yscale('log')
-
-ax1.set_ylim(1e-1,40)
-ax1.set_xlim(bin_edges[0],bin_edges[-1])
-
-
-
-
-ax2.bar(bin_edges[:-1], total_n_percentages, width=bin_widths, align='edge', edgecolor='black')
-
-# Add labels
-ax2.set_xlabel(r"Diameter ($\mu$m)")
-ax2.set_ylabel("Number PDF (%)")
+plt.xlabel(r"Diameter ($\mu$m)")
+plt.ylabel("Number PDF (%)")
 #plt.title(f"Particle distribution at {date}, \n t= {round(t_start*1000)} to {round(t_end*1000)} ms, transmission: {transmission:.1f} % ")
-ax2.set_xscale('log')
+plt.xscale('log')
 #plt.yscale('log')
-ax2.grid(which='both', linestyle='--', linewidth=0.5)
-ax2.set_ylim(1e-1,40)
-ax2.set_xlim(bin_edges[0],bin_edges[-1])
+plt.grid(which='both', linestyle='--', linewidth=0.5)
+plt.ylim(1e-1,40)
+plt.xlim(bin_edges[0],bin_edges[-1])
 print(f"filename: {filename}")
 full_save_path = os.path.join(save_path,filename)
 print(f"full path: {full_save_path}")
-
+plt.tight_layout()
 
 plt.savefig(full_save_path+"_seriesaverage.svg")
 

@@ -1,13 +1,18 @@
 """
 This file finds all number and volume means,stds and skewnesses for a given keyphrase and makes a csv of these values
 """
-keyphrase = "PEO_1percent_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "waterjet"  ##change this for different statistics
+import os
+#FINDING THE FILES
+cwd = os.path.dirname(os.path.abspath(__file__))
 
+path = os.path.join(cwd,"Averages")
+path = os.path.join(path,"Unweighted","water_jet") #for the unweighted ones
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
-import os
+
 import tkinter as tk
 from tkinter import filedialog
 from matplotlib.colors import LogNorm
@@ -23,11 +28,7 @@ pd.set_option('future.no_silent_downcasting', True)
 matplotlib.use("TkAgg")  # Or "Agg", "Qt5Agg", "QtAgg"
 plt.rcParams.update({'font.size': 14})
 
-#FINDING THE FILES
-cwd = os.path.dirname(os.path.abspath(__file__))
 
-path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","1percent") #for the unweighted ones
 
 save_path = os.path.join(cwd,"results_spraytec","csv")
 txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
@@ -117,6 +118,9 @@ stats = {
 full_save_path = os.path.join(save_path, keyphrase + ".csv")
 print(f"saved at: {full_save_path}")
 num_rows = len(v_means)
+if num_rows==0:
+    print("No results")
+    exit()
 with open(full_save_path, 'w', newline='') as f:
     writer = csv.writer(f)
     
