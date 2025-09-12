@@ -27,7 +27,7 @@ def comparison(save_name):
         "PEO_0dot25_1ml_1dot5bar_80ms.npz",
         "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms.npz"]
     if save_name =="jets":
-        keep= ["PEOjet", "waterjet"]
+        keep= [ "waterjet","waterjet_camera"] #"PEOjet",
     return keep
 
 save_names= ["concentration", "film_thickness", "pressure", "height","jets"] #choose which one you want
