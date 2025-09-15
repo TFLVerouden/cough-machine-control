@@ -145,6 +145,9 @@ def set_cvd_friendly_colors(style="adjusted", do_reset=False, do_print=False):
         print("Current color cycle:", current_colors)
         print("Current colormap:", current_cmap)
 
+    # Return color cycle
+    return(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+
 
 def get_color(n):
     """
