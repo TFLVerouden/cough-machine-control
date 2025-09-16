@@ -1,8 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-plt.style.use("tableau-colorblind10")
+import sys
+#plt.style.use("tableau-colorblind10")
 cwd = os.path.dirname(os.path.abspath(__file__))
+print(cwd)
+parent_dir = os.path.dirname(cwd)
+function_dir = os.path.join(parent_dir,'functions')
+
+sys.path.append(function_dir)
+from cvd_check import set_cvd_friendly_colors
+
+colors = set_cvd_friendly_colors()
+
 save_path = os.path.join(cwd,"results_spraytec","Serie_Averages")
 series_savepath = os.path.join(save_path,"npz_files")
 total_savepath = os.path.join(save_path,"bundled")
@@ -34,12 +44,12 @@ save_names= ["concentration", "film_thickness", "pressure", "height","jets"] #ch
 
 
 save_name = "height"
-save_name ="jets"
+save_name ="concentration"
 keep = comparison(save_name)
 
 
 filtered = [f for f in npz_files if any(k in f for k in keep)]
-colors = plt.get_cmap("tab10").colors   # tab10 = Tableau ColorBlind10
+# colors = plt.get_cmap("tab10").colors   # tab10 = Tableau ColorBlind10
 print(len(filtered))
 
 plt.figure()
@@ -103,5 +113,5 @@ for file in filtered:
     i+=1
 plt.legend()
 
-plt.savefig(total_savepath+"\\" +save_name + "comparison.svg")
+#plt.savefig(total_savepath+"\\" +save_name + "comparison.svg")
 plt.show()
