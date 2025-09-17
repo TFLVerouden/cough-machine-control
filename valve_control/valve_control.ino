@@ -28,8 +28,6 @@ Adafruit_SHT4x sht4;  // Declare the T+RH sensor object
 
 enum State {
   IDLE,
-  OPENING,
-  CLOSING,
   ERROR
 };
 
@@ -86,18 +84,6 @@ void loop() {
       // Do nothing
       break;
 
-    case OPENING:
-      if (millis() - startTime >= duration) {
-        closeValve();
-        currentState = IDLE;
-      }
-      break;
-
-    case CLOSING:
-      closeValve();
-      currentState = IDLE;
-      break;
-
     case ERROR:
       blinkError();
       currentState = IDLE;
@@ -120,9 +106,7 @@ void handleCommand(String command) {
     }
 
   } else if (command == "C") {
-    if (valveOpen) {
-      currentState = CLOSING;
-    }
+    closeValve();
 
   } else if (command == "P?") {
     readPressure();
