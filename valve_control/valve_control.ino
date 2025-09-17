@@ -13,15 +13,15 @@ const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs]
 uint32_t tickTrigger = 0;  // Trigger for the tick interval
 bool performingTrigger = false;
 
-// Valve opening logic parameters
-int duration = 0;                // Variable to store the duration
+// Valve opening logic parameters (these are not static as they are called by functions)
+uint32_t duration = 0;                // Variable to store the duration
 bool valveOpen = false;          // Flag to check if the valve is open
 unsigned long tickValve = 0;     // Variable to store the start time
 
 // Exponential moving average (EMA) parameters & calibration of the R Click readings
 const uint32_t EMA_INTERVAL = 500; // Desired oversampling interval [µs]
 const float EMA_LP_FREQ = 200.;      // Low-pass filter cut-off frequency [Hz]
-R_Click R_click(pressurePin, RT_Click_Calibration{3.99, 9.75, 795, 1943});
+R_Click R_click(csRClick, RT_Click_Calibration{3.99, 9.75, 795, 1943});
 
 // Humidity+temperature sensor
 Adafruit_SHT4x sht4;  // Declare the T+RH sensor object
@@ -99,9 +99,10 @@ void handleCommand(String command) {
     digitalWrite(trigPin, HIGH);
     tickTrigger = micros();
 
+    // Extract duration (us) from command (ms) and open valve
+    duration = 1000 * command.substring(2).toInt();
     if (duration > 0) {
       openValve();
-      currentState = OPENING;
     } else {
       currentState = ERROR;
     }
