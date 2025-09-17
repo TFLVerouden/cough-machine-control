@@ -243,3 +243,4 @@ fabric.properties
 # Add all variations of .DS_Store
 .DS_Store
 **/.DS_Store
+.vscode/settings.json
