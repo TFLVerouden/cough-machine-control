@@ -287,7 +287,10 @@ def get_calibration(folder, save=True, distance_between = 0.5):
 
 
     # 3. Otherwise, do manual calibration
+
     calibration_files = glob.glob(os.path.join(folder, "*calibration*.tif"))
+    print(calibration_files)
+
     if not calibration_files:
         print("❌ No calibration TIFF found!")
         return None
