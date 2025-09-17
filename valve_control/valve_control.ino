@@ -6,7 +6,12 @@
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
 const int mosfetPin = 7;         // Pin to control the MOSFET for valve control
 const int csRClick = 2;          // Cable select pin for RClick pressure reading
-const int trigPin = 10;      // Placeholder pin for pressure reading
+const int trigPin = 9;           // Pin for trigger out 
+
+// Trigger parameters
+const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs]
+uint32_t tickTrigger = 0;  // Trigger for the tick interval
+bool performingTrigger = false;
 
 // Valve opening logic parameters
 int duration = 0;                // Variable to store the duration
@@ -34,9 +39,12 @@ void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(mosfetPin, OUTPUT);
   pinMode(csRClick, INPUT);
+  pinMode(trigPin, OUTPUT);
+
   digitalWrite(ledPin, LOW);
   digitalWrite(mosfetPin, LOW);
   digitalWrite(trigPin, LOW);
+  
   Serial.begin(115200);
   R_click.begin();
 
@@ -52,6 +60,19 @@ void setup() {
 } 
 
 void loop() {
+  // Handle trigger
+  if (performingTrigger && (micros() - tickTrigger >= TRIGGER_WIDTH) {
+    digitalWrite(trigPin, LOW)
+    performingTrigger = false;
+  }
+
+  // Handle MOSFET valve control
+  if (valveOpen && (micros() - tickValve >= duration)) {
+    closeValve();
+    valveOpen = false;
+    currentState = IDLE;
+  }
+
   // Poll R-click board (pressure sensor)
   R_click.poll_EMA();
 
@@ -86,7 +107,11 @@ void loop() {
 
 void handleCommand(String command) {
   if (command.startsWith("O")) {
-    duration = command.substring(2).toInt();
+    // Trigger camera
+    performingTrigger = true;
+    digitalWrite(trigPin, HIGH);
+    tickTrigger = micros();
+
     if (duration > 0) {
       openValve();
       currentState = OPENING;
