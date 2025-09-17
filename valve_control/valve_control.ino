@@ -4,7 +4,7 @@
 
 // Connections
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
-const int mosfetPin = 7;         // Pin to control the MOSFET for valve control
+const int valvePin = 7;         // Pin to control the MOSFET for valve control
 const int csRClick = 2;          // Cable select pin for RClick pressure reading
 const int trigPin = 9;           // Pin for trigger out 
 
@@ -35,12 +35,12 @@ State currentState = IDLE;
 
 void setup() {
   pinMode(ledPin, OUTPUT);
-  pinMode(mosfetPin, OUTPUT);
+  pinMode(valvePin, OUTPUT);
   pinMode(csRClick, INPUT);
   pinMode(trigPin, OUTPUT);
 
   digitalWrite(ledPin, LOW);
-  digitalWrite(mosfetPin, LOW);
+  digitalWrite(valvePin, LOW);
   digitalWrite(trigPin, LOW);
   
   Serial.begin(115200);
@@ -59,8 +59,8 @@ void setup() {
 
 void loop() {
   // Handle trigger
-  if (performingTrigger && (micros() - tickTrigger >= TRIGGER_WIDTH) {
-    digitalWrite(trigPin, LOW)
+  if (performingTrigger && (micros() - tickTrigger >= TRIGGER_WIDTH)) {
+    digitalWrite(trigPin, LOW);
     performingTrigger = false;
   }
 
@@ -94,15 +94,16 @@ void loop() {
  // TODO: Move to loop so variables don't have to be global
 void handleCommand(String command) {
   if (command.startsWith("O")) {
-    // Trigger camera
-    performingTrigger = true;
-    digitalWrite(trigPin, HIGH);
-    tickTrigger = micros();
-
-    // Extract duration (us) from command (ms) and open valve
+    // Extract duration (us) from command (ms)
     duration = 1000 * command.substring(2).toInt();
     if (duration > 0) {
+      // Open valve
       openValve();
+
+      // Trigger camera
+      performingTrigger = true;
+      digitalWrite(trigPin, HIGH);
+      tickTrigger = micros();
     } else {
       currentState = ERROR;
     }
@@ -122,14 +123,14 @@ void handleCommand(String command) {
 
 void openValve() {
   digitalWrite(ledPin, HIGH);
-  digitalWrite(mosfetPin, HIGH);
+  digitalWrite(valvePin, HIGH);
   valveOpen = true;
-  tickValve = millis();
+  tickValve = micros();
 }
 
 void closeValve() {
   digitalWrite(ledPin, LOW);
-  digitalWrite(mosfetPin, LOW);
+  digitalWrite(valvePin, LOW);
   valveOpen = false;
   Serial.println("!");
 }
