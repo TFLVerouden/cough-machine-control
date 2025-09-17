@@ -4,13 +4,14 @@
 
 // Connections
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
-const int powerPin = 5;          // Use pin 5 for 5.0V control
-const int pressurePin = 10;      // Placeholder pin for pressure reading
+const int mosfetPin = 7;         // Pin to control the MOSFET for valve control
+const int csRClick = 2;          // Cable select pin for RClick pressure reading
+const int trigPin = 10;      // Placeholder pin for pressure reading
 
 // Valve opening logic parameters
 int duration = 0;                // Variable to store the duration
 bool valveOpen = false;          // Flag to check if the valve is open
-unsigned long startTime = 0;     // Variable to store the start time
+unsigned long tickValve = 0;     // Variable to store the start time
 
 // Exponential moving average (EMA) parameters & calibration of the R Click readings
 const uint32_t EMA_INTERVAL = 500; // Desired oversampling interval [µs]
@@ -31,10 +32,11 @@ State currentState = IDLE;
 
 void setup() {
   pinMode(ledPin, OUTPUT);
-  pinMode(powerPin, OUTPUT);
-  pinMode(pressurePin, INPUT);
+  pinMode(mosfetPin, OUTPUT);
+  pinMode(csRClick, INPUT);
   digitalWrite(ledPin, LOW);
-  digitalWrite(powerPin, LOW);
+  digitalWrite(mosfetPin, LOW);
+  digitalWrite(trigPin, LOW);
   Serial.begin(115200);
   R_click.begin();
 
@@ -106,14 +108,14 @@ void handleCommand(String command) {
 
 void openValve() {
   digitalWrite(ledPin, HIGH);
-  digitalWrite(powerPin, HIGH);
+  digitalWrite(mosfetPin, HIGH);
   valveOpen = true;
-  startTime = millis();
+  tickValve = millis();
 }
 
 void closeValve() {
   digitalWrite(ledPin, LOW);
-  digitalWrite(powerPin, LOW);
+  digitalWrite(mosfetPin, LOW);
   valveOpen = false;
   Serial.println("!");
 }
