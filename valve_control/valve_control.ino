@@ -91,6 +91,7 @@ void loop() {
   }
 }
 
+ // TODO: Move to loop so variables don't have to be global
 void handleCommand(String command) {
   if (command.startsWith("O")) {
     // Trigger camera
@@ -131,6 +132,7 @@ void closeValve() {
   valveOpen = false;
   Serial.println("!");
 }
+// TODO: Print error rather than occupying microcontroller with error state -> state machine can then be removed altogether
 
 void blinkError() {
   for (int i = 0; i < 5; i++) {
