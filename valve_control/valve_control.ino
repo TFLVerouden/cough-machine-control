@@ -52,6 +52,9 @@ void setup() {
 } 
 
 void loop() {
+  // Poll R-click board (pressure sensor)
+  R_click.poll_EMA();
+
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     handleCommand(command);
@@ -131,7 +134,6 @@ void blinkError() {
 
 void readPressure() {
   // Reads out R-click board and converts to pressure
-  R_click.poll_EMA();
   Serial.print("P");
   Serial.print(0.6249*R_click.get_EMA_mA() - 2.4882);
   Serial.println();
