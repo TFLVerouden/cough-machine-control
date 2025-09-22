@@ -487,7 +487,8 @@ def filament_file(
     fourcc = cv.VideoWriter_fourcc(*'mp4v')
     fps = 10
 
-    out =  None
+    output_folder_tommie = "frames_tommie"
+    os.makedirs(output_folder_tommie, exist_ok=True)
     for i,file in enumerate(files):
            
         if i== selected_image or selected_image == -1:
@@ -575,18 +576,10 @@ def filament_file(
 
                 frame = np.hstack([thresh, contour_mask, overlay])
                 frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
-                if out is None:
-                    h, w, _ = frame.shape
-                    fourcc = cv.VideoWriter_fourcc(*'mp4v')
-                    fps = 10
-                    out = cv.VideoWriter("Tommie.mp4", fourcc, fps, (w, h))
-                # fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                # ax[0].imshow(thresh,cmap="gray")
-                # ax[1].imshow(contour_mask,cmap="gray")
-                # ax[2].imshow(overlay,cmap="gray")
-                # plt.show()  
-                frame = cv.resize(frame, (w, h))
-                out.write(frame)              
+                filename = os.path.join(output_folder_tommie, f"frame_{i:04d}.png")
+                
+                
+                cv.imwrite(filename, frame)             
                 if i % 10 == 0:
                     print(f"Processed {i}/{total_frames} frames...")
 
@@ -804,7 +797,7 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=100)
+    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
     aa
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"
