@@ -18,11 +18,14 @@ import gc  # Garbage collector
 
 
 cwd = os.path.abspath(os.path.dirname(__file__))
+
 parent_dir = os.path.dirname(cwd)
 print(cwd)
 #function_dir = os.path.join(parent_dir, 'cough-machine-control')
+
+
 function_dir = os.path.join(parent_dir,'functions')
-print(function_dir)
+
 sys.path.append(function_dir)
 import calibration
 
@@ -40,7 +43,7 @@ path_dir = os.path.abspath(os.path.dirname(__file__))  # Get the absolute path o
 
 
 def movie_maker(folder,savefolder,start_frame = 0,output_name="animation",scale=1,fps=20000,cropped_value=0,delete_png=True,flip="vertical",process_png=True):
-    files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
+    files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower() and "leaked" not in f.lower()]
 
     temp_savefolder = os.path.join(savefolder,output_name,"processed_png")
     os.makedirs(savefolder, exist_ok=True)
@@ -93,7 +96,6 @@ def movie_maker(folder,savefolder,start_frame = 0,output_name="animation",scale=
             print(f"Error: {e}")
 
 def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,delete_png=True,flip= "vertical",output_name="Video",process_png=True):
-    print(folder_path)
     scale = calibration.get_calibration(folder_path)
     print(f"scale: {scale:.5f} mm/pix")
     folders = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
@@ -118,14 +120,14 @@ def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,del
         gc.collect()  # Force memory cleanup
 
 #folder  = r"D:\Experiments\Droplet_atomization\ETPoF_NickTamara\PEO2M_c1-1\0_75bar_12uL_c1-1_2_Camera_4_C001H001S0001_C1S0001_20250324_130907"
+folder = r"D:\\Experiments\\sideview_coughs\\02_09_25"
 
-folder = r"D:\Experiments\sideview_coughs\29_08_25"
 
 savefolder =os.path.join(folder,"Videos")
 output_name = folder.split('_Camera')[0]
 output_name = output_name.split('\\')[-1]
 roi = [500,950,100,550] #xstart,xend, ystart, yend
-movie_maker_folder_loop(folder_path= folder,savefolder=savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=False)
+movie_maker_folder_loop(folder_path= folder,savefolder=savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=True)
 #movie_maker_folder_loop(folder,savefolder,fps=20000,cropped_value=0,output_name=output_name,delete_png=False)
 
 #movie_maker_folder_loop(folder_path=folder_path,csv_file=csv_file,savefolder=savefolder,scale=scale,fps=20000,delete_png=False,process_png=False)
