@@ -13,7 +13,7 @@ from cvd_check import set_cvd_friendly_colors
 
 colors = set_cvd_friendly_colors()
 
-folder = r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\coughplotter"
+folder = r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\PIVplotter"
 
 csv_files = [f for f in os.listdir(folder) if f.endswith(".csv")]
 plt.figure(figsize=(6,4))
@@ -29,10 +29,8 @@ for csv_file in csv_files:
     reverse = csv_file.split("_")[-1]
     color = colors[i%6]
     if name== "Flowmeter":
-        continue
         df = pd.read_csv(path)
-        mask = df["Y"]>0
-        df = df[mask]
+
 
     else:
         
@@ -64,7 +62,7 @@ for npz_file in npz_files:
     data = np.load(path)
     if name == "PIV 1bar":
         continue
-    
+
     flow_rate = data["flow_rate_Lps"]*1000
     time = data["time_s"]
     # --- Step 1: Define block size ---
@@ -75,7 +73,7 @@ for npz_file in npz_files:
     flow_avg = flow_rate[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
     time_avg = time[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
 
-    plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,label=name)
+    plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,marker="o",label=name)
     j+=1
     i+=1
 
@@ -84,9 +82,9 @@ for npz_file in npz_files:
 plt.xlabel("Time (s)")
 plt.ylabel("Flow rate (L/s)")
 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-plt.xlim(0,0.5)
+plt.xlim(0,0.8)
 plt.ylim(0)
 plt.grid(which="both")
 plt.tight_layout()
-#plt.savefig(folder+"allcoughs.svg")
+plt.savefig(folder+"PIVcompare.svg")
 plt.show()

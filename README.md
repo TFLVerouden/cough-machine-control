@@ -21,4 +21,4 @@ See https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main/docs
 
 ### Aspect ratio
 Scale= Distance_pixels_x/ known_length_x
-Aspect_ratio = Dist_pix_x/ dist_pix_y * known_y/ known_x
+Aspect_ratio = known_length_y/ distpix_y (with scale conversion)
