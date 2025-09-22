@@ -299,7 +299,7 @@ def branch_fitter(branch,image,dist,window=5, line_threshold=0.85,step_filament=
             # for r, c in pixels:
             #     plt.plot([x0, x1], [y0, y1], color='red', linewidth=1)        
     #arr=  distance_filter(filament_len_array,dists_interpolating)
-
+    
     # plt.subplots(2,1)
     # plt.subplot(2,1,1)
     #plt.title(f"Filament_len 0 = {x[0],y[0]} ")
@@ -484,6 +484,10 @@ def filament_file(
  
     first_file = True
     frame_number =0
+    fourcc = cv.VideoWriter_fourcc(*'mp4v')
+    fps = 10
+
+    out =  None
     for i,file in enumerate(files):
            
         if i== selected_image or selected_image == -1:
@@ -510,8 +514,8 @@ def filament_file(
                 cropped = img[:,cropped_value:cropped_value+window_size]
                 
                 ret,thresh = cv.threshold(255-cropped,255-mean_val+thresh_factor,255,cv.THRESH_TOZERO)
+
                 
-    
                 hierarchy,contours,areas = edges(thresh)
                 # contour_image = np.zeros_like(thresh)
 
@@ -551,8 +555,9 @@ def filament_file(
                         color,tag = shape_categorizer(contour)
 
                         if tag == "Filament":
+
                             #filament_contours.append(contour)
-                            filament_image  =cv.drawContours(filament_image,[contour],255,'blue',-1)
+                            filament_image  =cv.drawContours(filament_image,[contour],-1,(255,0,0),-1)
 
                             
                             #cv.drawContours(contour_mask,[contour],-1,255,1)
@@ -567,11 +572,21 @@ def filament_file(
                 dist[~mask_skeleton] =0
                 overlay[dist!=0] = 255
                 dist_transform[dist!=0] = dist[dist!=0]
+
+                frame = np.hstack([thresh, contour_mask, overlay])
+                frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+                if out is None:
+                    h, w, _ = frame.shape
+                    fourcc = cv.VideoWriter_fourcc(*'mp4v')
+                    fps = 10
+                    out = cv.VideoWriter("Tommie.mp4", fourcc, fps, (w, h))
                 # fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                # ax[0].imshow(thresh)
-                # ax[1].imshow(contour_mask)
-                # ax[2].imshow(overlay)
-                # plt.show()                
+                # ax[0].imshow(thresh,cmap="gray")
+                # ax[1].imshow(contour_mask,cmap="gray")
+                # ax[2].imshow(overlay,cmap="gray")
+                # plt.show()  
+                frame = cv.resize(frame, (w, h))
+                out.write(frame)              
                 if i % 10 == 0:
                     print(f"Processed {i}/{total_frames} frames...")
 
@@ -789,9 +804,9 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files)
+    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=100)
     numpy_array.append(filament_val)
-
+    aa
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"
     with open(savepath, 'wb') as f:
         pickle.dump(numpy_array, f)
