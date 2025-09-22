@@ -789,9 +789,9 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files)
+    filament_val =main(folder,selected_image=300,skip_first_files=skip_first_files)
     numpy_array.append(filament_val)
-
+    aa
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"
     with open(savepath, 'wb') as f:
         pickle.dump(numpy_array, f)
