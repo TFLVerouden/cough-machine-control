@@ -21,10 +21,10 @@ cvd.set_cvd_friendly_colors()
 # Set experimental parameters
 test_mode = False
 videos = True
-random_profiles = True
-new_bckp = True
+random_profiles = False
+new_bckp = False
 meas_series = 'PIV250723'
-meas_name = 'PIV_2bar_80ms_refill'
+meas_name = 'PIV_1bar_80ms_refill'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
 frames = list(range(500, 800)) if test_mode else "all"
 dt = 1 / 40000  # [s]
@@ -242,21 +242,21 @@ piv.plot_vel_med(disp2, res_avg, frames, dt,
                  title=f'Second pass - {meas_name}',
                  proc_path=proc_path, file_name="pass2_v_med", test_mode=test_mode)
 
-# Plot some randomly selected velocity profiles
-piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                  ylim=(0, frame_w * 1000),
-                  disp_rejected=disp2_unf,
-                  proc_path=proc_path, file_name="pass2_v",
-                  subfolder='pass2', test_mode=not random_profiles)
+# # Plot some randomly selected velocity profiles
+# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+#                   mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+#                   ylim=(0, frame_w * 1000),
+#                   disp_rejected=disp2_unf,
+#                   proc_path=proc_path, file_name="pass2_v",
+#                   subfolder='pass2', test_mode=not random_profiles)
 
-# Plot all velocity profiles in video
-piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-                  mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-                  ylim=(0, frame_w * 1000),
-                  disp_rejected=disp2_unf,
-                  proc_path=proc_path, file_name="pass2_v",
-                  test_mode=not videos)
+# # Plot all velocity profiles in video
+# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+#                   mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+#                   ylim=(0, frame_w * 1000),
+#                   disp_rejected=disp2_unf,
+#                   proc_path=proc_path, file_name="pass2_v",
+#                   test_mode=not videos)
 
 
 # THIRD PASS: Split in 24 windows ==============================================
@@ -339,7 +339,7 @@ piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                   mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
-                  disp_rejected=disp3_unf,
+                  disp_rejected=disp3_unf, plot_rejected=False, frame_skip=40,
                   proc_path=proc_path, file_name="pass3_v",
                   test_mode=not videos)
 
@@ -361,7 +361,7 @@ q_model, time_model = piv.Gupta_model(model_gender, model_mass, model_height)
 # Plot flow rate in time, save to file
 piv.plot_flow_rate(q, frames, dt, q_model=q_model, t_model=time_model, ylim=(0, np.nanmax(q) * 1100),
                    title=f'Flow rate - {meas_name}',
-                   proc_path=proc_path, file_name="flow_rate",
+                   proc_path=proc_path, file_name="flow_rate", frame_skip=40, plot_model=False,
                    test_mode=test_mode)
 piv.save_backup(proc_path, "flow_rate.npz", test_mode=test_mode,
                 flow_rate_Lps=q, time_s=time, flow_rate_Gupta_Lps=q_model, time_model_s=time_model)

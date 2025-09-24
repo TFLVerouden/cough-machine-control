@@ -202,8 +202,7 @@ def plot_vel_Gupta(disp, res, frs, dt, proc_path=None, file_name=None, test_mode
 
 def plot_vel_prof(disp, res, frs, dt, win_pos, 
                   mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, 
-                  disp_rejected=None, **kwargs):
-    # TODO: Write docstring
+                  disp_rejected=None, frame_skip=1, plot_rejected=True, **kwargs):
     
     # Define a time array
     n_corrs = disp.shape[0]
@@ -240,17 +239,22 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         np.random.seed(42)  # For reproducible results
         frames_to_plot = np.sort(np.random.choice(n_corrs, size=min(10, n_corrs), replace=False))
     elif mode == "all" or mode == "video":
-        frames_to_plot = range(n_corrs)
+        if mode == "video" and frame_skip > 1:
+            # Skip frames: take every frame_skip-th frame
+            frames_to_plot = range(frame_skip-1, n_corrs, frame_skip)
+        else:
+            frames_to_plot = range(n_corrs)
     else:
         raise ValueError(f"Unknown mode: {mode}. Use 'video', 'all', or 'random'.")
     
     # Set up video writer if needed
     if mode == "video":
         fig_video, ax_video = plt.subplots(figsize=(10, 6))
+        plt.tight_layout()  # Minimize borders for video frames
         writer = ani.FFMpegWriter(fps=10)
         video_path = os.path.join(proc_path, file_name+'.mp4')
         video_context = writer.saving(fig_video, video_path, dpi=150)
-        frames_iter = trange(n_corrs, desc='Rendering video     ')
+        frames_iter = trange(len(frames_to_plot), desc='Rendering video     ')
     else:
         video_context = None
         frames_iter = frames_to_plot
@@ -264,8 +268,8 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         ax.plot(vx, y_pos, '-o', c=cvd.get_color(1), label='vx')
         ax.plot(vy, y_pos, '-o', c=cvd.get_color(0), label='vy')
         
-        # Plot rejected points if provided
-        if vel_rejected is not None:
+        # Plot rejected points if provided and enabled
+        if plot_rejected and vel_rejected is not None:
             vx_rejected = vel_rejected[frame_idx, :, :, :, 1]  # All peaks for vx
             vy_rejected = vel_rejected[frame_idx, :, :, :, 0]  # All peaks for vy
             
@@ -281,18 +285,22 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         
         ax.set_xlabel('Velocity (m/s)')
         ax.set_ylabel('y position (mm)')
-        ax.set_title(f'Velocity profiles at frame {frame_idx + 1} ({time[frame_idx] * 1000:.2f} ms)')
+        ax.set_title(f'Velocity profiles at frame {frame_idx + 1} ({time[frame_idx] * 1000:.0f} ms)')
         ax.legend(loc='upper right')
         ax.grid()
         ax.set(**kwargs)
+        
+        # Minimize white borders
+        plt.tight_layout()
     
     # Process frames
     if video_context is not None:
         # Video mode
         with video_context:
             for i in frames_iter:
+                frame_idx = frames_to_plot[i]  # Get the actual frame index
                 ax_video.clear()
-                plot_frame(i, ax_video)
+                plot_frame(frame_idx, ax_video)
                 writer.grab_frame()
         plt.close(fig_video)
         print(f"Video saved to {video_path}")
@@ -310,21 +318,27 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
                 plt.close(fig)
 
 
-def plot_flow_rate(q, frs, dt, q_model=None, t_model=None, proc_path=None, file_name=None, test_mode=False, **kwargs):
-    # TODO: Add docstring and typing
-    
+def plot_flow_rate(q, frs, dt, q_model=None, t_model=None, proc_path=None, file_name=None, test_mode=False, 
+                   frame_skip=1, plot_model=True, **kwargs):
+        
     # Define a time array
     time = get_time(frs, dt)
 
     # If lengths don't match, assume all data was supplied; slice accordingly
     if q.shape[0] != time.shape[0]:
         q = q[frs[0]:frs[-1]]
+    
+    # Apply frame skipping if specified
+    if frame_skip > 1:
+        skip_indices = slice(0, len(time), frame_skip)
+        time = time[skip_indices]
+        q = q[skip_indices]
 
     # Plot the flow rate in time
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(6, 4))
     
-    # If a model is provided, plot it
-    if q_model is not None and t_model is not None:
+    # If a model is provided and plotting is enabled, plot it
+    if plot_model and q_model is not None and t_model is not None:
         ax.plot(t_model * 1000, q_model, label='Gupta et al., 2009', c=cvd.get_color(2))
 
     ax.plot(time * 1000, q * 1000, label='Flow rate')
@@ -334,8 +348,13 @@ def plot_flow_rate(q, frs, dt, q_model=None, t_model=None, proc_path=None, file_
     ax.set_title('Flow rate in time')
     ax.set(**kwargs)
 
-    ax.legend(loc='upper right')
+    if plot_model:
+        ax.legend(loc='upper right')
+
     ax.grid()
+    
+    # Minimize white borders
+    plt.tight_layout()
 
     if proc_path is not None and file_name is not None and not test_mode:
         # Save the figure
