@@ -366,7 +366,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
     else:
         # Plot mode (random or all)
         for frame_idx in frames_iter:
-            fig, ax = plt.subplots(figsize=(6, 4))
+            fig, ax = plt.subplots(figsize=(6, 4), clear=True, num=99)
             plot_frame(frame_idx, ax)
             
             # Save if path is specified
