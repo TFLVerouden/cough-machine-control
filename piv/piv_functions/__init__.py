@@ -26,12 +26,12 @@ Usage:
 """
 
 # Import all functions from submodules
-from .io import save_backup, load_backup, read_img, read_imgs, save_cfig
+from .io import save_backup, load_backup, read_img, read_imgs, save_cfig, init_subfolder
 from .preprocessing import downsample, split_n_shift
 from .correlation import calc_corr, calc_corrs, sum_corr, sum_corrs
 from .displacement import find_peaks, three_point_gauss, subpixel, find_disp, find_disps
 from .postprocessing import (filter_outliers, filter_neighbours, first_valid, strip_peaks, smooth)
-from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof, plot_flow_rate,plot_vel_Gupta
+from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof, plot_flow_rate, plot_vel_Gupta
 from .utils import cart2polar, get_time, disp2shift, vel2flow
 from .calibration import calibrate_grid, all_distances
 from .modelling import Gupta_model
@@ -39,7 +39,7 @@ from .modelling import Gupta_model
 # Define what gets imported with "from piv_functions import *"
 __all__ = [
     # I/O functions
-    'save_backup', 'load_backup', 'read_img', 'read_imgs', 'save_cfig',
+    'save_backup', 'load_backup', 'read_img', 'read_imgs', 'save_cfig', 'init_subfolder',
 
     # Preprocessing functions
     'downsample', 'split_n_shift',
