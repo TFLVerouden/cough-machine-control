@@ -19,14 +19,14 @@ import cvd_check as cvd
 cvd.set_cvd_friendly_colors()
 
 # Set experimental parameters
-test_mode = False
+debug = False
 videos = True
-random_profiles = False
+random_profiles = True
 new_bckp = False
 meas_series = 'PIV250723'
 meas_name = 'PIV_1dot5bar_80ms_refill'
 cal_name = 'calibration_PIV_500micron_2025_07_23_C001H001S0001'
-frames = list(range(500, 800)) if test_mode else "all"
+frames = list(range(500, 800)) if debug else "all"
 dt = 1 / 40000  # [s]
 depth = 0.01  # [m] Depth of the channel
 
@@ -100,8 +100,8 @@ smooth_lam = 4e-7       # Smoothing lambda for splines
 print("\nFIRST PASS: full frame correlation")
 # Load existing backup data if available
 
-loaded_vars = piv.load_backup(proc_path, "pass1.npz", var_names[1],
-                              test_mode=(test_mode or new_bckp))
+loaded_vars = piv.load_backup(data_proc_path, "pass1.npz", var_names[1],
+                              test_mode=(debug or new_bckp))
 
 if loaded_vars:
     for var_name in var_names[1]:
@@ -148,7 +148,7 @@ time = piv.get_time(frames, dt)
 disp1 = piv.smooth(time, disp1, lam=smooth_lam, type=int)
 
 # Save the displacements to a backup file
-piv.save_backup(proc_path, "pass1.npz", test_mode=test_mode,
+piv.save_backup(data_proc_path, "pass1.npz", test_mode=debug,
                 ds_fac1=ds_fac1, n_tosum1=n_tosum1,
                 n_peaks1=n_peaks1, n_wins1=n_wins1,
                 min_dist1=min_dist1, d_max1=d_max1, n_nbs1=n_nbs1,
@@ -161,7 +161,7 @@ piv.plot_vel_comp(disp1_glo, disp1_nbs, disp1, res_avg, frames,
                   dt, ylim=(v_max1[0] * -1.1, v_max1[1] * 1.1),
                   disp_rejected=disp1_unf,
                   proc_path=proc_path, file_name="pass1_v-t",
-                  title=f'First pass - {meas_name}', test_mode=test_mode)
+                  title=f'First pass - {meas_name}', test_mode=debug)
 
 
 # SECOND PASS: Split in 8 windows ==============================================
@@ -176,8 +176,8 @@ nbs_thr2 = 5            # Threshold for neighbour filtering
 # TODO: Plot v_center
 
 print(f"\nSECOND PASS: {n_wins2} windows")
-loaded_vars = piv.load_backup(proc_path, "pass2.npz", var_names[2],
-                              test_mode=(test_mode or new_bckp))
+loaded_vars = piv.load_backup(data_proc_path, "pass2.npz", var_names[2],
+                              test_mode=(debug or new_bckp))
 
 if loaded_vars:
     # Extract loaded variables
@@ -228,7 +228,7 @@ disp2 = piv.filter_neighbours(disp2, thr=nbs_thr2, n_nbs=n_nbs2,
                               mode='r', replace=True, verbose=True, timing=True)
 
 # Save the displacements to a backup file
-piv.save_backup(proc_path, "pass2.npz", test_mode=test_mode,
+piv.save_backup(data_proc_path, "pass2.npz", test_mode=debug,
                 n_tosum2=n_tosum2, n_peaks2=n_peaks2, n_wins2=n_wins2,
                 win_ov2=win_ov2, d_max2=d_max2,
                 n_nbs2=n_nbs2,
@@ -240,24 +240,29 @@ piv.save_backup(proc_path, "pass2.npz", test_mode=test_mode,
 piv.plot_vel_med(disp2, res_avg, frames, dt,
                  ylim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
                  title=f'Second pass - {meas_name}',
-                 proc_path=proc_path, file_name="pass2_v_med", test_mode=test_mode)
+                 proc_path=proc_path, file_name="pass2_v-t_med", test_mode=debug)
 
-# # Plot some randomly selected velocity profiles
-# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-#                   mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-#                   ylim=(0, frame_w * 1000),
-#                   disp_rejected=disp2_unf,
-#                   proc_path=proc_path, file_name="pass2_v",
-#                   subfolder='pass2', test_mode=not random_profiles)
+# Plot some randomly selected velocity profiles
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='random', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp2_unf,
+                  proc_path=proc_path, file_name="pass2_v_prof", subfolder='pass2_v_prof', test_mode=not random_profiles)
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='average', avg_start_time=0.030, avg_end_time=0.120,
+                  proc_path=proc_path, file_name="pass2_v_prof")
 
-# # Plot all velocity profiles in video
-# piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
-#                   mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
-#                   ylim=(0, frame_w * 1000),
-#                   disp_rejected=disp2_unf,
-#                   proc_path=proc_path, file_name="pass2_v",
-#                   test_mode=not videos)
-
+# Plot all velocity profiles in video
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp2_unf,
+                  proc_path=proc_path, file_name="pass2_v_prof_detail",
+                  test_mode=not videos)
+piv.plot_vel_prof(disp2, res_avg, frames, dt, win_pos2,
+                  mode='video', xlim=(v_max2[0] * -1.1, v_max2[1] * 1.1), ylim=(0, frame_w * 1000),
+                  frame_skip=40, proc_path=proc_path, file_name="pass2_v_prof",
+                  test_mode=not videos)
 
 # THIRD PASS: Split in 24 windows ==============================================
 n_tosum3 = 40             # Number of correlation maps to sum -> 0.5 ms mov.av.
@@ -269,8 +274,8 @@ n_nbs3 = (1, 3, 1)     # Neighbourhood for local filtering
 nbs_thr3 = (4, 6)            # Threshold for neighbour filtering
 
 print(f"\nTHIRD PASS: {n_wins3} windows")
-loaded_vars = piv.load_backup(proc_path, "pass3.npz", var_names[3],
-                              test_mode=(test_mode or new_bckp))
+loaded_vars = piv.load_backup(data_proc_path, "pass3.npz", var_names[3],
+                              test_mode=(debug or new_bckp))
 
 if loaded_vars:
     for var_name in var_names[3]:
@@ -318,7 +323,7 @@ disp3 = piv.strip_peaks(disp3, axis=-2, verbose=True)
 disp3_nbs = disp3.copy()
 
 # Save the displacements to a backup file
-piv.save_backup(proc_path, "pass3.npz", test_mode=test_mode,
+piv.save_backup(data_proc_path, "pass3.npz", test_mode=debug,
                 disp3_unf=disp3_unf, int3_unf=int3_unf,
                 win_pos3=win_pos3, disp3_glo=disp3_glo, disp3=disp3,
                 n_tosum3=n_tosum3,
@@ -330,16 +335,28 @@ piv.save_backup(proc_path, "pass3.npz", test_mode=test_mode,
 # PLOTTING
 piv.plot_vel_med(disp3_nbs, res_avg, frames, dt,
                  ylim=(v_max3[0] * -1.1, v_max3[1] * 1.1),
-                 title=f'Third pass - {meas_name}',                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
+                 title=f'Third pass - {meas_name}', proc_path=proc_path, file_name="pass3_v-t_med", test_mode=debug)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                   mode='average', avg_start_time=0.030, avg_end_time=0.120,
-                  proc_path=proc_path, file_name="pass3_v")
+                  proc_path=proc_path, file_name="pass3_v_prof")
+
+piv.plot_vel_prof(disp3, res_avg, frames, dt, win_pos3,
+                  mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1),
+                  ylim=(0, frame_w * 1000),
+                  disp_rejected=disp3_unf,
+                  proc_path=proc_path, file_name="pass3_v_prof", subfolder='pass3_v_prof', test_mode=not random_profiles)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                   mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
-                  disp_rejected=disp3_unf, plot_rejected=False, frame_skip=40,
-                  proc_path=proc_path, file_name="pass3_v",
+                  disp_rejected=disp3_unf,
+                  proc_path=proc_path, file_name="pass3_v_prof_detail",
+                  test_mode=not videos)
+
+piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
+                  mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
+                  frame_skip=40,
+                  proc_path=proc_path, file_name="pass3_v_prof",
                   test_mode=not videos)
 
 # TODO: fit profile with turbulence model from turbulence book (Burgers equation, with max 3 params)
@@ -361,12 +378,12 @@ q_model, time_model = piv.Gupta_model(model_gender, model_mass, model_height)
 piv.plot_flow_rate(q, frames, dt, q_model=q_model, t_model=time_model, ylim=(0, np.nanmax(q) * 1100),
                    title=f'Flow rate - {meas_name}',
                    proc_path=proc_path, file_name="flow_rate", frame_skip=40, plot_model=False,
-                   test_mode=test_mode)
-piv.save_backup(proc_path, "flow_rate.npz", test_mode=test_mode,
+                   test_mode=debug)
+piv.save_backup(data_proc_path, "flow_rate.npz", test_mode=debug,
                 flow_rate_Lps=q, time_s=time, flow_rate_Gupta_Lps=q_model, time_model_s=time_model)
 
 # Save all parameters to a backup file
-piv.save_backup(proc_path, "params.npz", test_mode=test_mode,
+piv.save_backup(proc_path, "params.npz", test_mode=debug,
                 date_saved=run_date, meas_series=meas_series, meas_name=meas_name,
                 cal_name=cal_name, dt=dt, frames_start=frames[0], frames_end=frames[-1], res_avg=res_avg)
 

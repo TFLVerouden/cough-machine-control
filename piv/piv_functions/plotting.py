@@ -202,8 +202,7 @@ def plot_vel_Gupta(disp, res, frs, dt, proc_path=None, file_name=None, test_mode
 
 def plot_vel_prof(disp, res, frs, dt, win_pos, 
                   mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, 
-                  disp_rejected=None, frame_skip=1, plot_rejected=False, 
-                  avg_start_time=None, avg_end_time=None, **kwargs):
+                  disp_rejected=None, frame_skip=1, avg_start_time=None, avg_end_time=None, **kwargs):
     
     # Define a time array
     n_corrs = disp.shape[0]
@@ -226,9 +225,8 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
 
     # Set up save path if subfolder is specified
     if proc_path is not None and subfolder is not None and not test_mode:
-        save_path = os.path.join(proc_path, subfolder)
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+        from .io import init_subfolder
+        save_path = init_subfolder(proc_path, subfolder, debug=test_mode)
     else:
         if mode == "all":
             # Error: we don't want to save all images to the root folder
@@ -282,7 +280,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         ax.plot(vy, y_pos, '-o', c=cvd.get_color(0), label='vy')
         
         # Plot rejected points if provided and enabled
-        if plot_rejected and vel_rejected is not None:
+        if vel_rejected is not None:
             vx_rejected = vel_rejected[frame_idx, :, :, :, 1]  # All peaks for vx
             vy_rejected = vel_rejected[frame_idx, :, :, :, 0]  # All peaks for vy
             
@@ -308,39 +306,42 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
     
     # Process frames
     if mode == "average":
-        # Average mode: compute mean and std over the specified time range
+        # Average mode: compute median and IQR over the specified time range
         y_pos = win_pos[:, 0, 0] * res * 1000
         
         # Extract velocity data for the specified frames
         vx_data = vel[frames_to_plot, :, 0, 1]  # Shape: (n_frames, n_windows)
         vy_data = vel[frames_to_plot, :, 0, 0]  # Shape: (n_frames, n_windows)
         
-        # Compute mean and standard deviation across frames
-        vx_mean = np.nanmean(vx_data, axis=0)
-        vx_std = np.nanstd(vx_data, axis=0)
-        vy_mean = np.nanmean(vy_data, axis=0)
-        vy_std = np.nanstd(vy_data, axis=0)
+        # Compute median and interquartile range across frames
+        vx_median = np.nanmedian(vx_data, axis=0)
+        vx_q25 = np.nanpercentile(vx_data, 25, axis=0)
+        vx_q75 = np.nanpercentile(vx_data, 75, axis=0)
+        
+        vy_median = np.nanmedian(vy_data, axis=0)
+        vy_q25 = np.nanpercentile(vy_data, 25, axis=0)
+        vy_q75 = np.nanpercentile(vy_data, 75, axis=0)
         
         # Create figure for average profile
         fig, ax = plt.subplots(figsize=(7, 4))
         
-        # Plot mean profiles
-        ax.plot(vx_mean, y_pos, '-o', c=cvd.get_color(1), label='vx (mean)', linewidth=2)
-        ax.plot(vy_mean, y_pos, '-o', c=cvd.get_color(0), label='vy (mean)', linewidth=2)
+        # Plot median profiles
+        ax.plot(vx_median, y_pos, '-o', c=cvd.get_color(1), label='vx (median)', linewidth=2)
+        ax.plot(vy_median, y_pos, '-o', c=cvd.get_color(0), label='vy (median)', linewidth=2)
         
-        # Add shaded regions for standard deviation
-        ax.fill_betweenx(y_pos, vx_mean - vx_std, vx_mean + vx_std, 
-                        color=cvd.get_color(1), alpha=0.3, label='vx ± 1σ')
-        ax.fill_betweenx(y_pos, vy_mean - vy_std, vy_mean + vy_std, 
-                        color=cvd.get_color(0), alpha=0.3, label='vy ± 1σ')
+        # Add shaded regions for interquartile range
+        ax.fill_betweenx(y_pos, vx_q25, vx_q75, 
+                        color=cvd.get_color(1), alpha=0.3, label='vx IQR')
+        ax.fill_betweenx(y_pos, vy_q25, vy_q75, 
+                        color=cvd.get_color(0), alpha=0.3, label='vy IQR')
         
         # Optionally plot rejected data (average of all rejected points in time range)
-        if plot_rejected:
+        if disp_rejected is not None:
             raise NotImplementedError("Plotting rejected data in average mode is not implemented.")
         
         ax.set_xlabel('Velocity (m/s)')
         ax.set_ylabel('y position (mm)')
-        ax.set_title(f'Average velocity profiles ({avg_start_time*1000:.0f}-{avg_end_time*1000:.0f} ms, n={len(frames_to_plot)})')
+        ax.set_title(f'Median velocity profiles ({avg_start_time*1000:.0f}-{avg_end_time*1000:.0f} ms, n={len(frames_to_plot)})')
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         ax.grid()
         ax.set(**kwargs)
@@ -348,7 +349,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         
         # Save if path is specified
         if proc_path is not None and file_name is not None and not test_mode:
-            save_cfig(proc_path, file_name + "_avg", test_mode=test_mode, verbose=True)
+            save_cfig(proc_path, file_name + "_median", test_mode=test_mode, verbose=True)
         
         return fig, ax
         
