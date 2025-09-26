@@ -249,11 +249,11 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
     
     # Set up video writer if needed
     if mode == "video":
-        fig_video, ax_video = plt.subplots(figsize=(10, 6))
+        fig_video, ax_video = plt.subplots(figsize=(6, 4))
         plt.tight_layout()  # Minimize borders for video frames
         writer = ani.FFMpegWriter(fps=10)
         video_path = os.path.join(proc_path, file_name+'.mp4')
-        video_context = writer.saving(fig_video, video_path, dpi=150)
+        video_context = writer.saving(fig_video, video_path, dpi=300)
         frames_iter = trange(len(frames_to_plot), desc='Rendering video     ')
     else:
         video_context = None
@@ -307,7 +307,7 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
     else:
         # Plot mode (random or all)
         for frame_idx in frames_iter:
-            fig, ax = plt.subplots(figsize=(10, 6))
+            fig, ax = plt.subplots(figsize=(6, 4))
             plot_frame(frame_idx, ax)
             
             # Save if path is specified
