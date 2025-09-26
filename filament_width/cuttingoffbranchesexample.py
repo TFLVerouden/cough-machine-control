@@ -387,7 +387,7 @@ def pixel_values(pixels,image,dist,x,y,normal, target_y = 0.8, tolerance = 0.02)
     ####Method 2: Just linear interpolating
     #####
     non_exact_match_eps = 1e-6
-    target_y = 0.8 + non_exact_match_eps
+    target_y = target_y + non_exact_match_eps
 
     dy = pix_val - target_y
     crossings = np.where(dy[:-1] * dy[1:] < 0)[0]
@@ -513,7 +513,7 @@ def filament_file(
                     first_file = False
 
                 cropped = img[:,cropped_value:cropped_value+window_size]
-                
+         
                 ret,thresh = cv.threshold(255-cropped,255-mean_val+thresh_factor,255,cv.THRESH_TOZERO)
 
                 
@@ -568,12 +568,14 @@ def filament_file(
 
 
 
+               
                 dist = cv.distanceTransform(contour_mask,cv.DIST_L2,5)
+                plt.imshow(dist)
                 mask_skeleton= skeletonize(dist>0)==1
                 dist[~mask_skeleton] =0
                 overlay[dist!=0] = 255
                 dist_transform[dist!=0] = dist[dist!=0]
-
+             
                 frame = np.hstack([thresh, contour_mask, overlay])
                 frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
                 filename = os.path.join(output_folder_tommie, f"frame_{i:04d}.png")
@@ -797,7 +799,7 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=1)
+    filament_val =main(folder,selected_image=800,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
     aa
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"

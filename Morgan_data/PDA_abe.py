@@ -7,6 +7,8 @@ from matplotlib.lines import Line2D
 from scipy import stats
 from scipy.optimize import curve_fit
 import sys
+from scipy.special import gamma as gamma_func
+from scipy.stats import lognorm
 cwd = os.path.dirname(os.path.abspath(__file__))
 print(cwd)
 parent_dir = os.path.dirname(cwd)
@@ -42,6 +44,46 @@ def log_normal_fit(d, bin_edges):
     pdf_fit = pdf_fit / np.sum(pdf_fit*dx) #normalize like a pdf
 
     return x_fit, pdf_fit, mu, sigma
+
+
+
+def gamma_pdf(x, m, n):
+    x = np.array(x)
+    pdf = (x**(m-1) * np.exp(-x/n)) / (gamma_func(m) * n**m)
+    pdf[x <= 0] = 0
+    return pdf
+
+def villermaux_mixture(x, w, n1, n2, m1,m2):
+    """
+    2-component gamma mixture for Villermaux distributions.
+
+    Parameters:
+    - x: data points
+    - w: weight of first component (0 < w < 1)
+    - n1: scale of first gamma
+    - n2: scale of second gamma
+    - fixed_m: if not None, fix m1 = m2 = fixed_m
+ 
+    """
+
+
+
+
+    return w * gamma_pdf(x, m1, n1) + (1 - w) * gamma_pdf(x, m2, n2)
+
+def villermaux_mixture_fixed(x, w, n1, n2, m_fixed=4):
+    """
+    2-component gamma mixture with fixed shape parameter m.
+    Parameters:
+    - x: data points
+    - w: weight of first component
+    - n1: scale of first gamma
+    - n2: scale of second gamma
+    - m_fixed: fixed shape parameter (default 4)
+    """
+    m1 = 6
+    m2 = 6
+    return w * gamma_pdf(x, m1, n1) + (1 - w) * gamma_pdf(x, m2, n2)
 
 # -------------------- Settings --------------------
 plt.rcParams.update({"font.family": "Times New Roman", "font.size": 14})
@@ -117,14 +159,32 @@ def plot_hist_and_fit(stats_all, label_list, pdf_type="all", ylim=(0, 0.13)):
     plt.figure(figsize=(6,4))
     for cc, stat in enumerate(stats_all):
         pdf = stat[f'pdf_{pdf_type}']
-        
-        plt.step(d_bins, pdf, where='mid',color=colors[cc]) # plotting the histogram as bin_centers in the middle
-        x_fit, pdf_fit, mu_d, sigma_d = log_normal_fit(stat[f'd_{pdf_type}'], d_edges) #fitting
+        # Initial guesses for parameters: w, m1, n1, m2, n2
+        # p0 = [0.5, 4, 4, 2, 3]
+        # bounds = ([0, 0, 0, 0, 0], [1, np.inf, np.inf, np.inf, np.inf])
+        p0 = [0.5, 4, 4]  # initial guess for w, n1, n2
+        bounds = ([0, 0, 0], [1, np.inf, np.inf])   
+        m_fixed=4
+        popt_g, pcov_g = curve_fit(villermaux_mixture_fixed, d_bins, pdf, p0=p0, bounds=bounds)
+        # popt_g, pcov_g = curve_fit(villermaux_mixture, d_bins, pdf, p0=p0, bounds=bounds)
+        # w_fit, m1_fit, n1_fit, m2_fit, n2_fit = popt_g
+        w_fit, n1_fit, n2_fit = popt_g
+        #plt.step(d_bins, pdf, where='mid',color=colors[cc]) # plotting the histogram as bin_centers in the middle
+        plt.scatter(d_bins, pdf,color=colors[cc]) # plotting the histogram as bin_centers in the middle
         popt, pcov = curve_fit(log_normal, d_bins, pdf)
+       
+        residuals_lognormal = np.sum((pdf - log_normal(d_bins, *popt))**2)
+        #print(residuals_lognormal)
+ 
         plt.plot(d_bins, log_normal(d_bins, *popt), '--',color= colors[cc],
-         label='fit: mu=%5.3f, sigma=%5.3f' % tuple(popt))
-        plt.plot(x_fit, pdf_fit, ':',color = colors[cc],
-                 label=f'Calculated {label_list[cc]}, \n mu={mu_d:.1f} μm, \n std={sigma_d:.1f} μm') #plotting the fit
+         label=f'{label_list[cc]} log normal,  lsq: {residuals_lognormal:.5f}')
+       # popt, pcov = curve_fit(gamma_pdf, d_bins, pdf, p0=[1.0, 1.0], bounds=(0, np.inf))
+        residuals_gamma= np.sum((pdf - villermaux_mixture_fixed(d_bins, *popt_g))**2)
+        #plt.plot(d_bins, villermaux_mixture_fixed(d_bins, *popt_g), '-x', color=colors[cc],
+                #label=f'Mixture fit:  m1={m_fixed:.2f} m2={m_fixed:.2f}, lsq: {residuals_gamma:.5f}')
+
+        # plt.plot(x_fit, pdf_fit, ':',color = colors[cc],
+        #          label=f'Calculated {label_list[cc]}, \n mu={mu_d:.1f} μm, \n std={sigma_d:.1f} μm') #plotting the fit
     plt.title(f"{pdf_type}")
     plt.xscale("log")
     plt.xlabel(r"$d$ [$\mu$m]")
@@ -133,7 +193,7 @@ def plot_hist_and_fit(stats_all, label_list, pdf_type="all", ylim=(0, 0.13)):
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.legend(fontsize=14, frameon=False)
     plt.tight_layout()
-    plt.savefig(savepath+ f"\\{pdf_type}.svg")
+    #plt.savefig(savepath+ f"\\{pdf_type}.svg")
     plt.show()
 
 # -------------------- Plot All Cases --------------------
@@ -177,7 +237,7 @@ def plot_individual_measurements(PDA_case, label):
     plt.title(label)
     plt.legend(handles, labels, loc='upper right', frameon=True,ncols=2,fontsize=8)
     plt.tight_layout()
-    plt.savefig(savepath+ f"\\indvidual_{label}.svg")
+    #plt.savefig(savepath+ f"\\indvidual_{label}.svg")
     plt.show()
 
 
