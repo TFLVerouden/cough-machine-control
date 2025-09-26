@@ -1,0 +1,892 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+
+(*** Wolfram Notebook File ***)
+(* http://www.wolfram.com/nb *)
+
+(* CreatedBy='Mathematica 13.3' *)
+
+(*CacheID: 234*)
+(* Internal cache information:
+NotebookFileLineBreakTest
+NotebookFileLineBreakTest
+NotebookDataPosition[       158,          7]
+NotebookDataLength[     37221,        884]
+NotebookOptionsPosition[     36276,        859]
+NotebookOutlinePosition[     36679,        875]
+CellTagsIndexPosition[     36636,        872]
+WindowFrame->Normal*)
+
+(* Beginning of Notebook Content *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", 
+   RowBox[{"Compound", "-", 
+    RowBox[{"gamma", "/", "K"}], "-", 
+    RowBox[{"distribution", " ", 
+     RowBox[{"(", 
+      RowBox[{"common", " ", "form"}], ")"}]}]}], "*)"}], 
+  RowBox[{
+   RowBox[{
+    RowBox[{"ClearAll", "[", 
+     RowBox[{"P", ",", "m", ",", "n", ",", "x"}], "]"}], ";"}], 
+   "\[IndentingNewLine]", "\n", 
+   RowBox[{
+    RowBox[{
+     RowBox[{"P", "[", 
+      RowBox[{"m_", ",", "n_", ",", "x_"}], "]"}], ":=", 
+     RowBox[{"Module", "[", 
+      RowBox[{
+       RowBox[{"{", "prefactor", "}"}], ",", 
+       RowBox[{
+        RowBox[{"prefactor", "=", 
+         RowBox[{"2", "*", 
+          RowBox[{
+           RowBox[{
+            RowBox[{"(", 
+             RowBox[{"m", "*", "n"}], ")"}], "^", 
+            RowBox[{"(", 
+             RowBox[{
+              RowBox[{"(", 
+               RowBox[{"m", "+", "n"}], ")"}], "/", "2"}], ")"}]}], "/", 
+           RowBox[{"(", 
+            RowBox[{
+             RowBox[{"Gamma", "[", "m", "]"}], "*", 
+             RowBox[{"Gamma", "[", "n", "]"}]}], ")"}]}]}]}], ";", 
+        "\[IndentingNewLine]", 
+        RowBox[{"prefactor", "*", 
+         RowBox[{"x", "^", 
+          RowBox[{"(", 
+           RowBox[{
+            RowBox[{
+             RowBox[{"(", 
+              RowBox[{"m", "+", "n"}], ")"}], "/", "2"}], "-", "1"}], ")"}]}],
+          "*", 
+         RowBox[{"BesselK", "[", 
+          RowBox[{
+           RowBox[{"m", "-", "n"}], ",", 
+           RowBox[{"2", "*", 
+            RowBox[{"Sqrt", "[", 
+             RowBox[{"m", "*", "n", "*", "x"}], "]"}]}]}], "]"}]}]}]}], 
+      "]"}]}], ";"}], "\n", "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{"Quick", " ", "normalization", " ", "check", " ", 
+      RowBox[{
+       RowBox[{"(", "numerical", ")"}], ".", 
+       RowBox[{"WARNING", ":", 
+        RowBox[{
+        "integral", " ", "may", " ", "be", " ", "slow", " ", "for", " ", 
+         "some", " ", "m"}]}]}]}], ",", 
+     RowBox[{"n", ";", 
+      RowBox[{
+      "adjust", " ", "WorkingPrecision", " ", "or", " ", "Method", " ", "if", 
+       " ", 
+       RowBox[{"needed", "."}]}]}]}], "*)"}], "\[IndentingNewLine]", 
+   RowBox[{
+    RowBox[{"NormalizationCheck", "[", 
+     RowBox[{
+      RowBox[{"m_", "?", "Positive"}], ",", 
+      RowBox[{"n_", "?", "Positive"}]}], "]"}], ":=", 
+    RowBox[{"Quiet", "@", 
+     RowBox[{"NIntegrate", "[", 
+      RowBox[{
+       RowBox[{"P", "[", 
+        RowBox[{"m", ",", "n", ",", "x"}], "]"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"x", ",", "0", ",", "Infinity"}], "}"}], ",", 
+       RowBox[{"MaxRecursion", "->", "20"}], ",", 
+       RowBox[{"WorkingPrecision", "->", "12"}], ",", 
+       RowBox[{"Method", "->", "\"\<GlobalAdaptive\>\""}]}], "]"}]}]}], 
+   "\[IndentingNewLine]", "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{
+      RowBox[{"Example", ":", 
+       RowBox[{"numeric", " ", "check", " ", "for", " ", "m"}]}], "=", "2"}], 
+     ",", 
+     RowBox[{"n", "=", "3"}]}], "*)"}], "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{
+     RowBox[{"Print", "[", 
+      RowBox[{"\"\<Normalization for m=2, n=3: \>\"", ",", 
+       RowBox[{"NormalizationCheck", "[", 
+        RowBox[{"2", ",", "3"}], "]"}]}], "]"}], ";"}], "*)"}], 
+   "\[IndentingNewLine]", "\n", "\[IndentingNewLine]", 
+   RowBox[{"(*", 
+    RowBox[{
+    "Interactive", " ", "Manipulate", " ", "for", " ", "visualization"}], 
+    "*)"}], "\[IndentingNewLine]", 
+   RowBox[{"Manipulate", "[", 
+    RowBox[{
+     RowBox[{"Column", "[", 
+      RowBox[{"{", 
+       RowBox[{
+        RowBox[{"Row", "[", 
+         RowBox[{"{", 
+          RowBox[{"\"\<m = \>\"", ",", "m", ",", 
+           RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<n = \>\"", ",", 
+           "n"}], "}"}], "]"}], ",", 
+        RowBox[{"Plot", "[", 
+         RowBox[{
+          RowBox[{"Evaluate", "[", 
+           RowBox[{"P", "[", 
+            RowBox[{"m", ",", "n", ",", "x"}], "]"}], "]"}], ",", 
+          RowBox[{"{", 
+           RowBox[{"x", ",", "xMin", ",", "xMax"}], "}"}], ",", 
+          RowBox[{"PlotRange", "->", "plotRange"}], ",", 
+          RowBox[{"AxesLabel", "->", 
+           RowBox[{"{", 
+            RowBox[{"\"\<x\>\"", ",", "\"\<P(x)\>\""}], "}"}]}], ",", 
+          RowBox[{"PlotLabel", "->", 
+           RowBox[{"Row", "[", 
+            RowBox[{"{", 
+             RowBox[{"\"\<P_{\>\"", ",", 
+              RowBox[{"ToString", "[", "m", "]"}], ",", "\"\<,\>\"", ",", 
+              RowBox[{"ToString", "[", "n", "]"}], ",", 
+              "\"\<}(x) \[LongDash] linear scale\>\""}], "}"}], "]"}]}], ",", 
+          RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+        RowBox[{"LogPlot", "[", 
+         RowBox[{
+          RowBox[{"Evaluate", "[", 
+           RowBox[{"P", "[", 
+            RowBox[{"m", ",", "n", ",", "x"}], "]"}], "]"}], ",", 
+          RowBox[{"{", 
+           RowBox[{"x", ",", "xMin", ",", "xMax"}], "}"}], ",", 
+          RowBox[{"PlotRange", "->", "plotRange"}], ",", 
+          RowBox[{"AxesLabel", "->", 
+           RowBox[{"{", 
+            RowBox[{"\"\<x\>\"", ",", "\"\<P(x)\>\""}], "}"}]}], ",", 
+          RowBox[{"PlotLabel", "->", "\"\<Log scale\>\""}], ",", 
+          RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+        RowBox[{"Row", "[", 
+         RowBox[{"{", 
+          RowBox[{
+           RowBox[{"Button", "[", 
+            RowBox[{"\"\<Check normalization (numeric)\>\"", ",", 
+             RowBox[{
+              RowBox[{"Print", "[", 
+               RowBox[{"\"\<Integral = \>\"", ",", 
+                RowBox[{"NormalizationCheck", "[", 
+                 RowBox[{"m", ",", "n"}], "]"}]}], "]"}], ";"}]}], "]"}], ",", 
+           RowBox[{"Spacer", "[", "20", "]"}], ",", 
+           "\"\<Integral (approx) = \>\"", ",", 
+           RowBox[{"Dynamic", "[", 
+            RowBox[{"NumberForm", "[", 
+             RowBox[{
+              RowBox[{"Quiet", "@", 
+               RowBox[{"NIntegrate", "[", 
+                RowBox[{
+                 RowBox[{"P", "[", 
+                  RowBox[{"m", ",", "n", ",", "x"}], "]"}], ",", 
+                 RowBox[{"{", 
+                  RowBox[{"x", ",", "0", ",", "Infinity"}], "}"}], ",", 
+                 RowBox[{"MaxRecursion", "->", "12"}], ",", 
+                 RowBox[{"WorkingPrecision", "->", "10"}]}], "]"}]}], ",", 
+              RowBox[{"{", 
+               RowBox[{"6", ",", "5"}], "}"}]}], "]"}], "]"}]}], "}"}], 
+         "]"}]}], "}"}], "]"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"m", ",", "2", ",", "\"\<m\>\""}], "}"}], ",", "0.1", ",", 
+       "10", ",", 
+       RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"n", ",", "3", ",", "\"\<n\>\""}], "}"}], ",", "0.1", ",", 
+       "10", ",", 
+       RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"xMin", ",", "0.001", ",", "\"\<x min\>\""}], "}"}], ",", 
+       RowBox[{"10", "^", 
+        RowBox[{"-", "6"}]}], ",", "1", ",", 
+       RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"xMax", ",", "50", ",", "\"\<x max\>\""}], "}"}], ",", "1", 
+       ",", "500", ",", 
+       RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"{", 
+        RowBox[{"plotRange", ",", "Automatic", ",", "\"\<PlotRange\>\""}], 
+        "}"}], ",", 
+       RowBox[{"{", 
+        RowBox[{"Automatic", ",", "All"}], "}"}]}], "}"}], ",", 
+     RowBox[{"ControlPlacement", "->", "Left"}]}], "]"}]}]}]], "Input",
+ CellChangeTimes->{{3.967719631806662*^9, 3.967719631806662*^9}},
+ CellLabel->"In[29]:=",ExpressionUUID->"54ccabde-5210-4d45-813c-52c1d0c0225a"],
+
+Cell[BoxData[
+ TagBox[
+  StyleBox[
+   DynamicModuleBox[{$CellContext`m$$ = 6.8, $CellContext`n$$ = 
+    0.1, $CellContext`plotRange$$ = Automatic, $CellContext`xMax$$ = 
+    50, $CellContext`xMin$$ = 0.001, Typeset`show$$ = True, 
+    Typeset`bookmarkList$$ = {}, Typeset`bookmarkMode$$ = "Menu", 
+    Typeset`animator$$, Typeset`animvar$$ = 1, Typeset`name$$ = 
+    "\"untitled\"", Typeset`specs$$ = {{{
+       Hold[$CellContext`m$$], 2, "m"}, 0.1, 10}, {{
+       Hold[$CellContext`n$$], 3, "n"}, 0.1, 10}, {{
+       Hold[$CellContext`xMin$$], 0.001, "x min"}, 
+      Rational[1, 1000000], 1}, {{
+       Hold[$CellContext`xMax$$], 50, "x max"}, 1, 500}, {{
+       Hold[$CellContext`plotRange$$], Automatic, "PlotRange"}, {
+      Automatic, All}}}, Typeset`size$$ = {
+    576., {397.08373784999014`, 402.8156712755433}}, Typeset`update$$ = 0, 
+    Typeset`initDone$$, Typeset`skipInitDone$$ = True}, 
+    DynamicBox[Manipulate`ManipulateBoxes[
+     1, StandardForm, 
+      "Variables" :> {$CellContext`m$$ = 2, $CellContext`n$$ = 
+        3, $CellContext`plotRange$$ = Automatic, $CellContext`xMax$$ = 
+        50, $CellContext`xMin$$ = 0.001}, "ControllerVariables" :> {}, 
+      "OtherVariables" :> {
+       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
+        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
+        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
+         Typeset`skipInitDone$$}, "Body" :> Column[{
+         Row[{"m = ", $CellContext`m$$, 
+           Spacer[20], "n = ", $CellContext`n$$}], 
+         Plot[
+          Evaluate[
+           $CellContext`P[$CellContext`m$$, $CellContext`n$$, \
+$CellContext`x]], {$CellContext`x, $CellContext`xMin$$, $CellContext`xMax$$}, 
+          PlotRange -> $CellContext`plotRange$$, AxesLabel -> {"x", "P(x)"}, 
+          PlotLabel -> Row[{"P_{", 
+             ToString[$CellContext`m$$], ",", 
+             ToString[$CellContext`n$$], "}(x) \[LongDash] linear scale"}], 
+          ImageSize -> Large], 
+         LogPlot[
+          Evaluate[
+           $CellContext`P[$CellContext`m$$, $CellContext`n$$, \
+$CellContext`x]], {$CellContext`x, $CellContext`xMin$$, $CellContext`xMax$$}, 
+          PlotRange -> $CellContext`plotRange$$, AxesLabel -> {"x", "P(x)"}, 
+          PlotLabel -> "Log scale", ImageSize -> Large], 
+         Row[{
+           Button["Check normalization (numeric)", Print["Integral = ", 
+              $CellContext`NormalizationCheck[$CellContext`m$$, \
+$CellContext`n$$]]; Null], 
+           Spacer[20], "Integral (approx) = ", 
+           Dynamic[
+            NumberForm[
+             Quiet[
+              NIntegrate[
+               $CellContext`P[$CellContext`m$$, $CellContext`n$$, \
+$CellContext`x], {$CellContext`x, 0, Infinity}, MaxRecursion -> 12, 
+               WorkingPrecision -> 10]], {6, 5}]]}]}], 
+      "Specifications" :> {{{$CellContext`m$$, 2, "m"}, 0.1, 10, Appearance -> 
+         "Labeled"}, {{$CellContext`n$$, 3, "n"}, 0.1, 10, Appearance -> 
+         "Labeled"}, {{$CellContext`xMin$$, 0.001, "x min"}, 
+         Rational[1, 1000000], 1, Appearance -> 
+         "Labeled"}, {{$CellContext`xMax$$, 50, "x max"}, 1, 500, Appearance -> 
+         "Labeled"}, {{$CellContext`plotRange$$, Automatic, "PlotRange"}, {
+         Automatic, All}}}, "Options" :> {ControlPlacement -> Left}, 
+      "DefaultOptions" :> {}],
+     ImageSizeCache->{910., {427.6340332872234, 433.3659667127766}},
+     SingleEvaluation->True],
+    Deinitialization:>None,
+    DynamicModuleValues:>{},
+    SynchronousInitialization->True,
+    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
+    UnsavedVariables:>{Typeset`initDone$$},
+    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
+   Deployed->True,
+   StripOnInput->False],
+  Manipulate`InterpretManipulate[1]]], "Output",
+ CellChangeTimes->{3.9677196397638707`*^9, 3.9677774366069694`*^9, 
+  3.967777611663847*^9, 3.967798130188602*^9},
+ CellLabel->"Out[32]=",ExpressionUUID->"dc74144e-77ce-48d4-b312-0d2a5b959d09"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"ClearAll", "[", 
+   RowBox[{"GammaMix", ",", "NormalizationCheck"}], "]"}], "\n", 
+  "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{"Define", " ", "mixture", " ", "of", " ", "two", " ", "gammas"}], 
+   "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"GammaMix", "[", 
+     RowBox[{
+     "w_", ",", "\[Alpha]1_", ",", "\[Beta]1_", ",", "\[Alpha]2_", ",", 
+      "\[Beta]2_", ",", "x_"}], "]"}], ":=", 
+    RowBox[{
+     RowBox[{"w", "*", 
+      RowBox[{"PDF", "[", 
+       RowBox[{
+        RowBox[{"GammaDistribution", "[", 
+         RowBox[{"\[Alpha]1", ",", "\[Beta]1"}], "]"}], ",", "x"}], "]"}]}], 
+     "+", 
+     RowBox[{
+      RowBox[{"(", 
+       RowBox[{"1", "-", "w"}], ")"}], "*", 
+      RowBox[{"PDF", "[", 
+       RowBox[{
+        RowBox[{"GammaDistribution", "[", 
+         RowBox[{"\[Alpha]2", ",", "\[Beta]2"}], "]"}], ",", "x"}], 
+       "]"}]}]}]}], ";"}], "\n", "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{"Normalization", " ", 
+    RowBox[{"check", ":", 
+     RowBox[{
+      RowBox[{"integral", " ", "should", " ", "be"}], "\[TildeTilde]", 
+      "1"}]}]}], "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"NormalizationCheck", "[", 
+    RowBox[{
+    "w_", ",", "\[Alpha]1_", ",", "\[Beta]1_", ",", "\[Alpha]2_", ",", 
+     "\[Beta]2_"}], "]"}], ":=", 
+   RowBox[{"Quiet", "@", 
+    RowBox[{"NIntegrate", "[", 
+     RowBox[{
+      RowBox[{"GammaMix", "[", 
+       RowBox[{
+       "w", ",", "\[Alpha]1", ",", "\[Beta]1", ",", "\[Alpha]2", ",", 
+        "\[Beta]2", ",", "x"}], "]"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"x", ",", "0", ",", "\[Infinity]"}], "}"}], ",", 
+      RowBox[{"MaxRecursion", "->", "20"}], ",", 
+      RowBox[{"WorkingPrecision", "->", "12"}], ",", 
+      RowBox[{"Method", "->", "\"\<GlobalAdaptive\>\""}]}], "]"}]}]}], "\n", 
+  "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{"Interactive", " ", "Manipulate"}], 
+   "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{"Manipulate", "[", 
+  RowBox[{
+   RowBox[{"Column", "[", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"Row", "[", 
+       RowBox[{"{", 
+        RowBox[{"\"\<w = \>\"", ",", "w", ",", 
+         RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Alpha]1 = \>\"", ",",
+          "\[Alpha]1", ",", 
+         RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Beta]1 = \>\"", ",", 
+         "\[Beta]1", ",", 
+         RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Alpha]2 = \>\"", ",",
+          "\[Alpha]2", ",", 
+         RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Beta]2 = \>\"", ",", 
+         "\[Beta]2"}], "}"}], "]"}], ",", 
+      RowBox[{"Plot", "[", 
+       RowBox[{
+        RowBox[{"Evaluate", "[", 
+         RowBox[{"GammaMix", "[", 
+          RowBox[{
+          "w", ",", "\[Alpha]1", ",", "\[Beta]1", ",", "\[Alpha]2", ",", 
+           "\[Beta]2", ",", "x"}], "]"}], "]"}], ",", 
+        RowBox[{"{", 
+         RowBox[{"x", ",", "xMin", ",", "xMax"}], "}"}], ",", 
+        RowBox[{"PlotRange", "->", "plotRange"}], ",", 
+        RowBox[{"ScalingFunctions", "->", 
+         RowBox[{"{", 
+          RowBox[{"\"\<Log10\>\"", ",", "None"}], "}"}]}], ",", 
+        RowBox[{"AxesLabel", "->", 
+         RowBox[{"{", 
+          RowBox[{"\"\<x (log scale)\>\"", ",", "\"\<P(x)\>\""}], "}"}]}], 
+        ",", 
+        RowBox[{
+        "PlotLabel", "->", "\"\<Mixture of two gammas (x logarithmic)\>\""}], 
+        ",", 
+        RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+      RowBox[{"Row", "[", 
+       RowBox[{"{", 
+        RowBox[{
+         RowBox[{"Button", "[", 
+          RowBox[{"\"\<Check normalization (numeric)\>\"", ",", 
+           RowBox[{
+            RowBox[{"Print", "[", 
+             RowBox[{"\"\<Integral = \>\"", ",", 
+              RowBox[{"NormalizationCheck", "[", 
+               RowBox[{
+               "w", ",", "\[Alpha]1", ",", "\[Beta]1", ",", "\[Alpha]2", ",", 
+                "\[Beta]2"}], "]"}]}], "]"}], ";"}]}], "]"}], ",", 
+         RowBox[{"Spacer", "[", "20", "]"}], ",", 
+         "\"\<Integral (approx) = \>\"", ",", 
+         RowBox[{"Dynamic", "[", 
+          RowBox[{"NumberForm", "[", 
+           RowBox[{
+            RowBox[{"Quiet", "@", 
+             RowBox[{"NIntegrate", "[", 
+              RowBox[{
+               RowBox[{"GammaMix", "[", 
+                RowBox[{
+                "w", ",", "\[Alpha]1", ",", "\[Beta]1", ",", "\[Alpha]2", ",",
+                  "\[Beta]2", ",", "x"}], "]"}], ",", 
+               RowBox[{"{", 
+                RowBox[{"x", ",", "0", ",", "\[Infinity]"}], "}"}], ",", 
+               RowBox[{"MaxRecursion", "->", "12"}], ",", 
+               RowBox[{"WorkingPrecision", "->", "10"}]}], "]"}]}], ",", 
+            RowBox[{"{", 
+             RowBox[{"6", ",", "5"}], "}"}]}], "]"}], "]"}]}], "}"}], "]"}]}],
+      "}"}], "]"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"w", ",", "0.5", ",", "\"\<weight w\>\""}], "}"}], ",", "0", 
+     ",", "1", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\[Alpha]1", ",", "2", ",", "\"\<\[Alpha]1\>\""}], "}"}], ",", 
+     "0.1", ",", "10", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\[Beta]1", ",", "1", ",", "\"\<\[Beta]1\>\""}], "}"}], ",", 
+     "0.1", ",", "10", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\[Alpha]2", ",", "5", ",", "\"\<\[Alpha]2\>\""}], "}"}], ",", 
+     "0.1", ",", "10", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"\[Beta]2", ",", "2", ",", "\"\<\[Beta]2\>\""}], "}"}], ",", 
+     "0.1", ",", "10", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"xMin", ",", "0.001", ",", "\"\<x min\>\""}], "}"}], ",", 
+     RowBox[{"10", "^", 
+      RowBox[{"-", "6"}]}], ",", "1", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"xMax", ",", "50", ",", "\"\<x max\>\""}], "}"}], ",", "1", ",",
+      "500", ",", 
+     RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+   RowBox[{"{", 
+    RowBox[{
+     RowBox[{"{", 
+      RowBox[{"plotRange", ",", "Automatic", ",", "\"\<PlotRange\>\""}], 
+      "}"}], ",", 
+     RowBox[{"{", 
+      RowBox[{"Automatic", ",", "All"}], "}"}]}], "}"}], ",", 
+   RowBox[{"ControlPlacement", "->", "Left"}]}], "]"}], "\n"}], "Input",
+ CellChangeTimes->{{3.967777586265232*^9, 3.9677775894416494`*^9}, {
+  3.9677779182170568`*^9, 3.967777919445144*^9}},
+ CellLabel->"In[33]:=",ExpressionUUID->"0a36787a-d0f3-4fc5-ba24-a02ecb23bb8c"],
+
+Cell[BoxData[
+ TagBox[
+  StyleBox[
+   DynamicModuleBox[{$CellContext`plotRange$$ = Automatic, $CellContext`w$$ = 
+    0., $CellContext`xMax$$ = 77., $CellContext`xMin$$ = 
+    0.001, $CellContext`\[Alpha]1$$ = 2, $CellContext`\[Alpha]2$$ = 
+    5, $CellContext`\[Beta]1$$ = 1, $CellContext`\[Beta]2$$ = 2, 
+    Typeset`show$$ = True, Typeset`bookmarkList$$ = {}, 
+    Typeset`bookmarkMode$$ = "Menu", Typeset`animator$$, Typeset`animvar$$ = 
+    1, Typeset`name$$ = "\"untitled\"", Typeset`specs$$ = {{{
+       Hold[$CellContext`w$$], 0.5, "weight w"}, 0, 1}, {{
+       Hold[$CellContext`\[Alpha]1$$], 2, "\[Alpha]1"}, 0.1, 10}, {{
+       Hold[$CellContext`\[Beta]1$$], 1, "\[Beta]1"}, 0.1, 10}, {{
+       Hold[$CellContext`\[Alpha]2$$], 5, "\[Alpha]2"}, 0.1, 10}, {{
+       Hold[$CellContext`\[Beta]2$$], 2, "\[Beta]2"}, 0.1, 10}, {{
+       Hold[$CellContext`xMin$$], 0.001, "x min"}, 
+      Rational[1, 1000000], 1}, {{
+       Hold[$CellContext`xMax$$], 50, "x max"}, 1, 500}, {{
+       Hold[$CellContext`plotRange$$], Automatic, "PlotRange"}, {
+      Automatic, All}}}, Typeset`size$$ = {
+    576., {187.1723684254736, 192.90430185102676`}}, Typeset`update$$ = 0, 
+    Typeset`initDone$$, Typeset`skipInitDone$$ = True}, 
+    DynamicBox[Manipulate`ManipulateBoxes[
+     1, StandardForm, 
+      "Variables" :> {$CellContext`plotRange$$ = Automatic, $CellContext`w$$ = 
+        0.5, $CellContext`xMax$$ = 50, $CellContext`xMin$$ = 
+        0.001, $CellContext`\[Alpha]1$$ = 2, $CellContext`\[Alpha]2$$ = 
+        5, $CellContext`\[Beta]1$$ = 1, $CellContext`\[Beta]2$$ = 2}, 
+      "ControllerVariables" :> {}, 
+      "OtherVariables" :> {
+       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
+        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
+        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
+         Typeset`skipInitDone$$}, "Body" :> Column[{
+         Row[{"w = ", $CellContext`w$$, 
+           Spacer[20], "\[Alpha]1 = ", $CellContext`\[Alpha]1$$, 
+           Spacer[20], "\[Beta]1 = ", $CellContext`\[Beta]1$$, 
+           Spacer[20], "\[Alpha]2 = ", $CellContext`\[Alpha]2$$, 
+           Spacer[20], "\[Beta]2 = ", $CellContext`\[Beta]2$$}], 
+         Plot[
+          Evaluate[
+           $CellContext`GammaMix[$CellContext`w$$, $CellContext`\[Alpha]1$$, \
+$CellContext`\[Beta]1$$, $CellContext`\[Alpha]2$$, $CellContext`\[Beta]2$$, \
+$CellContext`x]], {$CellContext`x, $CellContext`xMin$$, $CellContext`xMax$$}, 
+          PlotRange -> $CellContext`plotRange$$, 
+          ScalingFunctions -> {"Log10", None}, 
+          AxesLabel -> {"x (log scale)", "P(x)"}, PlotLabel -> 
+          "Mixture of two gammas (x logarithmic)", ImageSize -> Large], 
+         Row[{
+           Button["Check normalization (numeric)", Print["Integral = ", 
+              $CellContext`NormalizationCheck[$CellContext`w$$, $CellContext`\
+\[Alpha]1$$, $CellContext`\[Beta]1$$, $CellContext`\[Alpha]2$$, $CellContext`\
+\[Beta]2$$]]; Null], 
+           Spacer[20], "Integral (approx) = ", 
+           Dynamic[
+            NumberForm[
+             Quiet[
+              NIntegrate[
+               $CellContext`GammaMix[$CellContext`w$$, \
+$CellContext`\[Alpha]1$$, $CellContext`\[Beta]1$$, $CellContext`\[Alpha]2$$, \
+$CellContext`\[Beta]2$$, $CellContext`x], {$CellContext`x, 0, Infinity}, 
+               MaxRecursion -> 12, WorkingPrecision -> 10]], {6, 5}]]}]}], 
+      "Specifications" :> {{{$CellContext`w$$, 0.5, "weight w"}, 0, 1, 
+         Appearance -> 
+         "Labeled"}, {{$CellContext`\[Alpha]1$$, 2, "\[Alpha]1"}, 0.1, 10, 
+         Appearance -> "Labeled"}, {{$CellContext`\[Beta]1$$, 1, "\[Beta]1"}, 
+         0.1, 10, Appearance -> 
+         "Labeled"}, {{$CellContext`\[Alpha]2$$, 5, "\[Alpha]2"}, 0.1, 10, 
+         Appearance -> "Labeled"}, {{$CellContext`\[Beta]2$$, 2, "\[Beta]2"}, 
+         0.1, 10, Appearance -> 
+         "Labeled"}, {{$CellContext`xMin$$, 0.001, "x min"}, 
+         Rational[1, 1000000], 1, Appearance -> 
+         "Labeled"}, {{$CellContext`xMax$$, 50, "x max"}, 1, 500, Appearance -> 
+         "Labeled"}, {{$CellContext`plotRange$$, Automatic, "PlotRange"}, {
+         Automatic, All}}}, "Options" :> {ControlPlacement -> Left}, 
+      "DefaultOptions" :> {}],
+     ImageSizeCache->{910., {217.63403328722342`, 223.36596671277658`}},
+     SingleEvaluation->True],
+    Deinitialization:>None,
+    DynamicModuleValues:>{},
+    SynchronousInitialization->True,
+    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
+    UnsavedVariables:>{Typeset`initDone$$},
+    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
+   Deployed->True,
+   StripOnInput->False],
+  Manipulate`InterpretManipulate[1]]], "Output",
+ CellChangeTimes->{3.967777590394801*^9, 3.967777921376006*^9, 
+  3.9677981443081455`*^9},
+ CellLabel->"Out[36]=",ExpressionUUID->"59bc57be-93fb-4312-b89c-618edd68b05a"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[{
+ RowBox[{
+  RowBox[{"ClearAll", "[", 
+   RowBox[{"LogNormalMix", ",", "NormalizationCheck"}], "]"}], "\n", 
+  "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{
+   "Define", " ", "mixture", " ", "of", " ", "two", " ", "lognormals"}], 
+   "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{
+    RowBox[{"LogNormalMix", "[", 
+     RowBox[{
+     "w_", ",", "\[Mu]1_", ",", "\[Sigma]1_", ",", "\[Mu]2_", ",", 
+      "\[Sigma]2_", ",", "x_"}], "]"}], ":=", 
+    RowBox[{
+     RowBox[{"w", "*", 
+      RowBox[{"PDF", "[", 
+       RowBox[{
+        RowBox[{"LogNormalDistribution", "[", 
+         RowBox[{"\[Mu]1", ",", "\[Sigma]1"}], "]"}], ",", "x"}], "]"}]}], 
+     "+", 
+     RowBox[{
+      RowBox[{"(", 
+       RowBox[{"1", "-", "w"}], ")"}], "*", 
+      RowBox[{"PDF", "[", 
+       RowBox[{
+        RowBox[{"LogNormalDistribution", "[", 
+         RowBox[{"\[Mu]2", ",", "\[Sigma]2"}], "]"}], ",", "x"}], "]"}]}]}]}],
+    ";"}], "\n", "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{"Normalization", " ", 
+    RowBox[{"check", ":", 
+     RowBox[{
+      RowBox[{"integral", " ", "should", " ", "be"}], "\[TildeTilde]", 
+      "1"}]}]}], "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{
+   RowBox[{"NormalizationCheck", "[", 
+    RowBox[{
+    "w_", ",", "\[Mu]1_", ",", "\[Sigma]1_", ",", "\[Mu]2_", ",", 
+     "\[Sigma]2_"}], "]"}], ":=", 
+   RowBox[{"Quiet", "@", 
+    RowBox[{"NIntegrate", "[", 
+     RowBox[{
+      RowBox[{"LogNormalMix", "[", 
+       RowBox[{
+       "w", ",", "\[Mu]1", ",", "\[Sigma]1", ",", "\[Mu]2", ",", "\[Sigma]2", 
+        ",", "x"}], "]"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"x", ",", "0", ",", "\[Infinity]"}], "}"}], ",", 
+      RowBox[{"MaxRecursion", "->", "20"}], ",", 
+      RowBox[{"WorkingPrecision", "->", "12"}], ",", 
+      RowBox[{"Method", "->", "\"\<GlobalAdaptive\>\""}]}], "]"}]}]}], "\n", 
+  "\[IndentingNewLine]", 
+  RowBox[{"(*", 
+   RowBox[{"Interactive", " ", "Manipulate"}], 
+   "*)"}]}], "\[IndentingNewLine]", 
+ RowBox[{
+  RowBox[{"Manipulate", "[", 
+   RowBox[{
+    RowBox[{"Column", "[", 
+     RowBox[{"{", 
+      RowBox[{
+       RowBox[{"Row", "[", 
+        RowBox[{"{", 
+         RowBox[{"\"\<w = \>\"", ",", "w", ",", 
+          RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Mu]1 = \>\"", ",", 
+          "\[Mu]1", ",", 
+          RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Sigma]1 = \>\"", 
+          ",", "\[Sigma]1", ",", 
+          RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Mu]2 = \>\"", ",", 
+          "\[Mu]2", ",", 
+          RowBox[{"Spacer", "[", "20", "]"}], ",", "\"\<\[Sigma]2 = \>\"", 
+          ",", "\[Sigma]2"}], "}"}], "]"}], ",", 
+       RowBox[{"Plot", "[", 
+        RowBox[{
+         RowBox[{"Evaluate", "[", 
+          RowBox[{"LogNormalMix", "[", 
+           RowBox[{
+           "w", ",", "\[Mu]1", ",", "\[Sigma]1", ",", "\[Mu]2", ",", 
+            "\[Sigma]2", ",", "x"}], "]"}], "]"}], ",", 
+         RowBox[{"{", 
+          RowBox[{"x", ",", "xMin", ",", "xMax"}], "}"}], ",", 
+         RowBox[{"PlotRange", "->", "plotRange"}], ",", 
+         RowBox[{"ScalingFunctions", "->", 
+          RowBox[{"{", 
+           RowBox[{"\"\<Log10\>\"", ",", "None"}], "}"}]}], ",", 
+         RowBox[{"AxesLabel", "->", 
+          RowBox[{"{", 
+           RowBox[{"\"\<x (log scale)\>\"", ",", "\"\<P(x)\>\""}], "}"}]}], 
+         ",", 
+         RowBox[{
+         "PlotLabel", "->", 
+          "\"\<Mixture of two lognormals (x logarithmic)\>\""}], ",", 
+         RowBox[{"ImageSize", "->", "Large"}]}], "]"}], ",", 
+       RowBox[{"Row", "[", 
+        RowBox[{"{", 
+         RowBox[{
+          RowBox[{"Button", "[", 
+           RowBox[{"\"\<Check normalization (numeric)\>\"", ",", 
+            RowBox[{
+             RowBox[{"Print", "[", 
+              RowBox[{"\"\<Integral = \>\"", ",", 
+               RowBox[{"NormalizationCheck", "[", 
+                RowBox[{
+                "w", ",", "\[Mu]1", ",", "\[Sigma]1", ",", "\[Mu]2", ",", 
+                 "\[Sigma]2"}], "]"}]}], "]"}], ";"}]}], "]"}], ",", 
+          RowBox[{"Spacer", "[", "20", "]"}], ",", 
+          "\"\<Integral (approx) = \>\"", ",", 
+          RowBox[{"Dynamic", "[", 
+           RowBox[{"NumberForm", "[", 
+            RowBox[{
+             RowBox[{"Quiet", "@", 
+              RowBox[{"NIntegrate", "[", 
+               RowBox[{
+                RowBox[{"LogNormalMix", "[", 
+                 RowBox[{
+                 "w", ",", "\[Mu]1", ",", "\[Sigma]1", ",", "\[Mu]2", ",", 
+                  "\[Sigma]2", ",", "x"}], "]"}], ",", 
+                RowBox[{"{", 
+                 RowBox[{"x", ",", "0", ",", "\[Infinity]"}], "}"}], ",", 
+                RowBox[{"MaxRecursion", "->", "12"}], ",", 
+                RowBox[{"WorkingPrecision", "->", "10"}]}], "]"}]}], ",", 
+             RowBox[{"{", 
+              RowBox[{"6", ",", "5"}], "}"}]}], "]"}], "]"}]}], "}"}], 
+        "]"}]}], "}"}], "]"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"w", ",", "0.5", ",", "\"\<weight w\>\""}], "}"}], ",", "0", 
+      ",", "1", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"\[Mu]1", ",", "0", ",", "\"\<\[Mu]1\>\""}], "}"}], ",", 
+      RowBox[{"-", "2"}], ",", "5", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"\[Sigma]1", ",", "0.5", ",", "\"\<\[Sigma]1\>\""}], "}"}], 
+      ",", "0.1", ",", "3", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"\[Mu]2", ",", "2", ",", "\"\<\[Mu]2\>\""}], "}"}], ",", 
+      RowBox[{"-", "2"}], ",", "5", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"\[Sigma]2", ",", "0.7", ",", "\"\<\[Sigma]2\>\""}], "}"}], 
+      ",", "0.1", ",", "3", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"xMin", ",", "0.001", ",", "\"\<x min\>\""}], "}"}], ",", 
+      RowBox[{"10", "^", 
+       RowBox[{"-", "6"}]}], ",", "1", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"xMax", ",", "50", ",", "\"\<x max\>\""}], "}"}], ",", "1", 
+      ",", "500", ",", 
+      RowBox[{"Appearance", "->", "\"\<Labeled\>\""}]}], "}"}], ",", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"plotRange", ",", "Automatic", ",", "\"\<PlotRange\>\""}], 
+       "}"}], ",", 
+      RowBox[{"{", 
+       RowBox[{"Automatic", ",", "All"}], "}"}]}], "}"}], ",", 
+    RowBox[{"ControlPlacement", "->", "Left"}]}], "]"}], 
+  "\n"}], "\n"}], "Input",
+ CellChangeTimes->{{3.9677777352573695`*^9, 3.9677777352573695`*^9}, 
+   3.967777816717657*^9},
+ CellLabel->"In[21]:=",ExpressionUUID->"7fa0d30e-a419-4b85-adc5-07e25a85b186"],
+
+Cell[BoxData[
+ TagBox[
+  StyleBox[
+   DynamicModuleBox[{$CellContext`plotRange$$ = Automatic, $CellContext`w$$ = 
+    0.026000000000000002`, $CellContext`xMax$$ = 50, $CellContext`xMin$$ = 
+    0.001, $CellContext`\[Mu]1$$ = -1.47, $CellContext`\[Mu]2$$ = 
+    2.4800000000000004`, $CellContext`\[Sigma]1$$ = 
+    0.44500000000000006`, $CellContext`\[Sigma]2$$ = 0.7, Typeset`show$$ = 
+    True, Typeset`bookmarkList$$ = {}, Typeset`bookmarkMode$$ = "Menu", 
+    Typeset`animator$$, Typeset`animvar$$ = 1, Typeset`name$$ = 
+    "\"untitled\"", Typeset`specs$$ = {{{
+       Hold[$CellContext`w$$], 0.5, "weight w"}, 0, 1}, {{
+       Hold[$CellContext`\[Mu]1$$], 0, "\[Mu]1"}, -2, 5}, {{
+       Hold[$CellContext`\[Sigma]1$$], 0.5, "\[Sigma]1"}, 0.1, 3}, {{
+       Hold[$CellContext`\[Mu]2$$], 2, "\[Mu]2"}, -2, 5}, {{
+       Hold[$CellContext`\[Sigma]2$$], 0.7, "\[Sigma]2"}, 0.1, 3}, {{
+       Hold[$CellContext`xMin$$], 0.001, "x min"}, 
+      Rational[1, 1000000], 1}, {{
+       Hold[$CellContext`xMax$$], 50, "x max"}, 1, 500}, {{
+       Hold[$CellContext`plotRange$$], Automatic, "PlotRange"}, {
+      Automatic, All}}}, Typeset`size$$ = {
+    576., {187.17236842547368`, 192.90430185102684`}}, Typeset`update$$ = 0, 
+    Typeset`initDone$$, Typeset`skipInitDone$$ = True}, 
+    DynamicBox[Manipulate`ManipulateBoxes[
+     1, StandardForm, 
+      "Variables" :> {$CellContext`plotRange$$ = Automatic, $CellContext`w$$ = 
+        0.5, $CellContext`xMax$$ = 50, $CellContext`xMin$$ = 
+        0.001, $CellContext`\[Mu]1$$ = 0, $CellContext`\[Mu]2$$ = 
+        2, $CellContext`\[Sigma]1$$ = 0.5, $CellContext`\[Sigma]2$$ = 0.7}, 
+      "ControllerVariables" :> {}, 
+      "OtherVariables" :> {
+       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
+        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
+        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
+         Typeset`skipInitDone$$}, "Body" :> Column[{
+         Row[{"w = ", $CellContext`w$$, 
+           Spacer[20], "\[Mu]1 = ", $CellContext`\[Mu]1$$, 
+           Spacer[20], "\[Sigma]1 = ", $CellContext`\[Sigma]1$$, 
+           Spacer[20], "\[Mu]2 = ", $CellContext`\[Mu]2$$, 
+           Spacer[20], "\[Sigma]2 = ", $CellContext`\[Sigma]2$$}], 
+         Plot[
+          Evaluate[
+           $CellContext`LogNormalMix[$CellContext`w$$, $CellContext`\[Mu]1$$, \
+$CellContext`\[Sigma]1$$, $CellContext`\[Mu]2$$, $CellContext`\[Sigma]2$$, \
+$CellContext`x]], {$CellContext`x, $CellContext`xMin$$, $CellContext`xMax$$}, 
+          PlotRange -> $CellContext`plotRange$$, 
+          ScalingFunctions -> {"Log10", None}, 
+          AxesLabel -> {"x (log scale)", "P(x)"}, PlotLabel -> 
+          "Mixture of two lognormals (x logarithmic)", ImageSize -> Large], 
+         Row[{
+           Button["Check normalization (numeric)", Print["Integral = ", 
+              $CellContext`NormalizationCheck[$CellContext`w$$, $CellContext`\
+\[Mu]1$$, $CellContext`\[Sigma]1$$, $CellContext`\[Mu]2$$, $CellContext`\
+\[Sigma]2$$]]; Null], 
+           Spacer[20], "Integral (approx) = ", 
+           Dynamic[
+            NumberForm[
+             Quiet[
+              NIntegrate[
+               $CellContext`LogNormalMix[$CellContext`w$$, \
+$CellContext`\[Mu]1$$, $CellContext`\[Sigma]1$$, $CellContext`\[Mu]2$$, \
+$CellContext`\[Sigma]2$$, $CellContext`x], {$CellContext`x, 0, Infinity}, 
+               MaxRecursion -> 12, WorkingPrecision -> 10]], {6, 5}]]}]}], 
+      "Specifications" :> {{{$CellContext`w$$, 0.5, "weight w"}, 0, 1, 
+         Appearance -> "Labeled"}, {{$CellContext`\[Mu]1$$, 0, "\[Mu]1"}, -2, 
+         5, Appearance -> 
+         "Labeled"}, {{$CellContext`\[Sigma]1$$, 0.5, "\[Sigma]1"}, 0.1, 3, 
+         Appearance -> "Labeled"}, {{$CellContext`\[Mu]2$$, 2, "\[Mu]2"}, -2, 
+         5, Appearance -> 
+         "Labeled"}, {{$CellContext`\[Sigma]2$$, 0.7, "\[Sigma]2"}, 0.1, 3, 
+         Appearance -> "Labeled"}, {{$CellContext`xMin$$, 0.001, "x min"}, 
+         Rational[1, 1000000], 1, Appearance -> 
+         "Labeled"}, {{$CellContext`xMax$$, 50, "x max"}, 1, 500, Appearance -> 
+         "Labeled"}, {{$CellContext`plotRange$$, Automatic, "PlotRange"}, {
+         Automatic, All}}}, "Options" :> {ControlPlacement -> Left}, 
+      "DefaultOptions" :> {}],
+     ImageSizeCache->{910., {217.63403328722342`, 223.36596671277658`}},
+     SingleEvaluation->True],
+    Deinitialization:>None,
+    DynamicModuleValues:>{},
+    SynchronousInitialization->True,
+    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
+    UnsavedVariables:>{Typeset`initDone$$},
+    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
+   Deployed->True,
+   StripOnInput->False],
+  Manipulate`InterpretManipulate[1]]], "Output",
+ CellChangeTimes->{3.967777736298207*^9, 3.967777817783494*^9},
+ CellLabel->"Out[24]=",ExpressionUUID->"92bf15c9-f7cd-4e44-88d7-adc81fa3cdbb"]
+}, Open  ]]
+},
+WindowSize->{1140, 567.6},
+WindowMargins->{{0.6, Automatic}, {Automatic, 0.6}},
+FrontEndVersion->"13.3 for Microsoft Windows (64-bit) (July 24, 2023)",
+StyleDefinitions->"Default.nb",
+ExpressionUUID->"1a9a95f1-151f-4bcf-bdf9-2f417df8b61f"
+]
+(* End of Notebook Content *)
+
+(* Internal cache information *)
+(*CellTagsOutline
+CellTagsIndex->{}
+*)
+(*CellTagsIndex
+CellTagsIndex->{}
+*)
+(*NotebookFileOutline
+Notebook[{
+Cell[CellGroupData[{
+Cell[580, 22, 7851, 202, 466, "Input",ExpressionUUID->"54ccabde-5210-4d45-813c-52c1d0c0225a"],
+Cell[8434, 226, 4013, 78, 880, "Output",ExpressionUUID->"dc74144e-77ce-48d4-b312-0d2a5b959d09"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[12484, 309, 6919, 179, 409, "Input",ExpressionUUID->"0a36787a-d0f3-4fc5-ba24-a02ecb23bb8c"],
+Cell[19406, 490, 4879, 89, 483, "Output",ExpressionUUID->"59bc57be-93fb-4312-b89c-618edd68b05a"]
+}, Open  ]],
+Cell[CellGroupData[{
+Cell[24322, 584, 7057, 182, 428, "Input",ExpressionUUID->"7fa0d30e-a419-4b85-adc5-07e25a85b186"],
+Cell[31382, 768, 4878, 88, 460, "Output",ExpressionUUID->"92bf15c9-f7cd-4e44-88d7-adc81fa3cdbb"]
+}, Open  ]]
+}
+]
+*)
+
