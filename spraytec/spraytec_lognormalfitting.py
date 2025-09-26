@@ -2,14 +2,14 @@ import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_0dot25_1ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms"  ##change this for different statistics
 
 #keyphrase = "waterjet"  ##change this for different statistics
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","0dot25_1ml") #for the unweighted ones
+path = os.path.join(path,"Unweighted","lower") #for the unweighted ones
 #path = os.path.join(path,"weighted") #for the weighted ones
 
 print(f"Path: {path}")
@@ -48,7 +48,7 @@ plt.rcParams.update({'font.size': 14})
 
 #FINDING THE FILES
 
-save_path = os.path.join(cwd,"results_spraytec","Averages")
+save_path = os.path.join(cwd,"results_spraytec","Fits")
 print(f"Save path {save_path}")
 
 
@@ -112,7 +112,7 @@ def two_log_normals(x, w, mu1,sigma1,mu2,sigma2):
 
 #find peaks
 def fitting(n_pdf,bin_centers,mode="ln"):
-    fitpointsfactor =3
+    fitpointsfactor =5
     mean_d = np.sum(bin_centers * n_percentages) / 100
 
     mode_d = bin_centers[np.argmax(n_pdf)]
@@ -152,13 +152,14 @@ def fitting(n_pdf,bin_centers,mode="ln"):
             param_2gamma, pcov = curve_fit(two_gamma, bin_centers, n_pdf,bounds=(lower_bounds,upper_bounds),p0=initial_guess_gamma) 
             w_gamma,m1,n1,m2,n2 = param_2gamma
             fit_pdf = two_gamma(fit_x,*param_2gamma)
-            fit_per = fitted_2gamma / sum(fitted_2gamma)*100 *fitpointsfactor
+            fit_per = fit_pdf / sum(fit_pdf)*100 *fitpointsfactor
 
     return fit_x,fit_pdf,fit_per,n_peaks
 
 
-fig= plt.figure(figsize= (6,4))
+
 i=0
+fig= plt.figure(figsize= (6,4))
 for file in matching_files:
 
     filename = file.split('\\')[-1].replace('.txt', '')
@@ -257,40 +258,42 @@ for file in matching_files:
         fitted_2ln_per = fitted_2ln / sum(fitted_2ln)*100 *fitpointsfactor
 
         #gammas
-        param_2gamma, pcov = curve_fit(two_gamma, bin_centers, n_pdf,bounds=(lower_bounds,upper_bounds),p0=initial_guess_gamma) 
-        w_gamma,m1,n1,m2,n2 = param_2gamma
-        fitted_2gamma = two_gamma(fit_x,*param_2gamma)
-        fitted_2gamma_per = fitted_2gamma / sum(fitted_2gamma)*100 *fitpointsfactor
+        # param_2gamma, pcov = curve_fit(two_gamma, bin_centers, n_pdf,bounds=(lower_bounds,upper_bounds),p0=initial_guess_gamma) 
+        # w_gamma,m1,n1,m2,n2 = param_2gamma
+        # fitted_2gamma = two_gamma(fit_x,*param_2gamma)
+        # fitted_2gamma_per = fitted_2gamma / sum(fitted_2gamma)*100 *fitpointsfactor
 
-
+        
         #print(pdf_values)
-        plt.scatter(bin_centers, n_percentages,color=colors[0],label= "Distribution")
+        # #plt.scatter(bin_centers, n_percentages,color=colors[0],label= "Distribution")
 
-        mode= "gamma"
-        x,pdf,per,n_peaks = fitting(n_pdf,bin_centers,mode=mode)
-        plt.plot(x,per,label= f"Gamma fit",linestyle= "-",color=colors[1])
+        # mode= "gamma"
+        # x,pdf,per,n_peaks = fitting(n_pdf,bin_centers,mode=mode)
+        #plt.plot(x,per,label= f"Gamma fit",linestyle= "-",color=colors[1])
         mode= "ln"
         x,pdf,per,n_peaks = fitting(n_pdf,bin_centers,mode=mode)
-        plt.plot(x,per,label= f"Log-normal fit",linestyle= "--",color=colors[2])
+        plt.plot(x,per,label= f"Log-normal fit",linestyle= "-",color=colors[i])
         i+=1
         # plt.plot(fit_x,fitted_2ln,label=f"{w:.2f},{mu1:.2f},{sigma1:.2f},{mu2:.2f},{sigma2:.2f}")
         # plt.plot(fit_x,fitted_2gamma,label=f"{w_gamma:.2f},{m1:.2f},{n1:.2f},{m2:.2f},{n2:.2f}")
         # #plt.title(param_2ln)
         
-        plt.xlabel(r"D ($\mu$m)")
-        plt.ylabel("Number distribution (%)")
-        plt.xscale('log')
-        plt.legend()
-        plt.show()
+
+        
+        
+       
+        
     # Add labels
 #plt.legend()
 plt.xscale('log')
-plt.show()
-plt.xlabel(r"Diameter ($\mu$m)")
-plt.ylabel("Number PDF (%)")
-plt.title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
+
+plt.xlabel(r"D ($\mu$m)")
+plt.ylabel("Number distribution (%)")
+
+
 plt.xscale('log')
 #plt.yscale('log')
+
 plt.grid(which='both', linestyle='--', linewidth=0.5)
 plt.ylim(1e-1,40)
 plt.xlim(bin_edges[0],bin_edges[-1])
@@ -298,7 +301,7 @@ print(f"filename: {filename}")
 full_save_path = os.path.join(save_path,filename)
 print(f"full path: {full_save_path}")
 plt.tight_layout()
-plt.legend()
-#plt.savefig(full_save_path+".svg")
+#plt.legend()
+plt.savefig(full_save_path+".svg")
 plt.show()
     
