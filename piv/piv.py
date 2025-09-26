@@ -333,9 +333,8 @@ piv.plot_vel_med(disp3_nbs, res_avg, frames, dt,
                  title=f'Third pass - {meas_name}',                    proc_path=proc_path, file_name="pass3_v_med", test_mode=test_mode)
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
-                  mode='random', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),
-                  disp_rejected=disp3_unf,
-                  proc_path=proc_path, file_name="pass3_v", subfolder='pass3', test_mode=not random_profiles)
+                  mode='average', avg_start_time=0.030, avg_end_time=0.120,
+                  proc_path=proc_path, file_name="pass3_v")
 
 piv.plot_vel_prof(disp3_nbs, res_avg, frames, dt, win_pos3,
                   mode='video', xlim=(v_max3[0] * -1.1, v_max3[1] * 1.1), ylim=(0, frame_w * 1000),

@@ -202,7 +202,8 @@ def plot_vel_Gupta(disp, res, frs, dt, proc_path=None, file_name=None, test_mode
 
 def plot_vel_prof(disp, res, frs, dt, win_pos, 
                   mode="random", proc_path=None, file_name=None, subfolder=None, test_mode=False, 
-                  disp_rejected=None, frame_skip=1, plot_rejected=True, **kwargs):
+                  disp_rejected=None, frame_skip=1, plot_rejected=False, 
+                  avg_start_time=None, avg_end_time=None, **kwargs):
     
     # Define a time array
     n_corrs = disp.shape[0]
@@ -244,8 +245,20 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
             frames_to_plot = range(frame_skip-1, n_corrs, frame_skip)
         else:
             frames_to_plot = range(n_corrs)
+    elif mode == "average":
+        # For average mode, determine frames within the specified time range
+        if avg_start_time is None or avg_end_time is None:
+            raise ValueError("avg_start_time and avg_end_time must be specified for average mode.")
+        
+        # Find frame indices corresponding to the time range
+        start_idx = np.argmin(np.abs(time - avg_start_time))
+        end_idx = np.argmin(np.abs(time - avg_end_time))
+        if end_idx <= start_idx:
+            raise ValueError("avg_end_time must be greater than avg_start_time.")
+        
+        frames_to_plot = range(start_idx, end_idx + 1)
     else:
-        raise ValueError(f"Unknown mode: {mode}. Use 'video', 'all', or 'random'.")
+        raise ValueError(f"Unknown mode: {mode}. Use 'video', 'all', 'random', or 'average'.")
     
     # Set up video writer if needed
     if mode == "video":
@@ -294,7 +307,52 @@ def plot_vel_prof(disp, res, frs, dt, win_pos,
         plt.tight_layout()
     
     # Process frames
-    if video_context is not None:
+    if mode == "average":
+        # Average mode: compute mean and std over the specified time range
+        y_pos = win_pos[:, 0, 0] * res * 1000
+        
+        # Extract velocity data for the specified frames
+        vx_data = vel[frames_to_plot, :, 0, 1]  # Shape: (n_frames, n_windows)
+        vy_data = vel[frames_to_plot, :, 0, 0]  # Shape: (n_frames, n_windows)
+        
+        # Compute mean and standard deviation across frames
+        vx_mean = np.nanmean(vx_data, axis=0)
+        vx_std = np.nanstd(vx_data, axis=0)
+        vy_mean = np.nanmean(vy_data, axis=0)
+        vy_std = np.nanstd(vy_data, axis=0)
+        
+        # Create figure for average profile
+        fig, ax = plt.subplots(figsize=(7, 4))
+        
+        # Plot mean profiles
+        ax.plot(vx_mean, y_pos, '-o', c=cvd.get_color(1), label='vx (mean)', linewidth=2)
+        ax.plot(vy_mean, y_pos, '-o', c=cvd.get_color(0), label='vy (mean)', linewidth=2)
+        
+        # Add shaded regions for standard deviation
+        ax.fill_betweenx(y_pos, vx_mean - vx_std, vx_mean + vx_std, 
+                        color=cvd.get_color(1), alpha=0.3, label='vx ± 1σ')
+        ax.fill_betweenx(y_pos, vy_mean - vy_std, vy_mean + vy_std, 
+                        color=cvd.get_color(0), alpha=0.3, label='vy ± 1σ')
+        
+        # Optionally plot rejected data (average of all rejected points in time range)
+        if plot_rejected:
+            raise NotImplementedError("Plotting rejected data in average mode is not implemented.")
+        
+        ax.set_xlabel('Velocity (m/s)')
+        ax.set_ylabel('y position (mm)')
+        ax.set_title(f'Average velocity profiles ({avg_start_time*1000:.0f}-{avg_end_time*1000:.0f} ms, n={len(frames_to_plot)})')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.grid()
+        ax.set(**kwargs)
+        plt.tight_layout()
+        
+        # Save if path is specified
+        if proc_path is not None and file_name is not None and not test_mode:
+            save_cfig(proc_path, file_name + "_avg", test_mode=test_mode, verbose=True)
+        
+        return fig, ax
+        
+    elif video_context is not None:
         # Video mode
         with video_context:
             for i in frames_iter:
