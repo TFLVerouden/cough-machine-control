@@ -2,14 +2,14 @@ import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "water_1ml_1dot5bar_80ms"  ##change this for different statistics
 
 #keyphrase = "waterjet"  ##change this for different statistics
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","lower") #for the unweighted ones
+path = os.path.join(path,"Unweighted","water") #for the unweighted ones
 #path = os.path.join(path,"weighted") #for the weighted ones
 
 print(f"Path: {path}")
@@ -112,7 +112,7 @@ def two_log_normals(x, w, mu1,sigma1,mu2,sigma2):
 
 #find peaks
 def fitting(n_pdf,bin_centers,mode="ln"):
-    fitpointsfactor =5
+    fitpointsfactor =3
     mean_d = np.sum(bin_centers * n_percentages) / 100
 
     mode_d = bin_centers[np.argmax(n_pdf)]
@@ -121,7 +121,7 @@ def fitting(n_pdf,bin_centers,mode="ln"):
     ratio_prom = max(stats['prominences'])/ min(stats['prominences'])
     n_peaks =len(peaks)
     if n_peaks>1:
-        if ratio_prom >10:
+        if ratio_prom >5:
             n_peaks =1
         else: 
             n_peaks =2
@@ -265,7 +265,7 @@ for file in matching_files:
 
         
         #print(pdf_values)
-        # #plt.scatter(bin_centers, n_percentages,color=colors[0],label= "Distribution")
+        plt.scatter(bin_centers, n_percentages,color=colors[i],label= "Distribution")
 
         # mode= "gamma"
         # x,pdf,per,n_peaks = fitting(n_pdf,bin_centers,mode=mode)
@@ -302,6 +302,6 @@ full_save_path = os.path.join(save_path,filename)
 print(f"full path: {full_save_path}")
 plt.tight_layout()
 #plt.legend()
-plt.savefig(full_save_path+".svg")
+#plt.savefig(full_save_path+".svg")
 plt.show()
     

@@ -176,8 +176,8 @@ def plot_hist_and_fit(stats_all, label_list, pdf_type="all", ylim=(0, 0.13)):
         residuals_lognormal = np.sum((pdf - log_normal(d_bins, *popt))**2)
         #print(residuals_lognormal)
  
-        plt.plot(d_bins, log_normal(d_bins, *popt), '--',color= colors[cc],
-         label=f'{label_list[cc]} log normal,  lsq: {residuals_lognormal:.5f}')
+        # plt.plot(d_bins, log_normal(d_bins, *popt), '--',color= colors[cc],
+        #  label=f'{label_list[cc]} log normal,  lsq: {residuals_lognormal:.5f}')
        # popt, pcov = curve_fit(gamma_pdf, d_bins, pdf, p0=[1.0, 1.0], bounds=(0, np.inf))
         residuals_gamma= np.sum((pdf - villermaux_mixture_fixed(d_bins, *popt_g))**2)
         #plt.plot(d_bins, villermaux_mixture_fixed(d_bins, *popt_g), '-x', color=colors[cc],
@@ -197,7 +197,7 @@ def plot_hist_and_fit(stats_all, label_list, pdf_type="all", ylim=(0, 0.13)):
     plt.show()
 
 # -------------------- Plot All Cases --------------------
-plot_hist_and_fit(stats_all, legend_labels, pdf_type="all", ylim=(0,0.13))
+#plot_hist_and_fit(stats_all, legend_labels, pdf_type="all", ylim=(0,0.13))
 
 
 
@@ -218,11 +218,11 @@ def plot_individual_measurements(PDA_case, label):
         dx = np.diff(np.exp(log_d_edges))
         pdf = N / np.sum(N*dx)
 
-
+        percentage = pdf/ sum(pdf)*100
         # Fit
   
         x_fit, pdf_fit, mean_d, std_d = log_normal_fit(d, d_edges)
-        h, = plt.plot(x_fit, pdf_fit, '--',
+        h, = plt.plot(x_fit, percentage, '--',
                  label=f'{i}') #label=rf'{i}, $\mu$ {mean_d:.1f} μm, std={std_d:.1f} μm'
         handles.append(h)
         labels.append(f'{i}: {mean_d:.1f}, {std_d:.1f}')
@@ -232,10 +232,10 @@ def plot_individual_measurements(PDA_case, label):
     plt.xscale("log")
     plt.xlabel(r"$d$ [$\mu$m]")
     plt.ylabel(r"p.d.f. [$\mu$m$^{-1}$]")
-    plt.ylim(0, 0.15)
+    #plt.ylim(0, 0.15)
     plt.grid(True, which='both', linestyle='--', linewidth=0.5)
     plt.title(label)
-    plt.legend(handles, labels, loc='upper right', frameon=True,ncols=2,fontsize=8)
+    #plt.legend(handles, labels, loc='upper right', frameon=True,ncols=2,fontsize=8)
     plt.tight_layout()
     #plt.savefig(savepath+ f"\\indvidual_{label}.svg")
     plt.show()
