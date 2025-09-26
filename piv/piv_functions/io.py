@@ -49,6 +49,35 @@ def save_backup(proc_path: str, file_name: str,
     return True
 
 
+def init_subfolder(*path_components, debug=False, verbose=True) -> str:
+    """
+    Create a folder path from multiple components if it doesn't exist.
+    TODO: Change all test_mode to debug for consistency.
+    Args:
+        *path_components: Variable number of path components to join together.
+        debug (bool, optional): If True, skip creation and just return the path.
+        verbose (bool, optional): If True, print creation message.
+
+    Returns:
+        folder_path (str): Full path to the created folder.
+
+    Examples:
+        create_subfolder('/base/path', 'subfolder')  # Creates /base/path/subfolder
+        create_subfolder('/base', 'series', 'name', 'data')  # Creates /base/series/name/data
+    """
+    if not path_components:
+        raise ValueError("At least one path component must be provided")
+    
+    folder_path = os.path.join(*path_components)
+    
+    if not os.path.exists(folder_path) and not debug:
+        os.makedirs(folder_path)
+        if verbose:
+            print(f"Created directory: {folder_path}")
+    
+    return folder_path
+
+
 def load_backup(proc_path: str, file_name: str, var_names=None,
                 test_mode=False) -> dict:
     """
