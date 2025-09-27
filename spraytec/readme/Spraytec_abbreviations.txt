@@ -1,0 +1,13 @@
+Spraytec abbreviations:
+
+Col 1: Date-Time gives date measured
+Col11 Trans (Value) AMount of light transmitted
+Col 60 - 96: SC:Corrected scattered data
+Col 98-135: SR: Raw scatterdata
+Col 138-175: BL: Background intensity level
+Col 176-213:  BD: Presumably Beam diameter
+Col 214-250: DC:  Constant over time, different for detectors, seams to be a calibration
+Col 251: DC[M]:Constant over time, mean calibration factor?
+Col 296: Duration
+Col 297: Time(relative), compared to the trigger
+Col 317-377: Diameters (microm) with the probabilities of each diameter occuring (volume percentage)

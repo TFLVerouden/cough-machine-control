@@ -1,9 +1,24 @@
+#include <Arduino.h>
+#include <Adafruit_SHT4x.h>
+#include "MIKROE_4_20mA_RT_Click.h"
+
+// Connections
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
-const int powerPin = 5;  // Use pin 5 for 5.0V control
-const int pressurePin = A0;  // Placeholder pin for pressure reading
-int duration = 0;  // Variable to store the duration
-bool valveOpen = false;  // Flag to check if the valve is open
-unsigned long startTime = 0;  // Variable to store the start time
+const int powerPin = 5;          // Use pin 5 for 5.0V control
+const int pressurePin = 10;      // Placeholder pin for pressure reading
+
+// Valve opening logic parameters
+int duration = 0;                // Variable to store the duration
+bool valveOpen = false;          // Flag to check if the valve is open
+unsigned long startTime = 0;     // Variable to store the start time
+
+// Exponential moving average (EMA) parameters & calibration of the R Click readings
+const uint32_t EMA_INTERVAL = 500; // Desired oversampling interval [µs]
+const float EMA_LP_FREQ = 200.;      // Low-pass filter cut-off frequency [Hz]
+R_Click R_click(pressurePin, RT_Click_Calibration{3.99, 9.75, 795, 1943});
+
+// Humidity+temperature sensor
+Adafruit_SHT4x sht4;  // Declare the T+RH sensor object
 
 enum State {
   IDLE,
@@ -21,7 +36,18 @@ void setup() {
   digitalWrite(ledPin, LOW);
   digitalWrite(powerPin, LOW);
   Serial.begin(115200);
-}
+  R_click.begin();
+
+  // Initialize the SHT4x sensor
+  if (!sht4.begin()) {
+    Serial.println("Failed to find SHT4x sensor!");
+    while (1) delay(10);  // Halt execution if sensor is not found
+  }
+
+  // Set sensor precision and heater mode
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  sht4.setHeater(SHT4X_NO_HEATER);
+} 
 
 void loop() {
   if (Serial.available() > 0) {
@@ -71,6 +97,8 @@ void handleCommand(String command) {
   } else if (command == "P?") {
     readPressure();
 
+  } else if (command == "T?") {
+    readTemperature();
   } else {
     currentState = ERROR;
   }
@@ -100,8 +128,23 @@ void blinkError() {
 }
 
 void readPressure() {
-  // int pressureValue = analogRead(pressurePin);
-  // TODO: connect 4-20 mA board to read out sensor
-  int pressureValue = 0;
-  Serial.println(pressureValue);
+  // Reads out R-click board and converts to pressure
+  R_click.poll_EMA();
+  Serial.print("P");
+  Serial.print(0.6249*R_click.get_EMA_mA() - 2.4882);
+  Serial.println();
+}
+
+void readTemperature() {
+  // Reads Temperature and RH on command;
+  sensors_event_t humidity, temp;
+  
+  // Read temperature and humidity
+  sht4.getEvent(&humidity, &temp);
+  
+  Serial.print("T");
+  Serial.println(temp.temperature);
+  
+  Serial.print("RH");
+  Serial.println(humidity.relative_humidity);
 }
