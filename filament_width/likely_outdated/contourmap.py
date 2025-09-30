@@ -47,8 +47,8 @@ def contourmap_maker(filename,n_bins=200,max_width=50,fps=20000,scale=15,skip_fi
     cbar = plt.colorbar()
     cbar.set_label('Pixel Count')  
     plt.gca().invert_yaxis()
-    #plt.show()
-    plt.savefig(save_path)
+    plt.show()
+    #plt.savefig(save_path)
 
 
 folder_path = r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays"

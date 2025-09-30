@@ -740,7 +740,7 @@ def creating_pickles(folder,skip_first_files=250):
             
             ani.save(save_video, writer='ffmpeg', fps=60,dpi=300)
             plt.close()
-            aa
+            
             with open(savepath, 'wb') as f:
                 pickle.dump(numpy_array, f)
 

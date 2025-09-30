@@ -22,6 +22,15 @@ plt.style.use('tableau-colorblind10')
 colors = plt.cm.tab10.colors
 markers = ["o","v","1","*","+","d","|","s","h","<","X"]
 
+"""
+Difficult code, but the essential points one must know: It processes images to pickles with filament info.
+Selected image=-1, processes all images, selected_image =800, only processes frame 800
+main, filament file, and creating pickles are the most important functions.
+There is an issue that the pixel values are absolute defined instead of relative. This must be changed in filament file,
+where the comment is made. Also in the function pixel_values this must be tweaked.
+Throughout the code there are lots of outcommented plots, these can be used to check what you are doing
+"""
+
 # Build a graph representation of the skeleton
 def build_graph(skel):
     """
@@ -511,7 +520,7 @@ def filament_file(
                     mean_val = np.mean(np.mean(cal_img))
                     thresh_ref = np.quantile(cal_img.flatten(),0.80)/255
                     first_file = False
-
+                    ###Here you have to make the pixel values relative instead of absolute
                 cropped = img[:,cropped_value:cropped_value+window_size]
          
                 ret,thresh = cv.threshold(255-cropped,255-mean_val+thresh_factor,255,cv.THRESH_TOZERO)
@@ -799,9 +808,9 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=800,skip_first_files=skip_first_files,skip_images=1)
+    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
-    aa
+   
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"
     with open(savepath, 'wb') as f:
         pickle.dump(numpy_array, f)

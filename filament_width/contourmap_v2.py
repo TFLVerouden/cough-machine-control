@@ -124,8 +124,8 @@ def contourmap_maker(filename,n_bins=100,max_width=1,fps=20000,scale=15.67,skip_
         
         # fig.colorbar(im2,ax=ax[1])  
         # plt.gca().invert_yaxis()
-        #plt.show()
-        plt.savefig(save_path, format='pdf', bbox_inches='tight')
+        plt.show()
+        #plt.savefig(save_path, format='pdf', bbox_inches='tight')
     else:
         print(f"File already exists: {save_path}")
 

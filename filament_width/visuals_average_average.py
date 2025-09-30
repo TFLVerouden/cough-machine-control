@@ -2,10 +2,16 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sc
+
+"""
+Loads in a pickle displays the average width over time, and the width vs length of filament
+Average all filaments found for one timestep
+"""
+
 filename = r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\0dot25percentPEO1ml_4th.pkl"
 with open(filename, 'rb') as f:
     loaded = pickle.load(f)   
-
+loaded = loaded[0]
 length = len(loaded)
 time = np.arange(0,length,1,dtype=float)
 n_bins = 50
@@ -16,9 +22,14 @@ all_std = np.zeros_like(time)
 all_median = np.zeros_like(time)
 all_length = np.zeros_like(time)
 all_timesteps = np.zeros_like(time)
+
 for i in range(timesteps):
+    
     time_data = loaded[i]
+    print(len(time_data))
     if len(time_data)>0:
+
+       
         combined = np.concatenate([c.reshape(-1) for c in time_data])
         combined = combined[~np.isnan(combined)]
         if len(combined>0):
@@ -41,16 +52,22 @@ for i in range(timesteps):
 
 
 
-
+t= time/20000
 plt.figure()
-plt.scatter(time,all_avg,c='b', s=1)
-plt.scatter(time,all_avg+all_std,c='r',marker='_',s=1)
-plt.scatter(time,all_avg-all_std,c='r',marker='_',s=1)
+plt.scatter(t,all_avg,c='b', s=1)
+plt.scatter(t,all_avg+all_std,c='r',marker='_',s=1)
+plt.scatter(t,all_avg-all_std,c='r',marker='_',s=1)
+plt.xlabel("Time (s)")
+plt.ylabel("Avg width filament (px)")
+plt.title("Average width over time")
 plt.show()
 
 
 plt.figure()
 plt.scatter(all_length,all_avg,c='b', s=1)
+plt.xlabel("Length filament (px)")
+plt.ylabel("Width filament (px)")
+plt.title("All lengths vs all width")
 plt.show()
 
 
