@@ -75,7 +75,7 @@ for npz_file in npz_files:
     flow_avg = flow_rate[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
     time_avg = time[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
 
-    plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,label=name)
+    #plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,label=name)
     j+=1
     i+=1
 
@@ -88,5 +88,5 @@ plt.xlim(0,0.5)
 plt.ylim(0)
 plt.grid(which="both")
 plt.tight_layout()
-#plt.savefig(folder+"allcoughs.svg")
+plt.savefig(folder+"allcoughsliterature.svg")
 plt.show()

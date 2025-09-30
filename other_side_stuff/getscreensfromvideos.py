@@ -15,9 +15,19 @@ import matplotlib
 import time
 import sys
 import gc  # Garbage collector
-from matplotlib_scalebar.scalebar import ScaleBar
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
 
-folder_path = r"D:\Experiments\sideview_coughs\01_08_2025\PEO0dot25_1dot5bar_80ms_1dot5ml_7"
+from matplotlib_scalebar.scalebar import ScaleBar
+base_cmap = cm.get_cmap('Blues_r', 256)
+
+# Convert it to an array of RGBA values
+colors = base_cmap(np.linspace(0, 1, 256))
+
+# Force the last color (value = 1) to white
+colors[-1] = [1, 1, 1, 1]  # RGBA = white
+custom_cmap = ListedColormap(colors)
+folder_path = r"D:\Experiments\sideview_coughs\05_09_25\camera_spraytec_positie\water_1ml_camera_spraytec_positie_1"
 cal_path = os.path.dirname(folder_path)
 savepath= r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\screenshotscamera"
 cwd = os.path.abspath(os.path.dirname(__file__))
@@ -38,22 +48,22 @@ tif_files = [
     if f.lower().endswith(".tif") and os.path.isfile(os.path.join(folder_path, f))
 ]
 
-frame = 335
+frame = 1589
 img = Image.open(tif_files[frame])
 img = img.transpose(Image.FLIP_TOP_BOTTOM)
 img = np.array(img)
 img = img/np.max(img)
 
 
-thresh = 0.78
+thresh = 0.72
 img_rev=img
 _, binary = cv.threshold(img_rev, thresh, 255, cv.THRESH_TOZERO_INV)
 
 # plt.figure()
 # plt.imshow(binary,cmap="grey")
 # plt.show()
-# #binary= 1- binary
-# binary[binary == 0] = 1
+binary= 1- binary
+binary[binary == 0] = 1
 
 # print(np.min(binary),np.max(binary))
 # # Show
@@ -66,12 +76,13 @@ _, binary = cv.threshold(img_rev, thresh, 255, cv.THRESH_TOZERO_INV)
 
 plt.show()
 fig,ax = plt.subplots()
-plt.imshow(img,cmap="grey",vmin=0,vmax=1)
-scalebar = ScaleBar(scale, "mm")  
-ax.add_artist(scalebar)
-ax.set_xticks([])
-ax.set_yticks([])
-full_save_path = os.path.join(savepath, f"PEO0dot25original{frame}.svg")
+plt.imshow(binary,cmap=custom_cmap,vmin=np.min(binary),vmax=1)
+# scalebar = ScaleBar(scale, "mm")  
+# ax.add_artist(scalebar)
+# ax.set_xticks([])
+# ax.set_yticks([])
+ax.axis('off')
+full_save_path = os.path.join(savepath, f"watercoverblues{frame}.png")
 plt.savefig(full_save_path)
 plt.show()
 

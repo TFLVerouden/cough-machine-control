@@ -214,7 +214,7 @@ def plot_hist_and_fit(stats_all, label_list, pdf_type="all", ylim=(0, 0.13)):
         series_savepath = os.path.join(save_path,"npz_files")
         print(series_savepath)
         full_series_savepath = os.path.join(series_savepath,legend_labels[cc])
-        np.savez(full_series_savepath,n_percentages=percentage,bins=d_edges[:-1],bin_widths=dx)
+        #np.savez(full_series_savepath,n_percentages=percentage,bins=d_edges[:-1],bin_widths=dx)
     plt.title(f"{pdf_type}")
     plt.xscale("log")
     plt.xlabel(r"$d$ [$\mu$m]")
@@ -283,7 +283,7 @@ def plot_individual_measurements(PDA_case, label):
     #plt.legend(handles, labels, loc='upper right', frameon=True,ncols=2,fontsize=8)
     plt.tight_layout()
     print(savepath)
-    plt.savefig(savepath+ f"\\indvidual_{label}.svg")
+    #plt.savefig(savepath+ f"\\indvidual_{label}.svg")
     plt.show()
 
 
