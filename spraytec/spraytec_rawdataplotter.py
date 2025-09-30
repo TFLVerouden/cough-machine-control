@@ -232,8 +232,10 @@ for file in matching_files:
     plt.xlim(0,0.2)
     plt.ylim(bin_centers[0], bin_centers[-1])
     plt.xlabel('Time (s)')
+    
     full_save_path = os.path.join(save_path,filename)
-    plt.savefig(full_save_path+".svg")
+    plt.show()
+    #plt.savefig(full_save_path+".svg")
     
     
 

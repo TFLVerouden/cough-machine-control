@@ -152,6 +152,6 @@ for file in matching_files:
     full_save_path = os.path.join(save_path,filename)
     print(f"full path: {full_save_path}")
     plt.tight_layout()
-    plt.savefig(full_save_path+".svg")
-
+    #plt.savefig(full_save_path+".svg")
+    plt.show()
     
