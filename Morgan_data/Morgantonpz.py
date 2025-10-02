@@ -10,6 +10,7 @@ import sys
 from scipy.special import gamma as gamma_func
 from scipy.stats import lognorm
 from scipy.signal import find_peaks
+from scipy import stats
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 print(cwd)
@@ -29,7 +30,7 @@ FilePath = os.path.join(cwd, "PDA")
 savepath  = os.path.join(FilePath,"results")
 os.makedirs(savepath, exist_ok=True)
 
-casenames = ["050B_0pt2wt", "050B_water"]
+casenames = ["050B_water","050B_0pt05wt","050B_0pt1wt","050B_0pt2wt","050B_1wt" ]
 legend_labels = ["0.2%wt", "Newtonian"]
 
 
@@ -246,6 +247,9 @@ def plot_individual_measurements(PDA_case, label):
         # Skip empty entries
         if len(d) == 0:
             continue
+
+
+  
         file = "spraytec/results_spraytec/Serie_Averages/npz_files/water_1ml_1dot5bar_80ms.npz"
         data = np.load(file,allow_pickle=True)
         bins = data['bins']
@@ -266,14 +270,19 @@ def plot_individual_measurements(PDA_case, label):
 
         dx = bin_widths
         n_pdf = pdf_all / np.sum(pdf_all*dx) #normalizing like a PDF
-    
+        max_bin_index = np.argmax(n_pdf)
 
+        print(max_bin_index)
+        mode_bin_left = d_edges[max_bin_index]
+        mode_bin_right = d_edges[max_bin_index + 1]
+        mode_bin_center =  (mode_bin_left + mode_bin_right) / 2
         # Fit
   
         fit_x,fit_pdf,fit_per,n_peaks = fitting(n_pdf,d_bins,mode="ln")
-        h, = plt.plot(fit_x, fit_per, '--',
+        h, = plt.plot(fit_x, fit_pdf, '--',
                  label=f'{i}') #label=rf'{i}, $\mu$ {mean_d:.1f} μm, std={std_d:.1f} μm'
 
+        
     plt.xscale("log")
     plt.xlabel(r"$d$ ($\mu$m)")
     plt.ylabel(r"Number distribution ($\%$)")
@@ -283,6 +292,7 @@ def plot_individual_measurements(PDA_case, label):
     #plt.legend(handles, labels, loc='upper right', frameon=True,ncols=2,fontsize=8)
     plt.tight_layout()
     print(savepath)
+
     #plt.savefig(savepath+ f"\\indvidual_{label}.svg")
     plt.show()
 
