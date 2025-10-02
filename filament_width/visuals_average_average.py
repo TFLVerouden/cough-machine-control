@@ -7,6 +7,8 @@ import scipy as sc
 Loads in a pickle displays the average width over time, and the width vs length of filament
 Average all filaments found for one timestep
 """
+scale =15.67
+fps=20000
 
 filename = r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\0dot25percentPEO1ml_4th.pkl"
 with open(filename, 'rb') as f:
@@ -54,20 +56,24 @@ for i in range(timesteps):
 
 t= time/20000
 plt.figure()
-plt.scatter(t,all_avg,c='b', s=1)
-plt.scatter(t,all_avg+all_std,c='r',marker='_',s=1)
-plt.scatter(t,all_avg-all_std,c='r',marker='_',s=1)
+plt.fill_between(t, (all_avg-all_std)/scale, (all_avg+all_std)/scale, color='C0', alpha=0.3)
+plt.scatter(t,all_avg/scale,c='b',s=1)
+# plt.scatter(t,all_avg+all_std,c='r',marker='_',s=1)
+# plt.scatter(t,all_avg-all_std,c='r',marker='_',s=1)
 plt.xlabel("Time (s)")
-plt.ylabel("Avg width filament (px)")
-plt.title("Average width over time")
+plt.ylabel("Average filament width (mm)")
+plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidth_0dot25_errorbars.pdf")
+#plt.title("Average width over time")
 plt.show()
 
 
 plt.figure()
-plt.scatter(all_length,all_avg,c='b', s=1)
-plt.xlabel("Length filament (px)")
-plt.ylabel("Width filament (px)")
-plt.title("All lengths vs all width")
+plt.scatter(all_length/scale,all_avg/scale,c='b', s=1)
+plt.xlabel("Length filament (mm)")
+plt.ylabel("Width filament (mm)")
+plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidthvslength_0dot25.pdf")
+
+#plt.title("All lengths vs all width")
 plt.show()
 
 

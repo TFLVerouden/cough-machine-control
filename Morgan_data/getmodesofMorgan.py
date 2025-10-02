@@ -4,7 +4,7 @@ import h5py
 import pickle
 import matplotlib.pyplot as plt
 # -------------------- Settings --------------------
-casenames = ["050B_water", "050B_0pt05wt", "050B_0pt1wt", "050B_0pt2wt"]
+casenames = ["050B_water", "050B_0pt05wt", "050B_0pt1wt", "050B_0pt2wt","050B_0pt5wt"]
 
 cwd = os.path.abspath(os.path.dirname(__file__))
 FilePath = os.path.join(cwd, "PDA")
@@ -62,10 +62,8 @@ for casename in casenames:
     pdf_all, _ = np.histogram(d, bins=d_edges)
     
     n_pdf = pdf_all / np.sum(pdf_all * bin_widths)
-    plt.step(d_bins,n_pdf/sum(n_pdf)*100)
-    plt.title(casename)
-    plt.xscale('log')
-    plt.show()
+    plt.step(d_bins,n_pdf/sum(n_pdf)*100,label=casename)
+
     # Mode bin center
     max_bin_index = np.argmax(n_pdf)
     mode_bin_left = d_edges[max_bin_index]
@@ -78,7 +76,10 @@ for casename in casenames:
             "mode_right": mode_bin_right,
         })
     mode_results[casename] = case_modes
+plt.legend()
 
+plt.xscale('log')
+plt.show()
 # -------------------- Save results --------------------
 # Save as npz
 np.savez(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\modedropletsizes\mode_results_Morgan.npz", **mode_results)
