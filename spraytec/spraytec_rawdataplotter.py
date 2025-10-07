@@ -1,7 +1,7 @@
 """
 Shows first entry the graph and over time an imshow of the spraytec data
 """
-keyphrase = "PEO_1percent"  ##change this for different statistics
+keyphrase = "water"  ##change this for different statistics
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -29,14 +29,18 @@ save_path = os.path.join(cwd,"results_spraytec","time_plots")
 
 
 
+txt_files = [
+    os.path.join(path, f)
+    for f in os.listdir(path)
+    if f.endswith('.txt') ]
 
-txt_files = [os.path.join(path, f) for f in os.listdir(path) if f.endswith('.txt')]
-
-pattern = re.compile(rf"\d{{4}}_\d{{2}}_\d{{2}}_\d{{2}}_\d{{2}}_{re.escape(keyphrase)}_\d+(?:_.*)?\.txt")
+pattern = re.compile(rf"\d{{4}}_\d{{2}}_\d{{2}}_\d{{2}}_\d{{2}}_{re.escape(keyphrase)}.*\.txt")
 
 # Filter matching files
-matching_files = [f for f in txt_files if pattern.search(os.path.basename(f))]
-
+matching_files = [
+    f for f in txt_files
+    if pattern.search(os.path.basename(f)) and 'waterjet' not in os.path.basename(f).lower()
+]
 save_path = os.path.join(save_path,keyphrase)
 
 # Create folder if it doesn't exist
@@ -51,12 +55,15 @@ os.makedirs(save_path, exist_ok=True)
 
 # print("You picked:", file)
 #### The loop over all files
+print(matching_files)
+
+plt.figure()
 for file in matching_files:
 
     filename = file.split('\\')[-1].replace('.txt', '')
  
     #From here we read the data
-
+    print(filename)
     df = pd.read_table(file,delimiter=",", encoding="latin-1")
     df = df.replace('-', 0)
     print(df.loc[0,"Date-Time"])
@@ -214,28 +221,54 @@ for file in matching_files:
     diameter_edges = edges_from_centers(bin_centers)
     n_percentages = percentages_all/ (bin_centers.reshape(-1,1)*1E-6)**3
     n_percentages  = n_percentages/ np.sum(n_percentages,axis=0)*100
-    # Make meshgrid of edges
-    X, Y = np.meshgrid(time_edges, diameter_edges)
+    # # Make meshgrid of edges
+    # X, Y = np.meshgrid(time_edges, diameter_edges)
 
-    vmin = 0
-    vmax = 40
-    plt.figure()
-    pcm = plt.pcolormesh(X, Y, n_percentages,
-                        norm=LogNorm(vmin=1e-1, vmax=5e1),
-                        cmap= 'Blues')
-    cbar2 = plt.colorbar(pcm)
+    # vmin = 0
+    # vmax = 40
+    # plt.figure()
+    # pcm = plt.pcolormesh(X, Y, n_percentages,
+    #                     norm=LogNorm(vmin=1e-1, vmax=5e1),
+    #                     cmap= 'Blues')
+    # cbar2 = plt.colorbar(pcm)
 
-    cbar2.set_label('Number distribution (%)')
-    plt.yscale('log')
-    plt.grid(which='major',linestyle="--",alpha=0.8)
-    plt.ylabel(r'D ($\mu$m)')
-    plt.xlim(0,0.2)
-    plt.ylim(bin_centers[0], bin_centers[-1])
-    plt.xlabel('Time (s)')
+    # cbar2.set_label('Number distribution (%)')
+    # plt.yscale('log')
+    # plt.grid(which='major',linestyle="--",alpha=0.8)
+    # plt.ylabel(r'D ($\mu$m)')
+    # plt.xlim(0,0.2)
+    # plt.ylim(bin_centers[0], bin_centers[-1])
+    # plt.xlabel('Time (s)')
     
-    full_save_path = os.path.join(save_path,filename)
-    plt.show()
-    #plt.savefig(full_save_path+".svg")
+    # full_save_path = os.path.join(save_path,filename)
+    # plt.savefig(full_save_path+".svg")
+    # plt.show()
+
+    # --- Compute median droplet size vs. time ---
+    median_diameters = []
+
+    for i in range(n_percentages.shape[1]):
+        # normalize to get probability distribution for this time step
+        pdf = n_percentages[:, i] / np.sum(n_percentages[:, i])
+        cdf = np.cumsum(pdf)
+
+        # find where cdf crosses 0.5 (median)
+        median_idx = np.searchsorted(cdf, 0.5)
+        median_diameters.append(bin_centers[median_idx])
+
+    median_diameters = np.array(median_diameters)
+
+    # --- Plot median vs. time ---
+
+    plt.plot(times, median_diameters, 'o', color='darkblue', lw=2, markersize=4)
+    plt.yscale('log')
+    plt.grid(True, which='major', linestyle='--', alpha=0.8)
+    plt.xlabel('Time (s)')
+    plt.ylabel('Median droplet diameter (μm)')
+    plt.title('Median droplet size over time')
+    plt.xlim(times[0], times[-1])
+plt.savefig(save_path+"meandropletdiametersovertime.svg")
+plt.show()  
     
     
 
@@ -319,6 +352,6 @@ for file in matching_files:
 
     # full_save_path = os.path.join(save_path,filename)
     # plt.savefig(full_save_path+".svg")
-    plt.close('all')
-    #plt.show()
+
+
 
