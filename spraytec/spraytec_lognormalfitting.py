@@ -2,14 +2,14 @@ import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+keyphrase = "PEO600K_0dot2_1ml_1dot5bar_80ms"  ##change this for different statistics
 
 #keyphrase = "waterjet"  ##change this for different statistics
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","0dot25") #for the unweighted ones
+path = os.path.join(path,"Unweighted","600k_0dot2") #for the unweighted ones
 #path = os.path.join(path,"weighted") #for the weighted ones
 
 print(f"Path: {path}")
@@ -272,12 +272,8 @@ for file in matching_files:
         #plt.plot(x,per,label= f"Gamma fit",linestyle= "-",color=colors[1])
         mode= "ln"
         x,pdf,per,n_peaks = fitting(n_pdf,bin_centers,mode=mode)
-        if i<4:
-            color = colors[0]
-            print(i)
-        else:
-            color =colors[1]
-        plt.plot(x,per,label= f"Log-normal fit",linestyle= "-",color=color)
+
+        plt.plot(x,per,label= f"Log-normal fit",linestyle= "-",color=colors[i])
         i+=1
         # plt.plot(fit_x,fitted_2ln,label=f"{w:.2f},{mu1:.2f},{sigma1:.2f},{mu2:.2f},{sigma2:.2f}")
         # plt.plot(fit_x,fitted_2gamma,label=f"{w_gamma:.2f},{m1:.2f},{n1:.2f},{m2:.2f},{n2:.2f}")
@@ -300,13 +296,13 @@ plt.xscale('log')
 #plt.yscale('log')
 
 plt.grid(which='both', linestyle='--', linewidth=0.5)
-plt.ylim(1e-1,40)
+plt.ylim(1e-1)
 plt.xlim(bin_edges[0],bin_edges[-1])
 print(f"filename: {filename}")
 full_save_path = os.path.join(save_path,filename)
 print(f"full path: {full_save_path}")
 plt.tight_layout()
 #plt.legend()
-#plt.savefig(full_save_path+".svg")
+plt.savefig(full_save_path+".svg")
 plt.show()
     

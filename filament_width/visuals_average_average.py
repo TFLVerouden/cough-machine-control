@@ -52,23 +52,37 @@ for i in range(timesteps):
             all_length[i] = np.nan
 
 
-
-
+#aspect_ratio>=3:
+#area>40:
+area= 40/scale/scale
+min_width_area =np.sqrt(area/3)
+min_width = 1/scale
+aspect_y= np.linspace(min_width,1.4,100)
+aspect_x = aspect_y *2.8
 t= time/20000
 plt.figure()
-plt.fill_between(t, (all_avg-all_std)/scale, (all_avg+all_std)/scale, color='C0', alpha=0.3)
+plt.fill_between(t, np.max(np.array([min_width*np.ones(len(all_avg)),(all_avg-all_std)/scale]),axis=0), (all_avg+all_std)/scale, color='C0', alpha=0.3)
 plt.scatter(t,all_avg/scale,c='b',s=1)
 # plt.scatter(t,all_avg+all_std,c='r',marker='_',s=1)
 # plt.scatter(t,all_avg-all_std,c='r',marker='_',s=1)
 plt.xlabel("Time (s)")
 plt.ylabel("Average filament width (mm)")
+plt.hlines(min_width,np.min(t),np.max(t),color="k",linestyles="--")
+
+plt.ylim(0)
 plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidth_0dot25_errorbars.pdf")
 #plt.title("Average width over time")
-plt.show()
-
+#plt.show()
+x = np.linspace(min_width,np.nanmax(all_length/scale), 100)  # avoid division by zero
+y = area / x
 
 plt.figure()
 plt.scatter(all_length/scale,all_avg/scale,c='b', s=1)
+plt.hlines(min_width,3* min_width,np.nanmax(all_length/scale),color="k",linestyles="--")
+print(min_width) 
+print(np.min(all_avg/scale))
+
+plt.plot(aspect_x,aspect_y,"--",c="g")
 plt.xlabel("Length filament (mm)")
 plt.ylabel("Width filament (mm)")
 plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidthvslength_0dot25.pdf")

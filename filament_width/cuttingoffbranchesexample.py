@@ -540,8 +540,8 @@ def filament_file(
                 # ax[1].imshow(thresh)
                 # plt.show()
                 contour_data= np.zeros_like(thresh)
-                filament_image = np.zeros_like(thresh)
-              
+                filament_image =  thresh #np.zeros_like(thresh)
+                filament_image = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
                 overlay = np.zeros_like(thresh)
                 dist_transform = np.zeros_like(thresh)
                 mask_bubbles = hierarchy[0,:,3]!=-1
@@ -567,7 +567,7 @@ def filament_file(
                         if tag == "Filament":
 
                             #filament_contours.append(contour)
-                            filament_image  =cv.drawContours(filament_image,[contour],-1,(255,0,0),-1)
+                            filament_image  =cv.drawContours(filament_image,[contour],-1,(0,0,255),1)
 
                             
                             #cv.drawContours(contour_mask,[contour],-1,255,1)
@@ -576,10 +576,13 @@ def filament_file(
                             
 
 
-
+                
                
                 dist = cv.distanceTransform(contour_mask,cv.DIST_L2,5)
-                plt.imshow(dist)
+                plt.imshow(cv.cvtColor(filament_image, cv.COLOR_BGR2RGB))
+                #plt.ylim(300,550)
+                plt.show()
+                aa
                 mask_skeleton= skeletonize(dist>0)==1
                 dist[~mask_skeleton] =0
                 overlay[dist!=0] = 255
@@ -798,6 +801,7 @@ def main(folder,selected_image =1501,cropped_value=55, mirror=True, rotation=Non
 
 
 folder = r"D:\Experiments\Preliminary_tests\3103_FirstSpraytec\1percentPEO1ml_2nd_Camera_4_C001H001S0001_C1S0001_20250331_164039"
+folder = r"D:\Experiments\Preliminary_tests\3103_FirstSpraytec\0dot25percentPEO1ml_4th_Camera_4_C001H001S0001_C1S0001_20250331_174252"
 def creating_pickles(folder,skip_first_files=250):
     numpy_array= []
     match = re.search(r'\\([^\\]+?)_Camera', folder)
@@ -808,7 +812,7 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=1)
+    filament_val =main(folder,selected_image=970,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
    
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"

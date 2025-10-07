@@ -15,6 +15,7 @@ def spraytec_dim(lift_height=0.346):
     returns the difference in height between the film in the cough machine and the bottom of the transparent screen of the spraytec
     """
     table_height = 0.553 -0.346# height without lift on
+    print(table_height)
     spraytec_ontable =0.472 # lower point, heigher point = 0.514
     height_spraytec_dif = 0.514 -0.472 #difference between top and bototm of plastic screen, this is not complete measurement volume
     total_height_spraytec = table_height +lift_height +spraytec_ontable
@@ -27,3 +28,4 @@ heightdiff = h_coughmachine - h_spraytec
 print(heightdiff)
 print(L_coughmachine)
 print(dh_spraytec)
+

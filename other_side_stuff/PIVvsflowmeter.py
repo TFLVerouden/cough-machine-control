@@ -45,8 +45,8 @@ for csv_file in csv_files:
     Y -=y_0
     if reverse != "r.csv":
         Y = -Y
-    print(X,Y)
-
+    #print(X,Y)
+    print(max(Y)*5)
     
     plt.plot(X,Y,label= name,linestyle=linestyle,color=color)
     i+=1
@@ -73,7 +73,7 @@ for npz_file in npz_files:
     flow_avg = flow_rate[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
     time_avg = time[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
 
-    plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,marker="o",label=name)
+
     j+=1
     i+=1
 
@@ -86,5 +86,6 @@ plt.xlim(0,0.8)
 plt.ylim(0)
 plt.grid(which="both")
 plt.tight_layout()
-plt.savefig(folder+"PIVcompare.svg")
+
+#plt.savefig(folder+"PIVcompare.svg")
 plt.show()

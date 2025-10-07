@@ -22,7 +22,7 @@ cwd = os.path.abspath(os.path.dirname(__file__))
 parent_dir = os.path.dirname(cwd)
 print(cwd)
 #function_dir = os.path.join(parent_dir, 'cough-machine-control')
-function_dir = os.path.join(cwd,'functions')
+function_dir = os.path.join(parent_dir,'functions')
 print(function_dir)
 sys.path.append(function_dir)
 import calibration
@@ -96,6 +96,7 @@ def movie_maker(folder,savefolder,start_frame = 0,output_name="animation",scale=
 def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,delete_png=True,flip= "vertical",output_name="Video",process_png=True):
     scale = calibration.get_calibration(folder_path)
     print(f"scale: {scale} mm/pix")
+    aa
     folders = [f for f in os.listdir(folder_path) if os.path.isdir(os.path.join(folder_path, f))]
     filtered_folders = [f for f in folders if 'spraytec' not in f.lower() and 'Videos' not in f and 'skip' not in f]
 
@@ -119,7 +120,7 @@ def movie_maker_folder_loop(folder_path,savefolder,fps=20000,cropped_value=0,del
 
 #folder  = r"D:\Experiments\Droplet_atomization\ETPoF_NickTamara\PEO2M_c1-1\0_75bar_12uL_c1-1_2_Camera_4_C001H001S0001_C1S0001_20250324_130907"
 folder = r"D:\\Experiments\\sideview_coughs\\05_08_2025"
-folder = r"D:\Experiments\sideview_coughs\01_08_2025"
+folder = r"D:\Experiments\sideview_coughs\jets"
 
 savefolder =os.path.join(folder,"Videos")
 output_name = folder.split('_Camera')[0]

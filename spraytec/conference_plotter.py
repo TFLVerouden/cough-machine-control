@@ -37,7 +37,7 @@ def comparison(save_name):
         "PEO_0dot25_1ml_1dot5bar_80ms.npz",
         "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms.npz"]
     if save_name =="jets":
-        keep= [ "waterjet","PEOjet"] #"PEOjet",
+        keep= [ "waterjet"] #"PEOjet",
     return keep
 
 save_names= ["concentration", "film_thickness", "pressure", "height","jets"] #choose which one you want
@@ -99,8 +99,8 @@ for file in filtered:
         full_label = label_fluid + " " + label_con  + label_amount + " " + label_cough
     else:
         full_label = filename.split(".")[0]
-        if full_label == "waterjet_camera": #If you want to exclude the camera data
-            continue
+        # if full_label == "waterjet_camera": #If you want to exclude the camera data
+        #     continue
     data = np.load(file,allow_pickle=True)
     bins = data['bins']
     n_percentages = data['n_percentages']
@@ -108,6 +108,11 @@ for file in filtered:
     bin_widths= data['bin_widths']
  
     average = np.average(bins, weights=n_percentages)
+    mode_index = np.argmax(n_percentages)
+    mode_diameter = (bins[mode_index] + bins[mode_index] + bin_widths[mode_index]) / 2
+    mode_error = bin_widths[mode_index] / 2
+    print(f"{full_label} mode diameter: {mode_diameter:.2f} ± {mode_error:.2f} µm")
+   
     # median, Q1, Q3 using np.quantile with weights
     def weighted_quantile(values, quantiles, sample_weight):
         values = np.array(values, dtype=float)
