@@ -37,14 +37,14 @@ def comparison(save_name):
         "PEO_0dot25_1ml_1dot5bar_80ms.npz",
         "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms.npz"]
     if save_name =="jets":
-        keep= [ "waterjet","waterjet_camera"] #"PEOjet",
+        keep= [ "waterjet"] #"PEOjet",
     return keep
 
 save_names= ["concentration", "film_thickness", "pressure", "height","jets"] #choose which one you want
 
 
 save_name = "height"
-save_name ="concentration"
+save_name ="jets"
 keep = comparison(save_name)
 
 
@@ -99,11 +99,34 @@ for file in filtered:
         full_label = label_fluid + " " + label_con  + label_amount + " " + label_cough
     else:
         full_label = filename.split(".")[0]
+        # if full_label == "waterjet_camera": #If you want to exclude the camera data
+        #     continue
     data = np.load(file,allow_pickle=True)
     bins = data['bins']
     n_percentages = data['n_percentages']
+    
     bin_widths= data['bin_widths']
-
+ 
+    average = np.average(bins, weights=n_percentages)
+    mode_index = np.argmax(n_percentages)
+    mode_diameter = (bins[mode_index] + bins[mode_index] + bin_widths[mode_index]) / 2
+    mode_error = bin_widths[mode_index] / 2
+    print(f"{full_label} mode diameter: {mode_diameter:.2f} ± {mode_error:.2f} µm")
+   
+    # median, Q1, Q3 using np.quantile with weights
+    def weighted_quantile(values, quantiles, sample_weight):
+        values = np.array(values, dtype=float)
+        sample_weight = np.array(sample_weight, dtype=float)
+        sorter = np.argsort(values)
+        values = values[sorter]
+        sample_weight = sample_weight[sorter]
+        cdf = np.cumsum(sample_weight) / np.sum(sample_weight)
+        return np.interp(quantiles, cdf, values)
+    weights = n_percentages/100
+    median = weighted_quantile(bins, 0.5, weights/100)
+    q1 = weighted_quantile(bins, 0.25, weights/100)
+    q3 = weighted_quantile(bins, 0.75, weights/100)
+    print(f"{full_label} mean: {average:.2f},median:{median:.2f},LQ:{q1:.2f},UQ:{q3:.2f}")
     plt.step(bins,n_percentages,where="post",color=colors[i],label=full_label)
     plt.grid(which="both",axis='both',linestyle='--', linewidth=0.5)
     plt.ylim(0,50)
@@ -113,5 +136,5 @@ for file in filtered:
     i+=1
 plt.legend()
 
-#plt.savefig(total_savepath+"\\" +save_name + "comparison.svg")
+plt.savefig(total_savepath+"\\" +save_name + "PEOcomparison.svg")
 plt.show()

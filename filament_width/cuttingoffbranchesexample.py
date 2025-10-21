@@ -22,6 +22,15 @@ plt.style.use('tableau-colorblind10')
 colors = plt.cm.tab10.colors
 markers = ["o","v","1","*","+","d","|","s","h","<","X"]
 
+"""
+Difficult code, but the essential points one must know: It processes images to pickles with filament info.
+Selected image=-1, processes all images, selected_image =800, only processes frame 800
+main, filament file, and creating pickles are the most important functions.
+There is an issue that the pixel values are absolute defined instead of relative. This must be changed in filament file,
+where the comment is made. Also in the function pixel_values this must be tweaked.
+Throughout the code there are lots of outcommented plots, these can be used to check what you are doing
+"""
+
 # Build a graph representation of the skeleton
 def build_graph(skel):
     """
@@ -299,7 +308,7 @@ def branch_fitter(branch,image,dist,window=5, line_threshold=0.85,step_filament=
             # for r, c in pixels:
             #     plt.plot([x0, x1], [y0, y1], color='red', linewidth=1)        
     #arr=  distance_filter(filament_len_array,dists_interpolating)
-
+    
     # plt.subplots(2,1)
     # plt.subplot(2,1,1)
     #plt.title(f"Filament_len 0 = {x[0],y[0]} ")
@@ -387,7 +396,7 @@ def pixel_values(pixels,image,dist,x,y,normal, target_y = 0.8, tolerance = 0.02)
     ####Method 2: Just linear interpolating
     #####
     non_exact_match_eps = 1e-6
-    target_y = 0.8 + non_exact_match_eps
+    target_y = target_y + non_exact_match_eps
 
     dy = pix_val - target_y
     crossings = np.where(dy[:-1] * dy[1:] < 0)[0]
@@ -484,6 +493,11 @@ def filament_file(
  
     first_file = True
     frame_number =0
+    fourcc = cv.VideoWriter_fourcc(*'mp4v')
+    fps = 10
+
+    output_folder_tommie = "frames_tommie"
+    os.makedirs(output_folder_tommie, exist_ok=True)
     for i,file in enumerate(files):
            
         if i== selected_image or selected_image == -1:
@@ -506,12 +520,12 @@ def filament_file(
                     mean_val = np.mean(np.mean(cal_img))
                     thresh_ref = np.quantile(cal_img.flatten(),0.80)/255
                     first_file = False
-
+                    ###Here you have to make the pixel values relative instead of absolute
                 cropped = img[:,cropped_value:cropped_value+window_size]
-                
+         
                 ret,thresh = cv.threshold(255-cropped,255-mean_val+thresh_factor,255,cv.THRESH_TOZERO)
+
                 
-    
                 hierarchy,contours,areas = edges(thresh)
                 # contour_image = np.zeros_like(thresh)
 
@@ -526,8 +540,8 @@ def filament_file(
                 # ax[1].imshow(thresh)
                 # plt.show()
                 contour_data= np.zeros_like(thresh)
-                filament_image = np.zeros_like(thresh)
-              
+                filament_image =  thresh #np.zeros_like(thresh)
+                filament_image = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)
                 overlay = np.zeros_like(thresh)
                 dist_transform = np.zeros_like(thresh)
                 mask_bubbles = hierarchy[0,:,3]!=-1
@@ -551,8 +565,9 @@ def filament_file(
                         color,tag = shape_categorizer(contour)
 
                         if tag == "Filament":
+
                             #filament_contours.append(contour)
-                            filament_image  =cv.drawContours(filament_image,[contour],255,'blue',-1)
+                            filament_image  =cv.drawContours(filament_image,[contour],-1,(0,0,255),1)
 
                             
                             #cv.drawContours(contour_mask,[contour],-1,255,1)
@@ -561,17 +576,24 @@ def filament_file(
                             
 
 
-
+                
+               
                 dist = cv.distanceTransform(contour_mask,cv.DIST_L2,5)
+                plt.imshow(cv.cvtColor(filament_image, cv.COLOR_BGR2RGB))
+                #plt.ylim(300,550)
+                plt.show()
+                aa
                 mask_skeleton= skeletonize(dist>0)==1
                 dist[~mask_skeleton] =0
                 overlay[dist!=0] = 255
                 dist_transform[dist!=0] = dist[dist!=0]
-                # fig,ax = plt.subplots(1,3,sharex=True,sharey=True)
-                # ax[0].imshow(thresh)
-                # ax[1].imshow(contour_mask)
-                # ax[2].imshow(overlay)
-                # plt.show()                
+             
+                frame = np.hstack([thresh, contour_mask, overlay])
+                frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+                filename = os.path.join(output_folder_tommie, f"frame_{i:04d}.png")
+                
+                
+                cv.imwrite(filename, frame)             
                 if i % 10 == 0:
                     print(f"Processed {i}/{total_frames} frames...")
 
@@ -779,6 +801,7 @@ def main(folder,selected_image =1501,cropped_value=55, mirror=True, rotation=Non
 
 
 folder = r"D:\Experiments\Preliminary_tests\3103_FirstSpraytec\1percentPEO1ml_2nd_Camera_4_C001H001S0001_C1S0001_20250331_164039"
+folder = r"D:\Experiments\Preliminary_tests\3103_FirstSpraytec\0dot25percentPEO1ml_4th_Camera_4_C001H001S0001_C1S0001_20250331_174252"
 def creating_pickles(folder,skip_first_files=250):
     numpy_array= []
     match = re.search(r'\\([^\\]+?)_Camera', folder)
@@ -789,9 +812,9 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files)
+    filament_val =main(folder,selected_image=970,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
-
+   
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"
     with open(savepath, 'wb') as f:
         pickle.dump(numpy_array, f)

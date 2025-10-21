@@ -7,6 +7,10 @@ import numpy as np
 #from sklearn.cluster import DBSCAN
 from scipy.optimize import minimize
 
+"""
+Calibration which seems to work pretty well. You select the area, where the circles are and confirm and off you go.
+"""
+
 def params_findcirclegrid():
     params = cv.SimpleBlobDetector_Params()
 

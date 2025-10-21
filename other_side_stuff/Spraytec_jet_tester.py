@@ -502,6 +502,8 @@ print(np.mean(all_diam))
 
 counts, _ = np.histogram(all_diam, bins=bin_edges)
 counts = counts/ np.sum(counts)*100
+
+
 plt.figure(figsize=(8,5))
 plt.bar(bin_edges[:-1], counts, width=bin_widths, align='edge', edgecolor='black')
 plt.xscale('log')

@@ -2,13 +2,13 @@ import os
 """
 Produces the average plots of the spraytec data either via a loop over a keyphrase or via a file explorer
 """
-keyphrase = "PEO_0dot25_2cmlower_1ml_1dot5bar_80ms"  ##change this for different statistics
-keyphrase = "waterjet"  ##change this for different statistics
+keyphrase = "PEO_0dot25_1dot5ml_1dot5bar_80ms"  ##change this for different statistics
+#keyphrase = "waterjet"  ##change this for different statistics
 
 cwd = os.path.dirname(os.path.abspath(__file__))
 
 path = os.path.join(cwd,"Averages")
-path = os.path.join(path,"Unweighted","water_jet") #for the unweighted ones
+path = os.path.join(path,"Unweighted","0dot25") #for the unweighted ones
 #path = os.path.join(path,"weighted") #for the weighted ones
 
 print(f"Path: {path}")
@@ -141,17 +141,17 @@ for file in matching_files:
 
     # Add labels
     plt.xlabel(r"Diameter ($\mu$m)")
-    plt.ylabel("Number PDF (%)")
-    plt.title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
+    plt.ylabel("Number distribution (%)")
+    #plt.title(f"t= {round(t_start*1000)} to {round(t_end*1000)} ms, \n T: {transmission:.1f} %, num. records: {num_records} ")
     plt.xscale('log')
     #plt.yscale('log')
     plt.grid(which='both', linestyle='--', linewidth=0.5)
-    plt.ylim(1e-1,40)
+    #plt.ylim(1e-1,40)
     plt.xlim(bin_edges[0],bin_edges[-1])
     print(f"filename: {filename}")
     full_save_path = os.path.join(save_path,filename)
     print(f"full path: {full_save_path}")
     plt.tight_layout()
     plt.savefig(full_save_path+".svg")
-
+    plt.show()
     

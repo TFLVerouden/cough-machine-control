@@ -29,8 +29,13 @@ for csv_file in csv_files:
     reverse = csv_file.split("_")[-1]
     color = colors[i%6]
     if name== "Flowmeter":
+        continue
         df = pd.read_csv(path)
+        mask = df["Y"]>0
+        df = df[mask]
+
     else:
+        
         df = pd.read_csv(path,index_col=0)
     
     
@@ -57,7 +62,9 @@ for npz_file in npz_files:
     name =name.replace("_"," ")
     name = name.replace("dot",".")
     data = np.load(path)
-
+    if name == "PIV 1bar":
+        continue
+    
     flow_rate = data["flow_rate_Lps"]*1000
     time = data["time_s"]
     # --- Step 1: Define block size ---
@@ -68,7 +75,7 @@ for npz_file in npz_files:
     flow_avg = flow_rate[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
     time_avg = time[:n_blocks*block_size].reshape(n_blocks, block_size).mean(axis=1)
 
-    plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,label=name)
+    #plt.plot(time_avg,flow_avg,color=colors[i%6],linestyle=linestyle,label=name)
     j+=1
     i+=1
 
@@ -81,5 +88,5 @@ plt.xlim(0,0.5)
 plt.ylim(0)
 plt.grid(which="both")
 plt.tight_layout()
-plt.savefig(folder+"allcoughs.svg")
+plt.savefig(folder+"allcoughsliterature.svg")
 plt.show()

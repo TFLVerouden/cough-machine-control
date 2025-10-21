@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy as sc
 import re
+"""
+Loads in a pickle displays the average width over time, and the width vs length of filament
+Shows all filaments found for one timestep
+"""
 
 filename = r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\0dot25percentPEO1ml_4th.pkl"
 with open(filename, 'rb') as f:

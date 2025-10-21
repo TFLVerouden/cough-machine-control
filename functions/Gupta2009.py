@@ -1,6 +1,10 @@
 import numpy as np
 import scipy as sc
 from scipy.special import gamma as Gamma
+"""
+Plots the model of Gupta 2009
+"""
+
 
 def Tau(t,PVT):
     """

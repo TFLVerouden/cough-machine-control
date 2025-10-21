@@ -453,7 +453,7 @@ def filament_file(
            
         if i== selected_image or selected_image == -1:
             
-            if i%skip_images==0 and i>skip_first_files:
+            if i%skip_images==0 and i>skip_first_files and i<1000:
                 frame_number+=1
                 img= Image.open(folder +"\\" + file)  # Open TIFF
                 img = np.array(img)
@@ -740,7 +740,7 @@ def creating_pickles(folder,skip_first_files=250):
             
             ani.save(save_video, writer='ffmpeg', fps=60,dpi=300)
             plt.close()
-            aa
+            
             with open(savepath, 'wb') as f:
                 pickle.dump(numpy_array, f)
 
