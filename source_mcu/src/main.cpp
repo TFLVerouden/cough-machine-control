@@ -26,7 +26,7 @@ R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{3.99, 9.75, 795, 1943});
 // Humidity+temperature sensor
 Adafruit_SHT4x sht4; // Declare the T+RH sensor object
 
-enum State { IDLE, ERROR };
+enum State { IDLE };
 
 State currentState = IDLE;
 
@@ -64,15 +64,9 @@ void closeValve() {
   Serial.println("!");
 }
 
-// TODO: Print error rather than occupying microcontroller with error state ->
-// state machine can then be removed altogether
-void blinkError() {
-  for (int i = 0; i < 5; i++) {
-    digitalWrite(PIN_LED, HIGH);
-    delay(100);
-    digitalWrite(PIN_LED, LOW);
-    delay(100);
-  }
+void printError(const char* message) {
+  Serial.print("ERROR: ");
+  Serial.println(message);
 }
 
 void readPressure() {
@@ -115,7 +109,7 @@ void handleCommand(String command) {
 
       tick = micros();
     } else {
-      currentState = ERROR;
+      printError("Invalid duration");
     }
 
   } else if (command == "C") {
@@ -127,7 +121,7 @@ void handleCommand(String command) {
   } else if (command == "T?") {
     readTemperature();
   } else {
-    currentState = ERROR;
+    printError("Unknown command");
   }
 }
 
@@ -158,11 +152,6 @@ void loop() {
   switch (currentState) {
   case IDLE:
     // Do nothing
-    break;
-
-  case ERROR:
-    blinkError();
-    currentState = IDLE;
     break;
   }
 }
