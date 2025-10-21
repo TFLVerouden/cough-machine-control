@@ -11,6 +11,20 @@
 #include <Arduino.h>
 
 // ============================================================================
+// DEBUG CONFIGURATION
+// ============================================================================
+// Set to 1 to enable debug messages, 0 to disable for maximum speed
+#define DEBUG 1
+
+#if DEBUG
+  #define DEBUG_PRINT(x)    Serial.print(x)
+  #define DEBUG_PRINTLN(x)  Serial.println(x)
+#else
+  #define DEBUG_PRINT(x)
+  #define DEBUG_PRINTLN(x)
+#endif
+
+// ============================================================================
 // PIN DEFINITIONS
 // ============================================================================
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
@@ -117,8 +131,8 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  setLedColor(COLOR_IDLE); // Return to idle color
-  Serial.println("!");     // Send valve closed confirmation
+  setLedColor(COLOR_IDLE);  // Return to idle color
+  DEBUG_PRINTLN("!");       // Valve closed confirmation (debug only for speed)
 }
 
 void printError(const char *message) {
@@ -203,6 +217,10 @@ void loop() {
   // -------------------------------------------------------------------------
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
+    command.trim(); // Remove any whitespace
+    
+    DEBUG_PRINT("CMD: ");
+    DEBUG_PRINTLN(command);
 
     if (command.startsWith("O")) {
       // Command: O<duration_ms>
@@ -242,6 +260,40 @@ void loop() {
       // Command: T?
       // Read and return temperature & humidity
       readTemperature();
+
+    } else if (command == "?") {
+      // Command: ?
+      // Print help menu
+      DEBUG_PRINTLN("\n=== Available Commands ===");
+      DEBUG_PRINTLN("O<ms>  - Open valve for <ms> milliseconds (e.g., O100)");
+      DEBUG_PRINTLN("C      - Close valve immediately");
+      DEBUG_PRINTLN("P?     - Read pressure");
+      DEBUG_PRINTLN("T?     - Read temperature & humidity");
+      DEBUG_PRINTLN("S?     - System status");
+      DEBUG_PRINTLN("?      - Show this help");
+
+    } else if (command == "S?") {
+      // Command: S?
+      // Print system status (debug only)
+      DEBUG_PRINTLN("\n=== System Status ===");
+      DEBUG_PRINT("Valve: ");
+      DEBUG_PRINTLN(valveOpen ? "OPEN" : "CLOSED");
+      if (valveOpen) {
+        DEBUG_PRINT("Time remaining: ");
+        uint32_t elapsed = micros() - tick;
+        if (elapsed < duration) {
+          DEBUG_PRINT((duration - elapsed) / 1000);
+          DEBUG_PRINTLN(" ms");
+        }
+      }
+      DEBUG_PRINT("Trigger: ");
+      DEBUG_PRINTLN(performingTrigger ? "ACTIVE" : "IDLE");
+      DEBUG_PRINT("Pressure (raw): ");
+      DEBUG_PRINT(R_click.get_EMA_mA());
+      DEBUG_PRINTLN(" mA");
+      DEBUG_PRINT("Uptime: ");
+      DEBUG_PRINT(millis() / 1000);
+      DEBUG_PRINTLN(" s");
 
     } else {
       // Unknown command
