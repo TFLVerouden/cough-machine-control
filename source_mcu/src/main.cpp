@@ -202,8 +202,8 @@ void loop() {
   // -------------------------------------------------------------------------
   // Handle valve timing
   // -------------------------------------------------------------------------
-  // Close valve automatically after the specified duration has elapsed
-  if (valveOpen && (micros() - tick >= duration)) {
+  // Close valve after duration (duration=0 means stay open)
+  if (valveOpen && duration > 0 && (micros() - tick >= duration)) {
     closeValve();
     valveOpen = false;
   }
@@ -224,30 +224,29 @@ void loop() {
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (command.startsWith("O ")) {
-      // Command: O <duration_ms>
-      // Opens valve for specified duration in milliseconds
-      // Example: "O 100" opens valve for 100ms
+    if (command == "O" || command.startsWith("O ")) {
+      // Command: O or O <duration_ms>
+      // O = open indefinitely, O <ms> = open for specified time
 
-      // Extract duration and convert ms to µs
+      if (command == "O") {
+        duration = 0; // 0 means stay open
+        DEBUG_PRINTLN("Opening valve indefinitely");
+      } else {
       duration = 1000 * command.substring(2).toInt();
       DEBUG_PRINT("Opening valve for ");
       DEBUG_PRINT(duration);
       DEBUG_PRINTLN(" µs");
-      if (duration > 0) {
-        // Open both valve and trigger simultaneously using PORT register
-        // Eq. to: digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
+      }
+
+        // Open valve and trigger
         PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
             ((1 << g_APinDescription[PIN_VALVE].ulPin) |
              (1 << g_APinDescription[PIN_TRIG].ulPin));
 
-        setLedColor(COLOR_VALVE_OPEN); // Show bright green for active valve
+        setLedColor(COLOR_VALVE_OPEN);
         valveOpen = true;
         performingTrigger = true;
-        tick = micros(); // Record start time
-      } else {
-        printError("Invalid duration");
-      }
+      tick = micros();
 
     } else if (command == "C") {
       // Command: C
@@ -269,6 +268,7 @@ void loop() {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
+      DEBUG_PRINTLN("O      - Open valve indefinitely");
       DEBUG_PRINTLN("O <ms> - Open valve for <ms> milliseconds (e.g., O 100)");
       DEBUG_PRINTLN("C      - Close valve immediately");
       DEBUG_PRINTLN("P?     - Read pressure");
