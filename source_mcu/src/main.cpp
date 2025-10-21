@@ -6,6 +6,7 @@
  */
 
 #include "MIKROE_4_20mA_RT_Click.h"
+#include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
 
@@ -15,6 +16,7 @@
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for external device synchronization
+// Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
 
 // ============================================================================
 // TIMING PARAMETERS
@@ -35,6 +37,30 @@ R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{3.99, 9.75, 795, 1943});
 Adafruit_SHT4x sht4;
 
 // ============================================================================
+// LED CONFIGURATION
+// ============================================================================
+// DotStar RGB LED (using board's built-in DotStar on pins 8 and 6)
+Adafruit_DotStar led(1, PIN_DOTSTAR_DATA, PIN_DOTSTAR_CLK, DOTSTAR_BGR);
+
+// LED color definitions (avoiding pure red for laser goggle compatibility)
+// Colors use BGR format: Blue, Green, Red
+const uint32_t COLOR_IDLE = 0x001000;       // Dim green - system ready
+const uint32_t COLOR_VALVE_OPEN = 0x00FF00; // Bright green - valve active
+const uint32_t COLOR_ERROR = 0xFF8000;      // Orange - error state
+const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
+const uint32_t COLOR_OFF = 0x000000;        // Off
+
+// ============================================================================
+// LED HELPER FUNCTION
+// ============================================================================
+
+void setLedColor(uint32_t color) {
+  // Set the DotStar LED to a specific color
+  led.setPixelColor(0, color);
+  led.show();
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -50,6 +76,11 @@ void setup() {
   digitalWrite(PIN_VALVE, LOW);
   digitalWrite(PIN_TRIG, LOW);
 
+  // Initialize DotStar LED
+  led.begin();
+  led.setBrightness(255); // Set brightness to full
+  led.show();             // Initialize all pixels to 'off'
+
   // Initialize serial communication at 115200 baud
   Serial.begin(115200);
 
@@ -59,17 +90,25 @@ void setup() {
   // Initialize the SHT4x temperature & humidity sensor
   if (!sht4.begin()) {
     Serial.println("Failed to find SHT4x sensor!");
-    while (1)
-      delay(10); // Halt execution if sensor is not found
+    // Blink orange for fatal error
+    while (1) {
+      setLedColor(COLOR_ERROR);
+      delay(200);
+      setLedColor(COLOR_OFF);
+      delay(200);
+    }
   }
 
   // Configure SHT4x for high precision, no heater
   sht4.setPrecision(SHT4X_HIGH_PRECISION);
   sht4.setHeater(SHT4X_NO_HEATER);
+
+  // Show idle color to indicate system is ready
+  setLedColor(COLOR_IDLE);
 }
 
 // ============================================================================
-// HELPER FUNCTIONS
+// VALVE AND SENSOR FUNCTIONS
 // ============================================================================
 
 void closeValve() {
@@ -78,27 +117,35 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  digitalWrite(PIN_LED, LOW); // Turn off LED indicator
-  Serial.println("!");        // Send valve closed confirmation
+  setLedColor(COLOR_IDLE); // Return to idle color
+  Serial.println("!");     // Send valve closed confirmation
 }
 
 void printError(const char *message) {
   // Print error message to serial for debugging
   Serial.print("ERROR: ");
   Serial.println(message);
+
+  // Flash orange briefly to indicate error
+  setLedColor(COLOR_ERROR);
+  delay(300);
+  setLedColor(COLOR_IDLE);
 }
 
 void readPressure() {
   // Read current pressure from R-Click sensor
   // Conversion formula: Pressure = 0.6249 * I[mA] - 2.4882
   // where I is the 4-20mA current output
+  setLedColor(COLOR_READING); // Show color during reading
   Serial.print("P");
   Serial.print(0.6249 * R_click.get_EMA_mA() - 2.4882);
   Serial.println();
+  setLedColor(COLOR_IDLE); // Return to idle color
 }
 
 void readTemperature() {
   // Read temperature and relative humidity from SHT4x sensor
+  setLedColor(COLOR_READING); // Show color during reading
   sensors_event_t humidity, temp;
   sht4.getEvent(&humidity, &temp);
 
@@ -109,6 +156,8 @@ void readTemperature() {
   // Send humidity reading
   Serial.print("RH");
   Serial.println(humidity.relative_humidity);
+
+  setLedColor(COLOR_IDLE); // Return to idle color
 }
 
 // ============================================================================
@@ -170,7 +219,7 @@ void loop() {
             ((1 << g_APinDescription[PIN_VALVE].ulPin) |
              (1 << g_APinDescription[PIN_TRIG].ulPin));
 
-        digitalWrite(PIN_LED, HIGH); // Turn on LED indicator
+        setLedColor(COLOR_VALVE_OPEN); // Show bright green for active valve
         valveOpen = true;
         performingTrigger = true;
         tick = micros(); // Record start time
