@@ -14,14 +14,14 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
-  #define DEBUG_PRINT(x)    Serial.print(x)
-  #define DEBUG_PRINTLN(x)  Serial.println(x)
+#define DEBUG_PRINT(x) Serial.print(x)
+#define DEBUG_PRINTLN(x) Serial.println(x)
 #else
-  #define DEBUG_PRINT(x)
-  #define DEBUG_PRINTLN(x)
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
 #endif
 
 // ============================================================================
@@ -60,7 +60,7 @@ Adafruit_DotStar led(1, PIN_DOTSTAR_DATA, PIN_DOTSTAR_CLK, DOTSTAR_BGR);
 // Colors use BGR format: Blue, Green, Red
 const uint32_t COLOR_IDLE = 0x001000;       // Dim green - system ready
 const uint32_t COLOR_VALVE_OPEN = 0x00FF00; // Bright green - valve active
-const uint32_t COLOR_ERROR = 0xFF6000;      // Orange - error state
+const uint32_t COLOR_ERROR = 0xFF4000;      // Orange - error state
 const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
 const uint32_t COLOR_OFF = 0x000000;        // Off
 
@@ -131,8 +131,8 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  setLedColor(COLOR_IDLE);  // Return to idle color
-  DEBUG_PRINTLN("!");       // Valve closed confirmation (debug only for speed)
+  setLedColor(COLOR_IDLE); // Return to idle color
+  DEBUG_PRINTLN("!");      // Valve closed confirmation (debug only for speed)
 }
 
 void printError(const char *message) {
@@ -169,7 +169,7 @@ void readTemperature(bool valveOpen) {
   Serial.println(temp.temperature);
 
   // Send humidity reading
-  Serial.print("RH");
+  Serial.print("H");
   Serial.println(humidity.relative_humidity);
 
   // Restore LED color based on valve state
@@ -220,7 +220,7 @@ void loop() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim(); // Remove any whitespace
-    
+
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
@@ -232,20 +232,20 @@ void loop() {
         duration = 0; // 0 means stay open
         DEBUG_PRINTLN("Opening valve indefinitely");
       } else {
-      duration = 1000 * command.substring(2).toInt();
-      DEBUG_PRINT("Opening valve for ");
-      DEBUG_PRINT(duration);
-      DEBUG_PRINTLN(" µs");
+        duration = 1000 * command.substring(2).toInt();
+        DEBUG_PRINT("Opening valve for ");
+        DEBUG_PRINT(duration);
+        DEBUG_PRINTLN(" µs");
       }
 
-        // Open valve and trigger
-        PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
-            ((1 << g_APinDescription[PIN_VALVE].ulPin) |
-             (1 << g_APinDescription[PIN_TRIG].ulPin));
+      // Open valve and trigger
+      PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
+          ((1 << g_APinDescription[PIN_VALVE].ulPin) |
+           (1 << g_APinDescription[PIN_TRIG].ulPin));
 
-        setLedColor(COLOR_VALVE_OPEN);
-        valveOpen = true;
-        performingTrigger = true;
+      setLedColor(COLOR_VALVE_OPEN);
+      valveOpen = true;
+      performingTrigger = true;
       tick = micros();
 
     } else if (command == "C") {
