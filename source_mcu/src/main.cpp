@@ -222,14 +222,16 @@ void loop() {
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (command.startsWith("O")) {
-      // Command: O<duration_ms>
+    if (command.startsWith("O ")) {
+      // Command: O <duration_ms>
       // Opens valve for specified duration in milliseconds
-      // Example: "O100" opens valve for 100ms
+      // Example: "O 100" opens valve for 100ms
 
       // Extract duration and convert ms to µs
       duration = 1000 * command.substring(2).toInt();
-
+      DEBUG_PRINT("Opening valve for ");
+      DEBUG_PRINT(duration);
+      DEBUG_PRINTLN(" µs");
       if (duration > 0) {
         // Open both valve and trigger simultaneously using PORT register
         // Eq. to: digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
@@ -254,18 +256,18 @@ void loop() {
     } else if (command == "P?") {
       // Command: P?
       // Read and return current pressure
-      readPressure();
+      readPressure(valveOpen);
 
     } else if (command == "T?") {
       // Command: T?
       // Read and return temperature & humidity
-      readTemperature();
+      readTemperature(valveOpen);
 
     } else if (command == "?") {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
-      DEBUG_PRINTLN("O<ms>  - Open valve for <ms> milliseconds (e.g., O100)");
+      DEBUG_PRINTLN("O <ms> - Open valve for <ms> milliseconds (e.g., O 100)");
       DEBUG_PRINTLN("C      - Close valve immediately");
       DEBUG_PRINTLN("P?     - Read pressure");
       DEBUG_PRINTLN("T?     - Read temperature & humidity");
