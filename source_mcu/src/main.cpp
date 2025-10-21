@@ -60,7 +60,7 @@ Adafruit_DotStar led(1, PIN_DOTSTAR_DATA, PIN_DOTSTAR_CLK, DOTSTAR_BGR);
 // Colors use BGR format: Blue, Green, Red
 const uint32_t COLOR_IDLE = 0x001000;       // Dim green - system ready
 const uint32_t COLOR_VALVE_OPEN = 0x00FF00; // Bright green - valve active
-const uint32_t COLOR_ERROR = 0xFF8000;      // Orange - error state
+const uint32_t COLOR_ERROR = 0xFF6000;      // Orange - error state
 const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
 const uint32_t COLOR_OFF = 0x000000;        // Off
 
@@ -146,7 +146,7 @@ void printError(const char *message) {
   setLedColor(COLOR_IDLE);
 }
 
-void readPressure() {
+void readPressure(bool valveOpen) {
   // Read current pressure from R-Click sensor
   // Conversion formula: Pressure = 0.6249 * I[mA] - 2.4882
   // where I is the 4-20mA current output
@@ -154,10 +154,11 @@ void readPressure() {
   Serial.print("P");
   Serial.print(0.6249 * R_click.get_EMA_mA() - 2.4882);
   Serial.println();
-  setLedColor(COLOR_IDLE); // Return to idle color
+  // Restore LED color based on valve state
+  setLedColor(valveOpen ? COLOR_VALVE_OPEN : COLOR_IDLE);
 }
 
-void readTemperature() {
+void readTemperature(bool valveOpen) {
   // Read temperature and relative humidity from SHT4x sensor
   setLedColor(COLOR_READING); // Show color during reading
   sensors_event_t humidity, temp;
@@ -171,7 +172,8 @@ void readTemperature() {
   Serial.print("RH");
   Serial.println(humidity.relative_humidity);
 
-  setLedColor(COLOR_IDLE); // Return to idle color
+  // Restore LED color based on valve state
+  setLedColor(valveOpen ? COLOR_VALVE_OPEN : COLOR_IDLE);
 }
 
 // ============================================================================
