@@ -36,34 +36,62 @@ yerr_b = np.array([
 
 # Plot
 
-fig, ax = plt.subplots(1,2,figsize=(8,6))
+# fig, ax = plt.subplots(1,2,figsize=(8,6))
+
+# # Main plot
+# ax[1].errorbar(x_a, y_a, yerr=yerr_a, fmt='o', ms=4, capsize=3, label="Sikkema 2025")
+# ax[1].errorbar(x_b, y_b, yerr=yerr_b, fmt='o', ms=4, capsize=3, label="Li et al. 2025")
+# #ax.set_xscale('log')   # log for full range
+# ax[1].set_yscale('log')
+# ax[1].set_xlabel("De")
+# ax[0].set_ylabel("Mode diameter (μm)")
+# ax[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+# #ax.legend()
+# ax[0].errorbar(x_a, y_a, yerr=yerr_a, fmt='o', ms=4, capsize=3, label="Sikkema 2025")
+# ax[0].errorbar(x_b, y_b, yerr=yerr_b, fmt='o', ms=4, capsize=3, label="Li 2025")
+# #ax.set_xscale('log')   # log for full range
+# ax[0].set_yscale('log')
+# ax[0].set_xlabel("De")
+
+# ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
+# ax[0].set_xlim(-0.5,30)
+# ax[0].set_ylim(6,30)
+
+# ax[0].text(0.08, 0.92, "a.", transform=ax[0].transAxes, fontsize=12, fontweight="bold", va="bottom", ha="right")
+# ax[1].text(0.08, 0.92, "b.", transform=ax[1].transAxes, fontsize=12, fontweight="bold", va="bottom", ha="right")
+# ax[0].yaxis.set_major_locator(FixedLocator([6, 10, 20, 30]))
+# ax[0].yaxis.set_major_formatter(ScalarFormatter())
+# # axins.tick_params(axis='y', which='major', labelsize=10)  # optional: adjust tick size
+# #axins.grid(True, which='both', linestyle='--', linewidth=0.5)
+# ax[1].legend()
+
+# plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\modedropletsizes\modedropletlegend.svg")
+# plt.show()
+
+
+fig,ax = plt.subplots(figsize=(3,4))
 
 # Main plot
-ax[1].errorbar(x_a, y_a, yerr=yerr_a, fmt='o', ms=4, capsize=3, label="Sikkema 2025")
-ax[1].errorbar(x_b, y_b, yerr=yerr_b, fmt='o', ms=4, capsize=3, label="Li 2025")
+plt.errorbar(x_a, y_a, yerr=yerr_a, fmt='o', ms=4, capsize=3, label="Sikkema 2025")
+plt.errorbar(x_b, y_b, yerr=yerr_b, fmt='o', ms=4, capsize=3, label="Li et al. 2025")
 #ax.set_xscale('log')   # log for full range
-ax[1].set_yscale('log')
-ax[1].set_xlabel("De")
-ax[0].set_ylabel("Mode diameter (μm)")
-ax[1].grid(True, which='both', linestyle='--', linewidth=0.5)
+ax.set_yscale('log')
+ax.set_xlabel("De")
+ax.set_ylabel("Mode diameter (μm)")
+plt.grid(True, which='both', linestyle='--', linewidth=0.5)
 #ax.legend()
-ax[0].errorbar(x_a, y_a, yerr=yerr_a, fmt='o', ms=4, capsize=3, label="Sikkema 2025")
-ax[0].errorbar(x_b, y_b, yerr=yerr_b, fmt='o', ms=4, capsize=3, label="Li 2025")
-#ax.set_xscale('log')   # log for full range
-ax[0].set_yscale('log')
-ax[0].set_xlabel("De")
 
-ax[0].grid(True, which='both', linestyle='--', linewidth=0.5)
-ax[0].set_xlim(-0.5,30)
-ax[0].set_ylim(6,30)
 
-ax[0].text(0.08, 0.92, "a.", transform=ax[0].transAxes, fontsize=12, fontweight="bold", va="bottom", ha="right")
-ax[1].text(0.08, 0.92, "b.", transform=ax[1].transAxes, fontsize=12, fontweight="bold", va="bottom", ha="right")
-ax[0].yaxis.set_major_locator(FixedLocator([6, 10, 20, 30]))
-ax[0].yaxis.set_major_formatter(ScalarFormatter())
+ax.set_xlim(-0.5,30)
+ax.set_ylim(6,30)
+
+
+ax.yaxis.set_major_locator(FixedLocator([6, 10, 20, 30]))
+ax.yaxis.set_major_formatter(ScalarFormatter())
 # axins.tick_params(axis='y', which='major', labelsize=10)  # optional: adjust tick size
 #axins.grid(True, which='both', linestyle='--', linewidth=0.5)
 
-
-plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\other_side_stuff\modedropletsizes\modedroplet.pdf")
+ax.legend(loc="center right")
+plt.tight_layout()
+plt.savefig(rf"C:\Users\sikke\Documents\universiteit\Master\Thesis\presentation\getmarkers.png")
 plt.show()

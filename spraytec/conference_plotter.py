@@ -12,7 +12,8 @@ sys.path.append(function_dir)
 from cvd_check import set_cvd_friendly_colors
 
 colors = set_cvd_friendly_colors()
-
+colors[3] ="green"
+colors[4] = "black"
 save_path = os.path.join(cwd,"results_spraytec","Serie_Averages")
 series_savepath = os.path.join(save_path,"npz_files")
 total_savepath = os.path.join(save_path,"bundled")
@@ -44,15 +45,15 @@ save_names= ["concentration", "film_thickness", "pressure", "height","jets"] #ch
 
 
 save_name = "height"
-save_name ="jets"
+#save_name ="jets"
 keep = comparison(save_name)
 
 
 filtered = [f for f in npz_files if any(k in f for k in keep)]
 # colors = plt.get_cmap("tab10").colors   # tab10 = Tableau ColorBlind10
 print(len(filtered))
-
-plt.figure()
+#filtered = [f for f in filtered if "1percent" in f]
+plt.figure(figsize=(4,3))
 i=0
 
 
@@ -69,6 +70,7 @@ for file in filtered:
             label_con  = ""
             label_amount = parts[1]
             label_cough= parts[2]
+            
         else:
             label_con  = parts[1] 
             label_amount = parts[2]
@@ -99,6 +101,11 @@ for file in filtered:
         full_label = label_fluid + " " + label_con  + label_amount + " " + label_cough
     else:
         full_label = filename.split(".")[0]
+     
+        if full_label =="waterjet":
+            full_label= "Spraytec"
+        else:
+            full_label ="Image processing"
         # if full_label == "waterjet_camera": #If you want to exclude the camera data
         #     continue
     data = np.load(file,allow_pickle=True)
@@ -128,13 +135,21 @@ for file in filtered:
     q3 = weighted_quantile(bins, 0.75, weights/100)
     print(f"{full_label} mean: {average:.2f},median:{median:.2f},LQ:{q1:.2f},UQ:{q3:.2f}")
     plt.step(bins,n_percentages,where="post",color=colors[i],label=full_label)
+    x= np.array(bins,dtype='float')
+    y =np.array(n_percentages,dtype='float')
+    mask = np.isfinite(x) & np.isfinite(y)
+    x = x[mask]
+    y = y[mask]
+    #plt.fill_between(x, 0, y, step='post', color=colors[i], alpha=0.2)
     plt.grid(which="both",axis='both',linestyle='--', linewidth=0.5)
-    plt.ylim(0,50)
+    plt.ylim(0.1,10)
+    #plt.xlim(100)
     plt.xscale('log')
-    plt.xlabel(r"Diameter ($\mu$m)")
+    plt.xlabel(r"Diameter ($\mathrm{\mu}$m)")
     plt.ylabel("Number distribution (%)")
     i+=1
-plt.legend()
-
-plt.savefig(total_savepath+"\\" +save_name + "PEOcomparison.svg")
+#plt.legend()
+plt.tight_layout()
+plt.savefig(r"C:\Users\sikke\Documents\universiteit\Master\Thesis\presentation\differentposition.svg")
+#plt.savefig(total_savepath+"\\" +save_name + "PEOcomparison.svg")
 plt.show()

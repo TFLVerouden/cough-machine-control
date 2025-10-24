@@ -70,7 +70,7 @@ plt.ylabel("Average filament width (mm)")
 plt.hlines(min_width,np.min(t),np.max(t),color="k",linestyles="--")
 
 plt.ylim(0)
-plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidth_0dot25_errorbars.pdf")
+plt.savefig(r"C:\Users\sikke\Documents\GitHub\cough-machine-control\filament_width\filamentwidth_0dot25_errorbars.svg")
 #plt.title("Average width over time")
 #plt.show()
 x = np.linspace(min_width,np.nanmax(all_length/scale), 100)  # avoid division by zero

@@ -18,10 +18,17 @@ from numpy.linalg import norm
 from math import degrees, acos
 import pickle
 import re
+from matplotlib import cm
+
 plt.style.use('tableau-colorblind10')
 colors = plt.cm.tab10.colors
 markers = ["o","v","1","*","+","d","|","s","h","<","X"]
+inferno = cm.get_cmap('PuRd', 256)  # matplotlib inferno
+colors = (inferno(np.arange(256))[:, :3] * 255).astype(np.uint8)  # RGB 0-255
+colors[0] = [255, 255, 255]  # first color = white
 
+# OpenCV expects colormap as 256x1x3 uint8
+custom_colormap = colors.reshape((256, 1, 3))
 """
 Difficult code, but the essential points one must know: It processes images to pickles with filament info.
 Selected image=-1, processes all images, selected_image =800, only processes frame 800
@@ -496,8 +503,9 @@ def filament_file(
     fourcc = cv.VideoWriter_fourcc(*'mp4v')
     fps = 10
 
-    output_folder_tommie = "frames_tommie"
+    output_folder_tommie =r"C:\Users\sikke\Documents\universiteit\Master\Thesis\presentation\filamentwidth"
     os.makedirs(output_folder_tommie, exist_ok=True)
+    max_dist_transform =0
     for i,file in enumerate(files):
            
         if i== selected_image or selected_image == -1:
@@ -567,7 +575,7 @@ def filament_file(
                         if tag == "Filament":
 
                             #filament_contours.append(contour)
-                            filament_image  =cv.drawContours(filament_image,[contour],-1,(0,0,255),1)
+                            filament_image  =cv.drawContours(filament_image,[contour],-1,(0,0,255),2)
 
                             
                             #cv.drawContours(contour_mask,[contour],-1,255,1)
@@ -579,17 +587,28 @@ def filament_file(
                 
                
                 dist = cv.distanceTransform(contour_mask,cv.DIST_L2,5)
-                plt.imshow(cv.cvtColor(filament_image, cv.COLOR_BGR2RGB))
-                #plt.ylim(300,550)
-                plt.show()
-                aa
+          
                 mask_skeleton= skeletonize(dist>0)==1
                 dist[~mask_skeleton] =0
                 overlay[dist!=0] = 255
                 dist_transform[dist!=0] = dist[dist!=0]
-             
-                frame = np.hstack([thresh, contour_mask, overlay])
-                frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
+                dist_rgb = cv.cvtColor(overlay.astype(np.uint8), cv.COLOR_GRAY2BGR)
+                thresh_rgb = cv.cvtColor(thresh.astype(np.uint8), cv.COLOR_GRAY2BGR)
+                global_max=50
+                # if np.max(dist_transform)> max_dist_transform:
+                #     print(np.max(dist_transform))
+                #     max_dist_transform = np.max(dist_transform)
+                dist_norm = (dist_transform / global_max * 255).clip(0, 255).astype(np.uint8)
+                #dist_rgb = cv.applyColorMap(dist_norm, custom_colormap)
+                #dist_rgb = cv.cvtColor(dist_transform.astype(np.uint8), cv.COLOR_GRAY2BGR)
+                # Create a vertical padding column (white or black)
+                padding = 5  # width of space in pixels
+                pad_col = 255 * np.ones((thresh_rgb.shape[0], padding, 3), dtype=np.uint8)  # white space
+
+                # Stack with padding between first two images
+                frame = np.hstack([thresh_rgb, pad_col, filament_image, pad_col, dist_rgb])
+                
+                #frame = cv.cvtColor(frame, cv.COLOR_GRAY2BGR)
                 filename = os.path.join(output_folder_tommie, f"frame_{i:04d}.png")
                 
                 
@@ -812,7 +831,7 @@ def creating_pickles(folder,skip_first_files=250):
     files = [f for f in glob.glob("*.tif", root_dir=folder) if "ximea" not in f.lower() and "calibration" not in f.lower()]
     amount_files = len(files)
 
-    filament_val =main(folder,selected_image=970,skip_first_files=skip_first_files,skip_images=1)
+    filament_val =main(folder,selected_image=-1,skip_first_files=skip_first_files,skip_images=1)
     numpy_array.append(filament_val)
    
     savepath= r"D:\Experiments\Processed_Data\RemotePC\\Processed_arrays\\" + result +".pkl"

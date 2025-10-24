@@ -20,6 +20,8 @@ import pickle
 import re
 import matplotlib.animation as animation
 from matplotlib.ticker import FuncFormatter
+from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+import matplotlib.font_manager as fm
 import sys
 plt.style.use('tableau-colorblind10')
 colors = plt.cm.tab10.colors
@@ -402,14 +404,16 @@ for i,file in enumerate(files):
     # plt.show()
     # Fill small holes inside binary objects
     #thresh = cv.morphologyEx(thresh, cv.MORPH_CLOSE, cv.getStructuringElement(cv.MORPH_ELLIPSE, (3,3)))
+    output = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)  # Convert to BGR so we can draw colored circles
 
     contours, hierarchy = cv.findContours(thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     contour_areas = np.array([cv.contourArea(contour) for contour in contours])
     min_area= 60
-  
+    
+    print(contour_areas)
     mask_area = (contour_areas > 12) & (contour_areas < 400)   # min_area
     contours  = [contour for i,contour in enumerate(contours) if mask_area[i] ]
- 
+    
     mask_hierarchy = hierarchy[:,:,3] == -1
 
     mask_hierarchy = mask_hierarchy[0]
@@ -435,9 +439,9 @@ for i,file in enumerate(files):
 
         if not inside:
             valid_contours.append(cnt)
+    cv.drawContours(output, valid_contours, -1, color=255, thickness=1)
     contour_areas = np.array([cv.contourArea(contour) for contour in valid_contours])
     contour_image = np.zeros_like(thresh)
-    output = cv.cvtColor(thresh, cv.COLOR_GRAY2BGR)  # Convert to BGR so we can draw colored circles
     diameters = 2 * np.sqrt(contour_areas / np.pi)
     for cnt in valid_contours:
         (x, y), radius = cv.minEnclosingCircle(cnt)
@@ -446,21 +450,38 @@ for i,file in enumerate(files):
         #cv.circle(output, center, radius, (0, 255, 0), 1)  # Draw green circle
         diameter = 2 * np.sqrt(cv.contourArea(cnt) / np.pi)
 
-        cv.circle(output, center, int(diameter/2), (255, 0, 0), 1)  # Draw green circle
+        cv.circle(output, center, int(diameter/2), (0, 0, 255), 1)  # Draw green circle
 
 
     # Draw contours as lines
-    cv.drawContours(contour_image, contours, -1, color=255, thickness=1)
+    
 
     diameters = diameters*scale
     all_diam = np.concatenate((all_diam, diameters))
     ##Show result with matplotlib
-    # fig,ax =plt.subplots(1,2,figsize=(8, 6),sharex=True,sharey=True)
-    # ax[0].imshow(contour_image, cmap='gray')
-    # plt.title("Contours Drawn with OpenCV")
-    # plt.axis('off')
-    # ax[1].imshow(cv.cvtColor(output,cv.COLOR_BGR2RGB))
-    # plt.show()
+    plt.figure()
+   
+    #plt.title("Contours Drawn with OpenCV")
+    plt.axis('off')
+    plt.imshow(cv.cvtColor(output,cv.COLOR_BGR2RGB))
+    scalebar_length_mm = 1
+    pixels_per_mm = 1 / scale
+    plt.xlim(0,200)
+    plt.ylim(320,380)
+    x_start = 180                  # starting x coordinate of scale bar
+    y = 335                        # y coordinate of scale bar
+    x_end = x_start - scalebar_length_mm * pixels_per_mm  # ending x
+    print(x_end)
+    print(scale)
+
+    # Draw scale bar
+    plt.plot([x_start, x_end], [y, y], color='white', lw=3)
+
+    # Draw text label above scale bar
+    plt.text((x_start + x_end)/2, y - 10, f'{scalebar_length_mm} mm', 
+            color='white', ha='center', va='bottom', fontsize=12)
+    #plt.savefig(r"C:\Users\sikke\Documents\universiteit\Master\Thesis\presentation\equivalentarea.svg")
+    plt.show()
 
 all_diam =np.array(all_diam)
 
