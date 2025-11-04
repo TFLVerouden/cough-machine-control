@@ -20,7 +20,7 @@ print(function_dir)
 sys.path.append(function_dir)
 import Gupta2009 as Gupta
 import pumpy 
-from Ximea import Ximea #not needed anymore
+# from Ximea import Ximea #not needed anymore
 
 
 ####Finished loading Modules
