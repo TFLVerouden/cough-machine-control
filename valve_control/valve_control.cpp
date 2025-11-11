@@ -4,26 +4,30 @@
 
 // Connections
 const int ledPin = LED_BUILTIN;  // Use the built-in LED
-const int powerPin = 5;          // Use pin 5 for 5.0V control
-const int pressurePin = 10;      // Placeholder pin for pressure reading
+const int valvePin = 7;         // Pin to control the MOSFET for valve control
+const int csRClick = 2;          // Cable select pin for RClick pressure reading
+const int trigPin = 9;           // Pin for trigger out 
 
-// Valve opening logic parameters
-int duration = 0;                // Variable to store the duration
+// Trigger parameters
+const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs]
+uint32_t tickTrigger = 0;  // Trigger for the tick interval
+bool performingTrigger = false;
+
+// Valve opening logic parameters (these are not static as they are called by functions)
+uint32_t duration = 0;                // Variable to store the duration
 bool valveOpen = false;          // Flag to check if the valve is open
-unsigned long startTime = 0;     // Variable to store the start time
+unsigned long tickValve = 0;     // Variable to store the start time
 
 // Exponential moving average (EMA) parameters & calibration of the R Click readings
 const uint32_t EMA_INTERVAL = 500; // Desired oversampling interval [µs]
 const float EMA_LP_FREQ = 200.;      // Low-pass filter cut-off frequency [Hz]
-R_Click R_click(pressurePin, RT_Click_Calibration{3.99, 9.75, 795, 1943});
+R_Click R_click(csRClick, RT_Click_Calibration{3.99, 9.75, 795, 1943});
 
 // Humidity+temperature sensor
 Adafruit_SHT4x sht4;  // Declare the T+RH sensor object
 
 enum State {
   IDLE,
-  OPENING,
-  CLOSING,
   ERROR
 };
 
@@ -31,10 +35,14 @@ State currentState = IDLE;
 
 void setup() {
   pinMode(ledPin, OUTPUT);
-  pinMode(powerPin, OUTPUT);
-  pinMode(pressurePin, INPUT);
+  pinMode(valvePin, OUTPUT);
+  pinMode(csRClick, INPUT);
+  pinMode(trigPin, OUTPUT);
+
   digitalWrite(ledPin, LOW);
-  digitalWrite(powerPin, LOW);
+  digitalWrite(valvePin, LOW);
+  digitalWrite(trigPin, LOW);
+  
   Serial.begin(115200);
   R_click.begin();
 
@@ -50,6 +58,22 @@ void setup() {
 } 
 
 void loop() {
+  // Handle trigger
+  if (performingTrigger && (micros() - tickTrigger >= TRIGGER_WIDTH)) {
+    digitalWrite(trigPin, LOW);
+    performingTrigger = false;
+  }
+
+  // Handle MOSFET valve control
+  if (valveOpen && (micros() - tickValve >= duration)) {
+    closeValve();
+    valveOpen = false;
+    currentState = IDLE;
+  }
+
+  // Poll R-click board (pressure sensor)
+  R_click.poll_EMA();
+
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     handleCommand(command);
@@ -60,18 +84,6 @@ void loop() {
       // Do nothing
       break;
 
-    case OPENING:
-      if (millis() - startTime >= duration) {
-        closeValve();
-        currentState = IDLE;
-      }
-      break;
-
-    case CLOSING:
-      closeValve();
-      currentState = IDLE;
-      break;
-
     case ERROR:
       blinkError();
       currentState = IDLE;
@@ -79,20 +91,25 @@ void loop() {
   }
 }
 
+ // TODO: Move to loop so variables don't have to be global
 void handleCommand(String command) {
   if (command.startsWith("O")) {
-    duration = command.substring(2).toInt();
+    // Extract duration (us) from command (ms)
+    duration = 1000 * command.substring(2).toInt();
     if (duration > 0) {
+      // Open valve
       openValve();
-      currentState = OPENING;
+
+      // Trigger camera
+      performingTrigger = true;
+      digitalWrite(trigPin, HIGH);
+      tickTrigger = micros();
     } else {
       currentState = ERROR;
     }
 
   } else if (command == "C") {
-    if (valveOpen) {
-      currentState = CLOSING;
-    }
+    closeValve();
 
   } else if (command == "P?") {
     readPressure();
@@ -106,17 +123,18 @@ void handleCommand(String command) {
 
 void openValve() {
   digitalWrite(ledPin, HIGH);
-  digitalWrite(powerPin, HIGH);
+  digitalWrite(valvePin, HIGH);
   valveOpen = true;
-  startTime = millis();
+  tickValve = micros();
 }
 
 void closeValve() {
   digitalWrite(ledPin, LOW);
-  digitalWrite(powerPin, LOW);
+  digitalWrite(valvePin, LOW);
   valveOpen = false;
   Serial.println("!");
 }
+// TODO: Print error rather than occupying microcontroller with error state -> state machine can then be removed altogether
 
 void blinkError() {
   for (int i = 0; i < 5; i++) {
@@ -129,7 +147,6 @@ void blinkError() {
 
 void readPressure() {
   // Reads out R-click board and converts to pressure
-  R_click.poll_EMA();
   Serial.print("P");
   Serial.print(0.6249*R_click.get_EMA_mA() - 2.4882);
   Serial.println();

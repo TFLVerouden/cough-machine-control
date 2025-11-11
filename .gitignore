@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -243,3 +242,5 @@ fabric.properties
 # Add all variations of .DS_Store
 .DS_Store
 **/.DS_Store
+.vscode/settings.json
+piv/processed/.DS_Store
