@@ -1,7 +1,7 @@
 /*
  * Cough Machine Control System
  *
- * Controls a solenoid valve for droplet experiments with precise timing.
+ * Controls a solenoid valve for atomisation experiments with precise timing.
  * Monitors pressure and environmental conditions.
  */
 
@@ -29,7 +29,7 @@
 // ============================================================================
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
-const int PIN_TRIG = 9; // Trigger output for external device synchronization
+const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 // Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
 
 // ============================================================================
@@ -189,7 +189,7 @@ void loop() {
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
   // -------------------------------------------------------------------------
-  // The trigger pulse is a short signal sent to external equipment when the
+  // The trigger pulse is a short signal sent to peripheral devices when the
   // valve opens. It turns off after TRIGGER_WIDTH microseconds.
   if (performingTrigger && (micros() - tick >= TRIGGER_WIDTH)) {
     // Turn off trigger using direct PORT register access
