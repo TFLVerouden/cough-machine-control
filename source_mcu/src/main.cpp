@@ -30,6 +30,8 @@
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
+const int PIN_LASER = A2; // Laser MOSFET gate pin for droplet detection
+const int PIN_PDA = 12;   // Analog input from photodetector
 // Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
 
 // ============================================================================
@@ -37,6 +39,7 @@ const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
+uint32_t tick_delay = 0; // Delay from droplet detection to valve opening [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -50,6 +53,11 @@ R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{3.99, 9.75, 795, 1943});
 // Temperature & humidity sensor (SHT4x I2C)
 Adafruit_SHT4x sht4;
 
+// Photodetector configuration for droplet detection
+const float PDA_R1 = 6710.0; // Voltage divider resistor [Ohm]
+const float PDA_R2 = 3260.0; // Voltage divider resistor [Ohm]
+const float PDA_THR = 1.5;   // Droplet detection threshold [V]
+
 // ============================================================================
 // LED CONFIGURATION
 // ============================================================================
@@ -62,7 +70,10 @@ const uint32_t COLOR_IDLE = 0x001000;       // Dim green - system ready
 const uint32_t COLOR_VALVE_OPEN = 0x00FF00; // Bright green - valve active
 const uint32_t COLOR_ERROR = 0xFF4000;      // Orange - error state
 const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
-const uint32_t COLOR_OFF = 0x000000;        // Off
+const uint32_t COLOR_LASER = 0x100000;      // Dim blue - started detection
+const uint32_t COLOR_DROPLET = 0xFF0000;    // Bright blue - droplet detected
+const uint32_t COLOR_WAITING = 0x400040; // Purple - waiting for valve opening
+const uint32_t COLOR_OFF = 0x000000;     // Off
 
 // ============================================================================
 // LED HELPER FUNCTION
@@ -84,11 +95,14 @@ void setup() {
   pinMode(PIN_VALVE, OUTPUT);
   pinMode(PIN_CS_RCLICK, INPUT);
   pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_LASER, OUTPUT);
+  pinMode(PIN_PDA, INPUT);
 
   // Set all outputs to safe initial state (off)
   digitalWrite(PIN_LED, LOW);
   digitalWrite(PIN_VALVE, LOW);
   digitalWrite(PIN_TRIG, LOW);
+  digitalWrite(PIN_LASER, LOW);
 
   // Initialize DotStar LED
   led.begin();
@@ -97,6 +111,10 @@ void setup() {
 
   // Initialize serial communication at 115200 baud
   Serial.begin(115200);
+
+  // TODO: Implement averaging?
+  // Set ADC resolution for photodetector
+  analogReadResolution(12); // 12-bit ADC (0-4095)
 
   // Initialize pressure sensor
   R_click.begin();
@@ -125,14 +143,50 @@ void setup() {
 // VALVE AND SENSOR FUNCTIONS
 // ============================================================================
 
+void openValveTrigger() {
+  // Open valve and trigger using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
+  PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
+      ((1 << g_APinDescription[PIN_VALVE].ulPin) |
+       (1 << g_APinDescription[PIN_TRIG].ulPin));
+
+  DEBUG_PRINTLN(
+      "Valve opened"); // Valve opened confirmation (debug only for speed)
+}
+
 void closeValve() {
   // Close valve using direct PORT register access for speed
   // Equivalent to digitalWrite(PIN_VALVE, LOW);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  setLedColor(COLOR_IDLE); // Return to idle color
-  DEBUG_PRINTLN("!");      // Valve closed confirmation (debug only for speed)
+  DEBUG_PRINTLN(
+      "Valve closed"); // Valve closed confirmation (debug only for speed)
+}
+
+void startLaser() {
+  // Turn on laser using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_LASER, HIGH);
+  PORT->Group[g_APinDescription[PIN_LASER].ulPort].OUTSET.reg =
+      (1 << g_APinDescription[PIN_LASER].ulPin);
+
+  DEBUG_PRINTLN("Laser ON");
+}
+
+void stopLaser() {
+  // Turn off laser using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_LASER, LOW);
+  PORT->Group[g_APinDescription[PIN_LASER].ulPort].OUTCLR.reg =
+      (1 << g_APinDescription[PIN_LASER].ulPin);
+
+  DEBUG_PRINTLN("Laser OFF");
+}
+
+void stopTrigger() {
+  // Turn off trigger using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_TRIG, LOW);
+  PORT->Group[g_APinDescription[PIN_TRIG].ulPort].OUTCLR.reg =
+      (1 << g_APinDescription[PIN_TRIG].ulPin);
 }
 
 void printError(const char *message) {
@@ -176,15 +230,30 @@ void readTemperature(bool valveOpen) {
   setLedColor(valveOpen ? COLOR_VALVE_OPEN : COLOR_IDLE);
 }
 
+float readPhotodetector() {
+  // Read photodetector voltage with resistor divider compensation
+  int adcValue = analogRead(PIN_PDA);        // 0-4095 (12-bit)
+  float voltage = (adcValue / 4095.0) * 3.3; // Convert to voltage
+  float signalVoltage = voltage * ((PDA_R1 + PDA_R2) / PDA_R2);
+
+  DEBUG_PRINTLN(signalVoltage);
+
+  return signalVoltage;
+}
+
 // ============================================================================
 // MAIN LOOP
 // ============================================================================
 
 void loop() {
-  // Static variables persist across loop iterations (like globals, but scoped)
+  // Static variables persist across loop iterations
   static uint32_t duration = 0;          // How long valve should stay open [µs]
   static bool valveOpen = false;         // Tracks if valve is currently open
   static bool performingTrigger = false; // Tracks if trigger pulse is active
+  static bool detectingDroplet = false;  // Tracks if in droplet detection mode
+  static bool dropletDetected = false;   // Tracks if droplet has been detected
+  static bool belowThreshold = false;    // Tracks if signal is below threshold
+  static uint32_t dropletDetectTime = 0; // When droplet was detected [µs]
 
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
@@ -192,10 +261,7 @@ void loop() {
   // The trigger pulse is a short signal sent to peripheral devices when the
   // valve opens. It turns off after TRIGGER_WIDTH microseconds.
   if (performingTrigger && (micros() - tick >= TRIGGER_WIDTH)) {
-    // Turn off trigger using direct PORT register access
-    // Equivalent to digitalWrite(PIN_TRIG, LOW);
-    PORT->Group[g_APinDescription[PIN_TRIG].ulPort].OUTCLR.reg =
-        (1 << g_APinDescription[PIN_TRIG].ulPin);
+    stopTrigger();
     performingTrigger = false;
   }
 
@@ -206,6 +272,16 @@ void loop() {
   if (valveOpen && duration > 0 && (micros() - tick >= duration)) {
     closeValve();
     valveOpen = false;
+
+    // Stop droplet detection after valve closes
+    // TODO: Could add a separate mode for continuous detection with repeated
+    // experiments
+    if (detectingDroplet) {
+      stopLaser();
+      detectingDroplet = false;
+    }
+
+    setLedColor(COLOR_IDLE);
   }
 
   // -------------------------------------------------------------------------
@@ -213,6 +289,52 @@ void loop() {
   // -------------------------------------------------------------------------
   // Must be called regularly to maintain the exponential moving average
   R_click.poll_EMA();
+
+  // -------------------------------------------------------------------------
+  // Droplet detection monitoring
+  // -------------------------------------------------------------------------
+  if (detectingDroplet) {
+    float signalVoltage = readPhotodetector();
+
+    // Falling edge: droplet detected (signal drops below threshold)
+    if (!belowThreshold && signalVoltage < PDA_THR) {
+      belowThreshold = true;
+      dropletDetected = true;
+      dropletDetectTime = micros();
+
+      // Turn off laser immediately when droplet is detected
+      stopLaser();
+      detectingDroplet = false;
+
+      setLedColor(COLOR_DROPLET);
+      DEBUG_PRINTLN("Droplet detected!");
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Handle delay and valve opening after droplet detection
+  // -------------------------------------------------------------------------
+  if (dropletDetected && !valveOpen) {
+    uint32_t elapsed = micros() - dropletDetectTime;
+
+    // Show purple LED during delay period
+    if (elapsed < tick_delay) {
+      setLedColor(COLOR_WAITING);
+    }
+
+    // Open valve after delay has elapsed
+    if (elapsed >= tick_delay) {
+      // Open valve and trigger
+      openValveTrigger();
+
+      setLedColor(COLOR_VALVE_OPEN);
+      valveOpen = true;
+      performingTrigger = true;
+      tick = micros();
+
+      dropletDetected = false; // Reset after opening valve
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Process serial commands
@@ -239,10 +361,7 @@ void loop() {
       }
 
       // Open valve and trigger
-      PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
-          ((1 << g_APinDescription[PIN_VALVE].ulPin) |
-           (1 << g_APinDescription[PIN_TRIG].ulPin));
-
+      openValveTrigger();
       setLedColor(COLOR_VALVE_OPEN);
       valveOpen = true;
       performingTrigger = true;
@@ -253,6 +372,47 @@ void loop() {
       // Manually close valve (override)
       closeValve();
       valveOpen = false;
+
+      // Stop detection if it was running
+      if (detectingDroplet) {
+        stopLaser();
+        detectingDroplet = false;
+      }
+
+      setLedColor(COLOR_IDLE);
+
+    } else if (command == "D" || command.startsWith("D ")) {
+      // Command: D or D <duration_ms>
+      // D = detect droplet and open indefinitely, D <ms> = open for specified
+      // time
+
+      if (command == "D") {
+        duration = 0; // 0 means stay open
+        DEBUG_PRINTLN("Droplet detection: valve will stay open");
+      } else {
+        duration = 1000 * command.substring(2).toInt();
+        DEBUG_PRINT("Droplet detection: valve will open for ");
+        DEBUG_PRINT(duration);
+        DEBUG_PRINTLN(" µs");
+      }
+
+      // Turn on laser
+      startLaser();
+
+      setLedColor(COLOR_LASER);
+      detectingDroplet = true;
+      dropletDetected = false;
+      belowThreshold = false;
+
+      DEBUG_PRINTLN("Detecting droplets");
+
+    } else if (command.startsWith("L ")) {
+      // Command: L <delay_us>
+      // Set laser-to-valve delay in microseconds
+      tick_delay = command.substring(2).toInt();
+      DEBUG_PRINT("Laser-to-valve delay set to ");
+      DEBUG_PRINT(tick_delay);
+      DEBUG_PRINTLN(" µs");
 
     } else if (command == "P?") {
       // Command: P?
@@ -271,10 +431,15 @@ void loop() {
       DEBUG_PRINTLN("O      - Open valve indefinitely");
       DEBUG_PRINTLN("O <ms> - Open valve for <ms> milliseconds (e.g., O 100)");
       DEBUG_PRINTLN("C      - Close valve immediately");
+      DEBUG_PRINTLN("D      - Detect droplet, open valve indefinitely");
+      DEBUG_PRINTLN("D <ms> - Detect droplet, open for <ms> milliseconds");
+      DEBUG_PRINTLN("L <us> - Set laser-to-valve delay in microseconds");
       DEBUG_PRINTLN("P?     - Read pressure");
       DEBUG_PRINTLN("T?     - Read temperature & humidity");
       DEBUG_PRINTLN("S?     - System status");
       DEBUG_PRINTLN("?      - Show this help");
+
+      // TODO: Implement continuous droplet detection & triggering
 
     } else if (command == "S?") {
       // Command: S?
@@ -292,6 +457,16 @@ void loop() {
       }
       DEBUG_PRINT("Trigger: ");
       DEBUG_PRINTLN(performingTrigger ? "ACTIVE" : "IDLE");
+      DEBUG_PRINT("Droplet detection: ");
+      DEBUG_PRINTLN(detectingDroplet ? "ACTIVE" : "IDLE");
+      if (detectingDroplet) {
+        DEBUG_PRINT("Photodetector: ");
+        DEBUG_PRINT(readPhotodetector());
+        DEBUG_PRINTLN(" V");
+      }
+      DEBUG_PRINT("Laser-to-valve delay: ");
+      DEBUG_PRINT(tick_delay);
+      DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Pressure (raw): ");
       DEBUG_PRINT(R_click.get_EMA_mA());
       DEBUG_PRINTLN(" mA");
