@@ -2,7 +2,7 @@
 
 // Connections
 const int detPin = A2;           // Analog signal from photodetector
-const int laserPin = 7;          // Signal to laser MOSFET
+const int laserPin = 12;          // Signal to laser MOSFET
 const int ledPin = LED_BUILTIN;  // Built-in LED
 
 // Resistor values
@@ -10,7 +10,7 @@ const float R1 = 6710.0; // Ohm
 const float R2 = 3260.0; // Ohm
 
 // Threshold and timeout
-const float THRESHOLD = 3;     // Voltage threshold (V)
+const float THRESHOLD = 1.5;     // Voltage threshold (V)
 const unsigned long TIMEOUT = 20000; // Max measurement time in ms (20 seconds)
 
 // State variables
