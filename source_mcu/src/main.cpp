@@ -14,7 +14,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -30,8 +30,8 @@
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
-const int PIN_LASER = A2; // Laser MOSFET gate pin for droplet detection
-const int PIN_PDA = 12;   // Analog input from photodetector
+const int PIN_LASER = 12; // Laser MOSFET gate pin for droplet detection
+const int PIN_PDA = A2;   // Analog input from photodetector
 // Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
 
 // ============================================================================
@@ -39,7 +39,8 @@ const int PIN_PDA = 12;   // Analog input from photodetector
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
-uint32_t tick_delay = 0; // Delay from droplet detection to valve opening [µs]
+uint32_t tick_delay = 0;              // Delay before opening valve [µs]
+uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -254,6 +255,11 @@ void loop() {
   static bool dropletDetected = false;   // Tracks if droplet has been detected
   static bool belowThreshold = false;    // Tracks if signal is below threshold
   static uint32_t dropletDetectTime = 0; // When droplet was detected [µs]
+  static bool waitingToOpen =
+      false; // Tracks if waiting for delay before opening
+  static uint32_t openCommandTime = 0; // When open command was received [µs]
+  static uint32_t detectionStartTime =
+      0; // When laser/detection was started [µs]
 
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
@@ -294,20 +300,25 @@ void loop() {
   // Droplet detection monitoring
   // -------------------------------------------------------------------------
   if (detectingDroplet) {
-    float signalVoltage = readPhotodetector();
+    uint32_t elapsedSinceStart = micros() - detectionStartTime;
 
-    // Falling edge: droplet detected (signal drops below threshold)
-    if (!belowThreshold && signalVoltage < PDA_THR) {
-      belowThreshold = true;
-      dropletDetected = true;
-      dropletDetectTime = micros();
+    // Only start checking photodiode after the configured delay
+    if (elapsedSinceStart >= pda_delay) {
+      float signalVoltage = readPhotodetector();
 
-      // Turn off laser immediately when droplet is detected
-      stopLaser();
-      detectingDroplet = false;
+      // Falling edge: droplet detected (signal drops below threshold)
+      if (!belowThreshold && signalVoltage < PDA_THR) {
+        belowThreshold = true;
+        dropletDetected = true;
+        dropletDetectTime = micros();
 
-      setLedColor(COLOR_DROPLET);
-      DEBUG_PRINTLN("Droplet detected!");
+        // Turn off laser immediately when droplet is detected
+        stopLaser();
+        detectingDroplet = false;
+
+        setLedColor(COLOR_DROPLET);
+        DEBUG_PRINTLN("Droplet detected!");
+      }
     }
   }
 
@@ -337,6 +348,31 @@ void loop() {
   }
 
   // -------------------------------------------------------------------------
+  // Handle delay and valve opening after O command
+  // -------------------------------------------------------------------------
+  if (waitingToOpen && !valveOpen) {
+    uint32_t elapsed = micros() - openCommandTime;
+
+    // Show purple LED during delay period
+    if (elapsed < tick_delay) {
+      setLedColor(COLOR_WAITING);
+    }
+
+    // Open valve after delay has elapsed
+    if (elapsed >= tick_delay) {
+      // Open valve and trigger
+      openValveTrigger();
+
+      setLedColor(COLOR_VALVE_OPEN);
+      valveOpen = true;
+      performingTrigger = true;
+      tick = micros();
+
+      waitingToOpen = false; // Reset after opening valve
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Process serial commands
   // -------------------------------------------------------------------------
   if (Serial.available() > 0) {
@@ -360,12 +396,19 @@ void loop() {
         DEBUG_PRINTLN(" µs");
       }
 
-      // Open valve and trigger
-      openValveTrigger();
-      setLedColor(COLOR_VALVE_OPEN);
-      valveOpen = true;
-      performingTrigger = true;
-      tick = micros();
+      // Start waiting period before opening valve
+      waitingToOpen = true;
+      openCommandTime = micros();
+
+      if (tick_delay > 0) {
+        setLedColor(COLOR_WAITING);
+        DEBUG_PRINT("Waiting ");
+        DEBUG_PRINT(tick_delay);
+        DEBUG_PRINTLN(" µs before opening");
+      } else {
+        // If no delay, proceed immediately in next loop iteration
+        setLedColor(COLOR_VALVE_OPEN);
+      }
 
     } else if (command == "C") {
       // Command: C
@@ -403,14 +446,15 @@ void loop() {
       detectingDroplet = true;
       dropletDetected = false;
       belowThreshold = false;
+      detectionStartTime = micros();
 
       DEBUG_PRINTLN("Detecting droplets");
 
     } else if (command.startsWith("L ")) {
       // Command: L <delay_us>
-      // Set laser-to-valve delay in microseconds
+      // Set delay before opening valve (applies to both O and D commands)
       tick_delay = command.substring(2).toInt();
-      DEBUG_PRINT("Laser-to-valve delay set to ");
+      DEBUG_PRINT("Delay before opening valve: ");
       DEBUG_PRINT(tick_delay);
       DEBUG_PRINTLN(" µs");
 
@@ -433,7 +477,8 @@ void loop() {
       DEBUG_PRINTLN("C      - Close valve immediately");
       DEBUG_PRINTLN("D      - Detect droplet, open valve indefinitely");
       DEBUG_PRINTLN("D <ms> - Detect droplet, open for <ms> milliseconds");
-      DEBUG_PRINTLN("L <us> - Set laser-to-valve delay in microseconds");
+      DEBUG_PRINTLN(
+          "L <us> - Set delay before valve opening to <us> microseconds");
       DEBUG_PRINTLN("P?     - Read pressure");
       DEBUG_PRINTLN("T?     - Read temperature & humidity");
       DEBUG_PRINTLN("S?     - System status");
@@ -464,8 +509,11 @@ void loop() {
         DEBUG_PRINT(readPhotodetector());
         DEBUG_PRINTLN(" V");
       }
-      DEBUG_PRINT("Laser-to-valve delay: ");
+      DEBUG_PRINT("Delay before opening valve: ");
       DEBUG_PRINT(tick_delay);
+      DEBUG_PRINTLN(" µs");
+      DEBUG_PRINT("Photodiode detection delay: ");
+      DEBUG_PRINT(pda_delay);
       DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Pressure (raw): ");
       DEBUG_PRINT(R_click.get_EMA_mA());
