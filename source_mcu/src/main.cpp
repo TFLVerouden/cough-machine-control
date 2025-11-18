@@ -260,6 +260,7 @@ void loop() {
   static uint32_t openCommandTime = 0; // When open command was received [µs]
   static uint32_t detectionStartTime =
       0; // When laser/detection was started [µs]
+  static bool continuousDetection = false; // Tracks if in continuous detection mode
 
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
@@ -279,15 +280,19 @@ void loop() {
     closeValve();
     valveOpen = false;
 
-    // Stop droplet detection after valve closes
-    // TODO: Could add a separate mode for continuous detection with repeated
-    // experiments
-    if (detectingDroplet) {
-      stopLaser();
-      detectingDroplet = false;
+    // If in continuous detection mode, restart detection immediately
+    if (continuousDetection) {
+      // Turn on laser and restart detection
+      startLaser();
+      setLedColor(COLOR_LASER);
+      detectingDroplet = true;
+      dropletDetected = false;
+      belowThreshold = false;
+      detectionStartTime = micros();
+      DEBUG_PRINTLN("Restarting droplet detection");
+    } else {
+      setLedColor(COLOR_IDLE);
     }
-
-    setLedColor(COLOR_IDLE);
   }
 
   // -------------------------------------------------------------------------
@@ -421,6 +426,9 @@ void loop() {
         stopLaser();
         detectingDroplet = false;
       }
+      
+      // Stop continuous detection mode
+      continuousDetection = false;
 
       setLedColor(COLOR_IDLE);
 
@@ -447,6 +455,7 @@ void loop() {
       dropletDetected = false;
       belowThreshold = false;
       detectionStartTime = micros();
+      continuousDetection = true; // Enable continuous detection mode
 
       DEBUG_PRINTLN("Detecting droplets");
 
