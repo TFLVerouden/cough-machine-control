@@ -112,6 +112,7 @@ void setup() {
 
   // Initialize serial communication at 115200 baud
   Serial.begin(115200);
+  Serial.setTimeout(10); // Set timeout to 10ms instead of default 1000ms
 
   // TODO: Implement averaging?
   // Set ADC resolution for photodetector
@@ -363,7 +364,7 @@ void loop() {
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (command == "O" || command.startsWith("O ")) {
+    if (command.startsWith("O")) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
@@ -408,7 +409,7 @@ void loop() {
 
       setLedColor(COLOR_IDLE);
 
-    } else if (command == "D" || command.startsWith("D ")) {
+    } else if (command.startsWith("D")) {
       // Command: D or D <duration_ms>
       // D = detect droplet and open indefinitely, D <ms> = open for specified
       // time
