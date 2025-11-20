@@ -31,3 +31,9 @@ CMD: D 100
 Droplet detection: valve will open for 100000 µs
 Laser ON
 Detecting droplets
+Laser OFF
+Droplet detected!
+Valve opened
+Valve closed!
+Laser ON
+Restarting droplet detection

@@ -14,7 +14,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -39,7 +39,7 @@ const int PIN_PDA = A2;   // Analog input from photodetector
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
-uint32_t tick_delay = 80500;          // Delay before opening valve [µs]
+uint32_t tick_delay = 59500;          // Delay before opening valve [µs]
 uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
 
 // ============================================================================
@@ -254,8 +254,10 @@ void loop() {
   static bool performingTrigger = false; // Tracks if trigger pulse is active
   static bool detectingDroplet = false;  // Tracks if in droplet detection mode
   static bool belowThreshold = false;    // Tracks if signal is below threshold
-  static bool waitingToOpenValve = false; // Tracks if waiting for delay before opening valve
-  static uint32_t waitStartTime = 0; // When waiting for valve opening started [µs]
+  static bool waitingToOpenValve =
+      false; // Tracks if waiting for delay before opening valve
+  static uint32_t waitStartTime =
+      0; // When waiting for valve opening started [µs]
   static uint32_t detectionStartTime =
       0; // When laser/detection was started [µs]
   static bool continuousDetection =
