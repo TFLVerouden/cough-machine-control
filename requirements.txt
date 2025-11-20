@@ -17,3 +17,4 @@ scikit-image
 tifffile
 tqdm
 pipreqs
+pumpy3 @ git+https://github.com/WetenSchaap/pumpy3.git
