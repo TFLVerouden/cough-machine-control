@@ -1,8 +1,8 @@
 """
 PIV Functions Module
 
-A comprehensive toolkit for Particle Image Velocimetry (PIV) analysis.
-Provides functions for image processing, cross-correlation, displacement 
+A collection of functions for Particle Image Velocimetry (PIV) analysis of cough machine images.
+Provides functions for image processing, cross-correlation, displacement
 calculation, data filtering, calibration, and visualization.
 
 Usage:
@@ -30,7 +30,8 @@ from .io import save_backup, load_backup, read_img, read_imgs, save_cfig, init_s
 from .preprocessing import downsample, split_n_shift
 from .correlation import calc_corr, calc_corrs, sum_corr, sum_corrs
 from .displacement import find_peaks, three_point_gauss, subpixel, find_disp, find_disps
-from .postprocessing import (filter_outliers, filter_neighbours, first_valid, strip_peaks, smooth)
+from .postprocessing import (
+    filter_outliers, filter_neighbours, first_valid, strip_peaks, smooth)
 from .plotting import plot_vel_comp, plot_vel_med, plot_vel_prof, plot_flow_rate, plot_vel_Gupta
 from .utils import cart2polar, get_time, disp2shift, vel2flow
 from .calibration import calibrate_grid, all_distances
@@ -43,20 +44,20 @@ __all__ = [
 
     # Preprocessing functions
     'downsample', 'split_n_shift',
-    
+
     # Correlation functions
     'calc_corr', 'calc_corrs', 'sum_corr', 'sum_corrs',
-    
+
     # Displacement functions
     'find_peaks', 'three_point_gauss', 'subpixel', 'find_disp', 'find_disps',
-    
+
     # Postprocessing functions
-    'filter_outliers', 'filter_neighbours', 'validate_n_nbs', 
+    'filter_outliers', 'filter_neighbours', 'validate_n_nbs',
     'first_valid', 'strip_peaks', 'smooth',
-    
+
     # Plotting functions
     'plot_vel_comp', 'plot_vel_med', 'plot_vel_prof', 'plot_flow_rate',
-    
+
     # Utility functions
     'cart2polar', 'get_time', 'disp2shift', 'vel2flow', 'Gupta_model',
 
