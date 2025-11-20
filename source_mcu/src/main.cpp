@@ -39,7 +39,7 @@ const int PIN_PDA = A2;   // Analog input from photodetector
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
-uint32_t tick_delay = 0;              // Delay before opening valve [µs]
+uint32_t tick_delay = 80500;          // Delay before opening valve [µs]
 uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
 
 // ============================================================================
@@ -237,7 +237,7 @@ float readPhotodetector() {
   float voltage = (adcValue / 4095.0) * 3.3; // Convert to voltage
   float signalVoltage = voltage * ((PDA_R1 + PDA_R2) / PDA_R2);
 
-  DEBUG_PRINTLN(signalVoltage);
+  // DEBUG_PRINTLN(signalVoltage);
 
   return signalVoltage;
 }
@@ -260,7 +260,8 @@ void loop() {
   static uint32_t openCommandTime = 0; // When open command was received [µs]
   static uint32_t detectionStartTime =
       0; // When laser/detection was started [µs]
-  static bool continuousDetection = false; // Tracks if in continuous detection mode
+  static bool continuousDetection =
+      false; // Tracks if in continuous detection mode
 
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
@@ -426,7 +427,7 @@ void loop() {
         stopLaser();
         detectingDroplet = false;
       }
-      
+
       // Stop continuous detection mode
       continuousDetection = false;
 
