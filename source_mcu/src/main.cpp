@@ -161,8 +161,9 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  DEBUG_PRINTLN(
+  DEBUG_PRINT(
       "Valve closed"); // Valve closed confirmation (debug only for speed)
+  Serial.println("!");
 }
 
 void startLaser() {
@@ -252,12 +253,9 @@ void loop() {
   static bool valveOpen = false;         // Tracks if valve is currently open
   static bool performingTrigger = false; // Tracks if trigger pulse is active
   static bool detectingDroplet = false;  // Tracks if in droplet detection mode
-  static bool dropletDetected = false;   // Tracks if droplet has been detected
   static bool belowThreshold = false;    // Tracks if signal is below threshold
-  static uint32_t dropletDetectTime = 0; // When droplet was detected [µs]
-  static bool waitingToOpen =
-      false; // Tracks if waiting for delay before opening
-  static uint32_t openCommandTime = 0; // When open command was received [µs]
+  static bool waitingToOpenValve = false; // Tracks if waiting for delay before opening valve
+  static uint32_t waitStartTime = 0; // When waiting for valve opening started [µs]
   static uint32_t detectionStartTime =
       0; // When laser/detection was started [µs]
   static bool continuousDetection =
@@ -287,7 +285,6 @@ void loop() {
       startLaser();
       setLedColor(COLOR_LASER);
       detectingDroplet = true;
-      dropletDetected = false;
       belowThreshold = false;
       detectionStartTime = micros();
       DEBUG_PRINTLN("Restarting droplet detection");
@@ -315,8 +312,8 @@ void loop() {
       // Falling edge: droplet detected (signal drops below threshold)
       if (!belowThreshold && signalVoltage < PDA_THR) {
         belowThreshold = true;
-        dropletDetected = true;
-        dropletDetectTime = micros();
+        waitingToOpenValve = true;
+        waitStartTime = micros();
 
         // Turn off laser immediately when droplet is detected
         stopLaser();
@@ -329,10 +326,10 @@ void loop() {
   }
 
   // -------------------------------------------------------------------------
-  // Handle delay and valve opening after droplet detection
+  // Handle delay and valve opening (for both droplet detection and O command)
   // -------------------------------------------------------------------------
-  if (dropletDetected && !valveOpen) {
-    uint32_t elapsed = micros() - dropletDetectTime;
+  if (waitingToOpenValve && !valveOpen) {
+    uint32_t elapsed = micros() - waitStartTime;
 
     // Show purple LED during delay period
     if (elapsed < tick_delay) {
@@ -349,32 +346,8 @@ void loop() {
       performingTrigger = true;
       tick = micros();
 
-      dropletDetected = false; // Reset after opening valve
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Handle delay and valve opening after O command
-  // -------------------------------------------------------------------------
-  if (waitingToOpen && !valveOpen) {
-    uint32_t elapsed = micros() - openCommandTime;
-
-    // Show purple LED during delay period
-    if (elapsed < tick_delay) {
-      setLedColor(COLOR_WAITING);
-    }
-
-    // Open valve after delay has elapsed
-    if (elapsed >= tick_delay) {
-      // Open valve and trigger
-      openValveTrigger();
-
-      setLedColor(COLOR_VALVE_OPEN);
-      valveOpen = true;
-      performingTrigger = true;
-      tick = micros();
-
-      waitingToOpen = false; // Reset after opening valve
+      // Reset flag after opening valve
+      waitingToOpenValve = false;
     }
   }
 
@@ -403,8 +376,8 @@ void loop() {
       }
 
       // Start waiting period before opening valve
-      waitingToOpen = true;
-      openCommandTime = micros();
+      waitingToOpenValve = true;
+      waitStartTime = micros();
 
       if (tick_delay > 0) {
         setLedColor(COLOR_WAITING);
@@ -453,7 +426,6 @@ void loop() {
 
       setLedColor(COLOR_LASER);
       detectingDroplet = true;
-      dropletDetected = false;
       belowThreshold = false;
       detectionStartTime = micros();
       continuousDetection = true; // Enable continuous detection mode
@@ -493,8 +465,6 @@ void loop() {
       DEBUG_PRINTLN("T?     - Read temperature & humidity");
       DEBUG_PRINTLN("S?     - System status");
       DEBUG_PRINTLN("?      - Show this help");
-
-      // TODO: Implement continuous droplet detection & triggering
 
     } else if (command == "S?") {
       // Command: S?
