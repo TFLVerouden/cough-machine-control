@@ -75,13 +75,14 @@ pump.set_mode("PMP")        # Set to PuMP mode
 
 input("Press Enter to start flushing the pump...")
 
-# Set MCU delay to 0 us
+# Set MCU delay to 0 us, make sure it is not in droplet detection mode
 ser_mcu.write('L 0\n'.encode())
+ser_mcu.write('C'.encode())  # Close valve
 
 # Flush pump for a bit
 pump.set_rate(1, "ml/mn")   # Flow rate
 pump.run()
-time.sleep(2)
+time.sleep(1)
 
 # Set MCU to droplet detection mode without opening valve
 ser_mcu.write('D 1\n'.encode())
@@ -99,20 +100,24 @@ while True:
 
 print("Droplet detected, pump stopped.")
 
-input("Press Enter to record 10 droplets...")
+nr_droplets = 50
+input(f"Press Enter to record {nr_droplets} droplets...")
+
+# Read all serial commands that may be in the buffer
+while ser_mcu.in_waiting > 0:
+    ser_mcu.readline()
 
 # First print the temperature and humidity
-read_temperature(verbose=True)
+temperature, humidity = read_temperature(verbose=True)
 
 # Set pump and MCU parameters
-pump.set_rate(0.2, "ml/mn")   # Flow rate
-ser_mcu.write('L 59500'.encode())  # Set valve opening delay to 59.5 ms
+pump.set_rate(0.3, "ml/mn")   # Flow rate
+ser_mcu.write('L 59500\n'.encode())  # Set valve opening delay to 59.5 ms
 
 # Setup readings array
 readings = np.array([], dtype=float)
 
 # Start recording droplets
-nr_droplets = 5
 droplet_times = []
 # Enable droplet detection, without opening valve
 ser_mcu.write('D 1\n'.encode())
@@ -132,13 +137,13 @@ while len(droplet_times) < nr_droplets:
         if response == "":
             continue
         elif response == "!":
-            droplet_time = time.time()
-            droplet_times.append(droplet_time)
+            droplet_times.append(elapsed)
             print(
-                f"Droplet {len(droplet_times)} detected at {droplet_time:.3f} s")
+                f"Droplet {len(droplet_times)} detected at {elapsed:.3f} s")
         elif response.startswith("P"):
             pressure = response.lstrip("P")
-            readings = np.append(readings, [tick, float(pressure)])
+            if pressure != "":
+                readings = np.append(readings, [elapsed, float(pressure)])
 
 ser_mcu.write('C'.encode())  # Disable droplet detection
 pump.stop()
@@ -151,6 +156,11 @@ for dt in droplet_times:
                 label='Droplet detected' if dt == droplet_times[0] else "")
 plt.xlabel('Time (s)')
 plt.ylabel('Pressure (bar)')
-plt.title('Pressure Readings During Droplet Formation')
+plt.title(
+    f'Dripping drops (T: {temperature} °C, RH: {humidity} %)')
 plt.legend()
 plt.show()
+
+# Save droplet times to npz file
+np.savez('droplet_times.npz', droplet_times=np.array(droplet_times),
+         temperature=float(temperature), humidity=float(humidity))
