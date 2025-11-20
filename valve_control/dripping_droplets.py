@@ -70,7 +70,6 @@ pump = pumpy3.PumpPHD2000_Refill(chain, address=0, name="PHD2000")
 # Configure pump
 pump.set_diameter(10.3)     # 5 mL Hamilton gastight nr 1005
 pump.set_mode("PMP")        # Set to PuMP mode
-pump.set_rate(0.2, "ml/mn")  # Flow rate
 
 input("Press Enter to start flushing the pump...")
 
@@ -78,12 +77,22 @@ input("Press Enter to start flushing the pump...")
 ser_mcu.write('L 0\n'.encode())
 
 # Flush pump for a bit
+pump.set_rate(1, "ml/mn")   # Flow rate
 pump.run()
 time.sleep(2)
 
 # Set MCU to droplet detection mode without opening valve
 ser_mcu.write('D 1\n'.encode())
 
-# When first droplet is detected, stop pump
-if ser_mcu.readline().decode('utf-8').rstrip() == '!':
-    pump.stop()
+# When a droplet is detected, stop pump
+while True:
+    if ser_mcu.in_waiting > 0:
+        response = ser_mcu.readline().decode('utf-8').rstrip()
+        if response == "":
+            continue
+        elif response == "!":
+            pump.stop()
+            ser_mcu.write('C'.encode())  # Disable droplet detection
+            break
+
+print("Droplet detected, pump stopped.")
