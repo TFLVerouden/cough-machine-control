@@ -2,6 +2,8 @@ import pumpy3
 import serial
 import time
 import serial.tools.list_ports
+import numpy as np
+import matplotlib.pyplot as plt
 
 # FUNCTIONS THAT NEED TO BE MOVED ELSEWHERE AT SOME POINT
 
@@ -96,3 +98,59 @@ while True:
             break
 
 print("Droplet detected, pump stopped.")
+
+input("Press Enter to record 10 droplets...")
+
+# First print the temperature and humidity
+read_temperature(verbose=True)
+
+# Set pump and MCU parameters
+pump.set_rate(0.2, "ml/mn")   # Flow rate
+ser_mcu.write('L 59500'.encode())  # Set valve opening delay to 59.5 ms
+
+# Setup readings array
+readings = np.array([], dtype=float)
+
+# Start recording droplets
+nr_droplets = 5
+droplet_times = []
+# Enable droplet detection, without opening valve
+ser_mcu.write('D 1\n'.encode())
+pump.run()
+
+loop_start = time.time()
+while len(droplet_times) < nr_droplets:
+    tick = time.time()
+    elapsed = tick - loop_start
+
+    # Ask MCU for a single pressure readout
+    ser_mcu.write('P?\n'.encode())
+
+    # Listen to commands
+    if ser_mcu.in_waiting > 0:
+        response = ser_mcu.readline().decode('utf-8').rstrip()
+        if response == "":
+            continue
+        elif response == "!":
+            droplet_time = time.time()
+            droplet_times.append(droplet_time)
+            print(
+                f"Droplet {len(droplet_times)} detected at {droplet_time:.3f} s")
+        elif response.startswith("P"):
+            pressure = response.lstrip("P")
+            readings = np.append(readings, [tick, float(pressure)])
+
+ser_mcu.write('C'.encode())  # Disable droplet detection
+pump.stop()
+
+# Make a quick plot of pressure in time, with vertical lines indicating the droplets
+plt.figure()
+plt.plot(readings[0::2] - readings[0], readings[1::2], label='Pressure (bar)')
+for dt in droplet_times:
+    plt.axvline(x=dt - readings[0], color='r', linestyle='--',
+                label='Droplet detected' if dt == droplet_times[0] else "")
+plt.xlabel('Time (s)')
+plt.ylabel('Pressure (bar)')
+plt.title('Pressure Readings During Droplet Formation')
+plt.legend()
+plt.show()
