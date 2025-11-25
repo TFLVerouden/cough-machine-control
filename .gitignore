@@ -245,3 +245,4 @@ fabric.properties
 .vscode/settings.json
 piv/processed/.DS_Store
 source_mcu/.vscode/settings.json
+src_mcu/.vscode/settings.json
