@@ -237,12 +237,12 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
-.vscode/launch.json
 
 # Add all variations of .DS_Store
 .DS_Store
 **/.DS_Store
-.vscode/settings.json
 piv/processed/.DS_Store
-source_mcu/.vscode/settings.json
-*.~vsdx
+
+# PlatformIO/VSCode
+**/.pio
+**/.vscode
