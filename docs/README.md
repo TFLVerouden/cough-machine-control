@@ -78,6 +78,7 @@ On breadboard left-to-right:
     - ATSAMD51G19A chip: https://www.microchip.com/en-us/product/ATSAMD51G19A
 - MIKROE 4-20 mA T-click: https://www.mikroe.com/4-20ma-t-click
 - MIKROE 4-20 mA R-click: https://www.mikroe.com/4-20ma-r-click
+   - Modified to act as passive current receiver (not supplying any voltage), see notes in the [MIKROE_4_20mA_RT_Click library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main/active_to_passive_R_click_modification)
 - Adafruit MOSFET driver: https://learn.adafruit.com/adafruit-mosfet-driver
 - Adafruit SHT45 temperature \& humidity sensor: https://learn.adafruit.com/adafruit-sht40-temperature-humidity-sensor
     - SHT4X chip: https://sensirion.com/products/catalog/SHT45
