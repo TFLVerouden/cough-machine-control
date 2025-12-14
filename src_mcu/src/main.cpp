@@ -29,13 +29,17 @@
 // PIN DEFINITIONS
 // ============================================================================
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
+const int PIN_PROP_VALVE = 10;  // Chip select for proportional valve
+const int PIN_PRES_REG = 11;  // Chip select for pressure regulator
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 const int PIN_LASER = 12; // Laser MOSFET gate pin for droplet detection
 const int PIN_PDA = A2;   // Analog input from photodetector
 // Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
 
-// Initialize DvG_StreamCommand serial communication, time and value arrays for serial data transmission
+// ============================================================================
+// INITIALIZE DVG_STREAMCOMMAND AND FLOW CURVE DATASETS
+// ============================================================================
 const int MAX_DATA_LENGTH = 2000;                       // Max serial dataset size
 const uint16_t CMD_BUF_LEN = 32000;                     // RAM size allocation for Serial buffer size
 int incomingCount = 0;                                  // Declare incoming dataset length globally
@@ -69,6 +73,18 @@ Adafruit_SHT4x sht4;
 const float PDA_R1 = 6710.0; // Voltage divider resistor [Ohm]
 const float PDA_R2 = 3260.0; // Voltage divider resistor [Ohm]
 const float PDA_THR = 4.5;   // Droplet detection threshold [V]
+
+// ============================================================================
+// T CLICK CONFIGURATION (proportional valve and pressure regulator)
+// ============================================================================
+T_Click valve(PIN_PROP_VALVE, RT_Click_Calibration{3.97, 19.90, 796, 3982});
+T_Click pressure(PIN_PRES_REG, RT_Click_Calibration{3.97, 19.90, 796, 3982});
+
+// Define default T Click values
+const float max_mA = 20.0;
+const float min_mA = 12.0;
+const float default_valve = 12.0;
+const float default_pressure = 4.0;
 
 // ============================================================================
 // LED CONFIGURATION
@@ -115,6 +131,13 @@ void setup() {
   digitalWrite(PIN_VALVE, LOW);
   digitalWrite(PIN_TRIG, LOW);
   digitalWrite(PIN_LASER, LOW);
+
+  // Initialize T Clicks (proportional valve and pressure regulator)
+  valve.begin();
+  valve.set_mA(default_valve);
+
+  pressure.begin();
+  pressure.set_mA(default_pressure);
 
   // Initialize DotStar LED
   led.begin();
@@ -365,11 +388,11 @@ void loop() {
     }
   }
 
-  // -------------------------------------------------------------------------
+  // =========================================================================
   // Process serial commands
-  // -------------------------------------------------------------------------
+  // =========================================================================
   if (sc.available()) {
-    char *command = sc.getCommand();  // create pointer to memory location of buffer content -> str_cmd
+    char *command = sc.getCommand();  // create pointer to memory location of serial buffer contents -> str_cmd
 
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
