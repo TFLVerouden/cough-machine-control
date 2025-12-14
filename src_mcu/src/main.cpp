@@ -50,6 +50,14 @@ float value_array[MAX_DATA_LENGTH];                     // mA dataset
 DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 
 // ============================================================================
+// DATASET PROCESSING VARIABLES
+// ============================================================================
+bool isExecuting = false;
+uint32_t runStartTime = 0;
+int sequenceIndex = 0;
+int dataIndex = 0;
+
+// ============================================================================
 // TIMING PARAMETERS
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
@@ -102,6 +110,7 @@ const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
 const uint32_t COLOR_LASER = 0x100000;      // Dim blue - started detection
 const uint32_t COLOR_DROPLET = 0xFF0000;    // Bright blue - droplet detected
 const uint32_t COLOR_WAITING = 0x400040; // Purple - waiting for valve opening
+const uint32_t COLOR_RECEIVING = 0x100000; // Dim red - receiving dataset
 const uint32_t COLOR_OFF = 0x000000;     // Off
 
 // ============================================================================
@@ -443,8 +452,95 @@ void loop() {
       } else {
           pressure.set_mA(current);
       }
+
+    } else if (strncmp(command, "LOAD", 4) == 0) {
+    // Parse incomming dataset. Command: "LOAD <N_datapoints> <Time0>,<mA0>,<Time1>,<mA1>,<TimeN>,<mAN>" 
+
+      setLedColor(COLOR_RECEIVING);
+
+      bool error = false;
+      const char* delim = ",";  // Serial dataset delimiter
+
+      if (strlen(command) < 6) {
+          DEBUG_PRINTLN("ERROR: \"LOAD\" command is not followed by dataset");
+          error = true;
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+          return;
+      }
       
-    }else if (strncmp(command, "O", 1) == 0) {
+      // read dataset length from char 5 until space (_) "LOAD_<length>_<dataset>" 
+      // and instantialize position to start reading data from in strtok
+      char* idx = strtok(command + 5, " ");
+      incomingCount = atoi(idx);  // convert dataset length to int type
+
+      // Debug print 
+      DEBUG_PRINT("Incoming data length: ");
+      DEBUG_PRINT(incomingCount);
+      DEBUG_PRINTLN(" datapoints long.");
+
+      // Check if data length is acceptable
+      if (incomingCount > MAX_DATA_LENGTH || incomingCount <= 0) {
+        DEBUG_PRINT("ERROR: data length is not allowed: 0 < N < ");
+        DEBUG_PRINT(MAX_DATA_LENGTH);
+        DEBUG_PRINTLN(", upload new dataset!");
+        error = true;
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
+        return;
+      }
+
+      dataIndex = 0; // Used later to only read valuable data from data arrays
+
+      // Parsing rest of the dataset after handshake
+      for (int i = 0; i < incomingCount; i++) {
+
+        idx = strtok(NULL, delim);  // Get next item from buffer (str_cmd). This item is the timestamp
+        // If the item is NULL, break
+        if (idx == NULL) {
+            DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (error at data index: ");
+            DEBUG_PRINT(dataIndex);
+            DEBUG_PRINTLN(")");
+            error = true;
+            setLedColor(COLOR_ERROR);
+            delay(300);
+            setLedColor(COLOR_OFF);
+            break;
+        }
+        // Convert incoming csv buffer index from string to int and add to time array
+        time_array[i] = atoi(idx);
+
+        idx = strtok(NULL, delim); // Get next csv buffer index. This item is the mA value
+        // Check again if item is not NULL
+        if (idx == NULL) {
+            DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (data index: ");
+            DEBUG_PRINT(dataIndex);
+            DEBUG_PRINTLN(")");
+            error = true;
+            setLedColor(COLOR_ERROR);
+            delay(300);
+            setLedColor(COLOR_OFF);
+            break;
+        }
+        // Convert incoming csv buffer index from string to float and add to value array
+        value_array[i] = parseFloatInString(idx, 0);
+
+        // Debug print whole received dataset
+        DEBUG_PRINT("Timestamp: ");
+        DEBUG_PRINT(time_array[i]);
+        DEBUG_PRINT(", mA: ");
+        DEBUG_PRINTLN(value_array[i]);
+
+        // Increase working index, used later to only read valuable data from data arrays
+        dataIndex++;
+      }
+
+      // LED color off when whole dataset is received
+      setLedColor(COLOR_OFF);
+
+    } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
