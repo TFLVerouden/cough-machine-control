@@ -681,17 +681,20 @@ void loop() {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
-      DEBUG_PRINTLN("O      - Open valve indefinitely");
-      DEBUG_PRINTLN("O <ms> - Open valve for <ms> milliseconds (e.g., O 100)");
-      DEBUG_PRINTLN("C      - Close valve immediately");
-      DEBUG_PRINTLN("D      - Detect droplet, open valve indefinitely");
-      DEBUG_PRINTLN("D <ms> - Detect droplet, open for <ms> milliseconds");
-      DEBUG_PRINTLN(
-          "L <us> - Set delay before valve opening to <us> microseconds");
-      DEBUG_PRINTLN("P?     - Read pressure");
-      DEBUG_PRINTLN("T?     - Read temperature & humidity");
-      DEBUG_PRINTLN("S?     - System status");
-      DEBUG_PRINTLN("?      - Show this help");
+      DEBUG_PRINTLN("O       - Open valve indefinitely");
+      DEBUG_PRINTLN("O <ms>  - Open valve for <ms> milliseconds (e.g., O 100)");
+      DEBUG_PRINTLN("C       - Close valve immediately");
+      DEBUG_PRINTLN("D       - Detect droplet, open valve indefinitely");
+      DEBUG_PRINTLN("D <ms>  - Detect droplet, open for <ms> milliseconds");
+      DEBUG_PRINTLN("L <us>  - Set delay before valve opening to <us> microseconds");
+      DEBUG_PRINTLN("SV <ms> - Set proportional valve milliamps to <mA>");
+      DEBUG_PRINTLN("SV <ms> - Set pressure regulator milliamps to <mA>");
+      DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: <ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
+      DEBUG_PRINTLN("RUN     - Execute loaded dataset");
+      DEBUG_PRINTLN("P?      - Read pressure");
+      DEBUG_PRINTLN("T?      - Read temperature & humidity");
+      DEBUG_PRINTLN("S?      - System status");
+      DEBUG_PRINTLN("?       - Show this help");
 
     } else if (strncmp(command, "S?", 2) == 0) {
       // Command: S?
