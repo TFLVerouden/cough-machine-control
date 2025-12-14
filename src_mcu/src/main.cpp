@@ -82,7 +82,8 @@ T_Click pressure(PIN_PRES_REG, RT_Click_Calibration{3.97, 19.90, 796, 3982});
 
 // Define default T Click values
 const float max_mA = 20.0;
-const float min_mA = 12.0;
+const float min_mA_valve = 12.0;
+const float min_mA_pres_reg = 4.0;
 const float default_valve = 12.0;
 const float default_pressure = 4.0;
 
@@ -392,12 +393,35 @@ void loop() {
   // Process serial commands
   // =========================================================================
   if (sc.available()) {
-    char *command = sc.getCommand();  // create pointer to memory location of serial buffer contents -> str_cmd
+    char *command = sc.getCommand();  // create pointer to memory location of serial buffer contents -> command
 
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (strncmp(command, "O", 1) == 0) {
+    if (strncmp(command, "SV", 2) == 0) {
+      // Command: SV <mA>
+      // Set milli amps of proportional valve to <mA>
+
+      float current = parseFloatInString(command, 2);     // Parse float from char array command, skip index 2
+
+      // Handle out of allowable range inputs, defaults to specified value
+      if (!current || current < min_mA_valve || current > max_mA) { 
+          valve.set_mA(default_valve);
+          DEBUG_PRINT("ERROR: input outside of allowable range (");
+          DEBUG_PRINT(min_mA_valve);
+          DEBUG_PRINT(" - ");
+          DEBUG_PRINT(max_mA);
+          DEBUG_PRINTLN("), valve set to default value.");
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+      
+      // Set T_Click to input mA
+      } else {
+          valve.set_mA(current);
+      }
+
+    } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
