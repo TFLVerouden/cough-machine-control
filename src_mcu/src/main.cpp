@@ -288,6 +288,12 @@ float readPhotodetector() {
   return signalVoltage;
 }
 
+void resetDataArrays() {
+    memset(time_array, 0, sizeof(time_array));
+    memset(value_array, 0, sizeof(value_array));
+    incomingCount = 0;
+}
+
 // ============================================================================
 // MAIN LOOP
 // ============================================================================
@@ -504,6 +510,7 @@ void loop() {
             DEBUG_PRINT(dataIndex);
             DEBUG_PRINTLN(")");
             error = true;
+            resetDataArrays();
             setLedColor(COLOR_ERROR);
             delay(300);
             setLedColor(COLOR_OFF);
@@ -519,6 +526,7 @@ void loop() {
             DEBUG_PRINT(dataIndex);
             DEBUG_PRINTLN(")");
             error = true;
+            resetDataArrays();
             setLedColor(COLOR_ERROR);
             delay(300);
             setLedColor(COLOR_OFF);
