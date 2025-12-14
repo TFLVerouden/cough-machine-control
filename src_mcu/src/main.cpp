@@ -111,6 +111,7 @@ const uint32_t COLOR_LASER = 0x100000;      // Dim blue - started detection
 const uint32_t COLOR_DROPLET = 0xFF0000;    // Bright blue - droplet detected
 const uint32_t COLOR_WAITING = 0x400040; // Purple - waiting for valve opening
 const uint32_t COLOR_RECEIVING = 0x100000; // Dim red - receiving dataset
+const uint32_t COLOR_EXECUTING = 0xFF0000; // Bright red - executing loaded dataset
 const uint32_t COLOR_OFF = 0x000000;     // Off
 
 // ============================================================================
@@ -404,6 +405,34 @@ void loop() {
     }
   }
 
+  // Execute loaded dataset if isExecuting is true
+  if (isExecuting) {
+    //Caclulate time since start execution
+    uint32_t now = millis() - runStartTime;
+    // If time since start execution > dataset index time -> set mA value of valve to dataset index value
+    if (now >= time_array[sequenceIndex]) {
+        // If whole dataset has been executed, exit execution state
+        if (sequenceIndex >= dataIndex) {
+            isExecuting = false;
+            setLedColor(COLOR_OFF);
+            return;
+        } else {
+            valve.set_mA(value_array[sequenceIndex]);
+            // Debug print dataset execution, expected time and value vs actual time and value
+            DEBUG_PRINT("Sequence index: ");
+            DEBUG_PRINT(sequenceIndex);
+            DEBUG_PRINT(", time elapsed: ");
+            DEBUG_PRINT(now);
+            DEBUG_PRINT(", time goal: ");
+            DEBUG_PRINT(time_array[sequenceIndex]);
+            DEBUG_PRINT(", setpoint: ");
+            DEBUG_PRINTLN(value_array[sequenceIndex]);
+
+            sequenceIndex++;
+      }
+    }
+  }
+
   // =========================================================================
   // Process serial commands
   // =========================================================================
@@ -547,6 +576,17 @@ void loop() {
 
       // LED color off when whole dataset is received
       setLedColor(COLOR_OFF);
+
+    // HEB HIER incomingCount veranderd voor dataIndex!!!! Als het niet meer werkt terugveranderen (08-12-2025 16:28)
+    } else if (strncmp(command, "RUN", 3) == 0) {
+      if (dataIndex == 0) {
+        Serial.println("Dataset is empty! Upload first using LOAD command.");
+      } else {
+        isExecuting = true;
+        runStartTime = millis();
+        sequenceIndex = 0;
+        setLedColor(COLOR_EXECUTING);
+      }
 
     } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
