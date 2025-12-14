@@ -9,6 +9,7 @@
 #include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
+#include "DvG_StreamCommand.h"
 
 // ============================================================================
 // DEBUG CONFIGURATION
@@ -33,6 +34,16 @@ const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 const int PIN_LASER = 12; // Laser MOSFET gate pin for droplet detection
 const int PIN_PDA = A2;   // Analog input from photodetector
 // Note: PIN_DOTSTAR_DATA and PIN_DOTSTAR_CLK are already defined in variant.h
+
+// Initialize DvG_StreamCommand serial communication, time and value arrays for serial data transmission
+const int MAX_DATA_LENGTH = 2000;                       // Max serial dataset size
+const uint16_t CMD_BUF_LEN = 32000;                     // RAM size allocation for Serial buffer size
+int incomingCount = 0;                                  // Declare incoming dataset length globally
+char cmd_buf[CMD_BUF_LEN]{'\0'};                        // Instantiate empty Serial buffer
+uint32_t time_array[MAX_DATA_LENGTH];                   // Time dataset
+float value_array[MAX_DATA_LENGTH];                     // mA dataset
+// Create DvG_StreamCommand object on Serial stream
+DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 
 // ============================================================================
 // TIMING PARAMETERS
@@ -357,14 +368,13 @@ void loop() {
   // -------------------------------------------------------------------------
   // Process serial commands
   // -------------------------------------------------------------------------
-  if (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n');
-    command.trim(); // Remove any whitespace
+  if (sc.available()) {
+    char *command = sc.getCommand();  // create pointer to memory location of buffer content -> str_cmd
 
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (command.startsWith("O")) {
+    if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
@@ -372,7 +382,7 @@ void loop() {
         duration = 0; // 0 means stay open
         DEBUG_PRINTLN("Opening valve indefinitely");
       } else {
-        duration = 1000 * command.substring(2).toInt();
+        duration = 1000 * parseFloatInString(command, 1);
         DEBUG_PRINT("Opening valve for ");
         DEBUG_PRINT(duration);
         DEBUG_PRINTLN(" µs");
@@ -392,7 +402,7 @@ void loop() {
         setLedColor(COLOR_VALVE_OPEN);
       }
 
-    } else if (command == "C") {
+    } else if (strncmp(command, "C", 1) == 0) {
       // Command: C
       // Manually close valve (override)
       closeValve();
@@ -409,7 +419,7 @@ void loop() {
 
       setLedColor(COLOR_IDLE);
 
-    } else if (command.startsWith("D")) {
+    } else if (strncmp(command, "D", 1) == 0) {
       // Command: D or D <duration_ms>
       // D = detect droplet and open indefinitely, D <ms> = open for specified
       // time
@@ -418,7 +428,7 @@ void loop() {
         duration = 0; // 0 means stay open
         DEBUG_PRINTLN("Droplet detection: valve will stay open");
       } else {
-        duration = 1000 * command.substring(2).toInt();
+        duration = 1000 * parseIntInString(command, 1);
         DEBUG_PRINT("Droplet detection: valve will open for ");
         DEBUG_PRINT(duration);
         DEBUG_PRINTLN(" µs");
@@ -435,25 +445,25 @@ void loop() {
 
       DEBUG_PRINTLN("Detecting droplets");
 
-    } else if (command.startsWith("L ")) {
+    } else if (strncmp(command, "L", 1) == 0) {
       // Command: L <delay_us>
       // Set delay before opening valve (applies to both O and D commands)
-      tick_delay = command.substring(2).toInt();
+      tick_delay = parseIntInString(command, 1);
       DEBUG_PRINT("Delay before opening valve: ");
       DEBUG_PRINT(tick_delay);
       DEBUG_PRINTLN(" µs");
 
-    } else if (command == "P?") {
+    } else if (strncmp(command, "P?", 2) == 0) {
       // Command: P?
       // Read and return current pressure
       readPressure(valveOpen);
 
-    } else if (command == "T?") {
+    } else if (strncmp(command, "T?", 2) == 0) {
       // Command: T?
       // Read and return temperature & humidity
       readTemperature(valveOpen);
 
-    } else if (command == "?") {
+    } else if (strncmp(command, "?", 1) == 0) {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
@@ -469,7 +479,7 @@ void loop() {
       DEBUG_PRINTLN("S?     - System status");
       DEBUG_PRINTLN("?      - Show this help");
 
-    } else if (command == "S?") {
+    } else if (strncmp(command, "S?", 2) == 0) {
       // Command: S?
       // Print system status (debug only)
       DEBUG_PRINTLN("\n=== System Status ===");
