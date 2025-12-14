@@ -402,7 +402,7 @@ void loop() {
       // Command: SV <mA>
       // Set milli amps of proportional valve to <mA>
 
-      float current = parseFloatInString(command, 2);     // Parse float from char array command, skip index 2
+      float current = parseFloatInString(command, 2);     // Parse float from char array command
 
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_valve || current > max_mA) { 
@@ -421,7 +421,30 @@ void loop() {
           valve.set_mA(current);
       }
 
-    } else if (strncmp(command, "O", 1) == 0) {
+    } else if (strncmp(command, "SP", 2) == 0) {
+      // Command: SP <mA>
+      // Set milli amps of pressure regulator to <mA>
+
+      float current = parseFloatInString(command, 2);     // Parse float from char array command
+
+      // Handle out of allowable range inputs, defaults to specified value
+      if (!current || current < min_mA_pres_reg || current > max_mA) { 
+          pressure.set_mA(default_pressure);
+          DEBUG_PRINT("ERROR: input outside of allowable range (");
+          DEBUG_PRINT(min_mA_pres_reg);
+          DEBUG_PRINT(" - ");
+          DEBUG_PRINT(max_mA);
+          DEBUG_PRINTLN("), valve set to default value.");
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+      
+      // Set T_Click to input mA
+      } else {
+          pressure.set_mA(current);
+      }
+      
+    }else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
