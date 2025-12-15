@@ -29,8 +29,8 @@
 // PIN DEFINITIONS
 // ============================================================================
 const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
-const int PIN_PROP_VALVE = 10;  // Chip select for proportional valve
-const int PIN_PRES_REG = 11;  // Chip select for pressure regulator
+const int PIN_PROP_VALVE = 11;  // Chip select for proportional valve
+const int PIN_PRES_REG = 10;  // Chip select for pressure regulator
 const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 const int PIN_LASER = 12; // Laser MOSFET gate pin for droplet detection
@@ -493,16 +493,14 @@ void loop() {
 
       setLedColor(COLOR_RECEIVING);
 
-      bool error = false;
       const char* delim = ",";  // Serial dataset delimiter
 
       if (strlen(command) < 6) {
-          DEBUG_PRINTLN("ERROR: \"LOAD\" command is not followed by dataset");
-          error = true;
-          setLedColor(COLOR_ERROR);
-          delay(300);
-          setLedColor(COLOR_OFF);
-          return;
+        DEBUG_PRINTLN("ERROR: \"LOAD\" command is not followed by dataset");
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
+        return;
       }
       
       // read dataset length from char 5 until space (_) "LOAD_<length>_<dataset>" 
@@ -520,7 +518,6 @@ void loop() {
         DEBUG_PRINT("ERROR: data length is not allowed: 0 < N < ");
         DEBUG_PRINT(MAX_DATA_LENGTH);
         DEBUG_PRINTLN(", upload new dataset!");
-        error = true;
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
@@ -535,15 +532,14 @@ void loop() {
         idx = strtok(NULL, delim);  // Get next item from buffer (str_cmd). This item is the timestamp
         // If the item is NULL, break
         if (idx == NULL) {
-            DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (error at data index: ");
-            DEBUG_PRINT(dataIndex);
-            DEBUG_PRINTLN(")");
-            error = true;
-            resetDataArrays();
-            setLedColor(COLOR_ERROR);
-            delay(300);
-            setLedColor(COLOR_OFF);
-            break;
+          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (error at data index: ");
+          DEBUG_PRINT(dataIndex);
+          DEBUG_PRINTLN(")");
+          resetDataArrays();
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+          break;
         }
         // Convert incoming csv buffer index from string to int and add to time array
         time_array[i] = atoi(idx);
@@ -551,15 +547,14 @@ void loop() {
         idx = strtok(NULL, delim); // Get next csv buffer index. This item is the mA value
         // Check again if item is not NULL
         if (idx == NULL) {
-            DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (data index: ");
-            DEBUG_PRINT(dataIndex);
-            DEBUG_PRINTLN(")");
-            error = true;
-            resetDataArrays();
-            setLedColor(COLOR_ERROR);
-            delay(300);
-            setLedColor(COLOR_OFF);
-            break;
+          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (data index: ");
+          DEBUG_PRINT(dataIndex);
+          DEBUG_PRINTLN(")");
+          resetDataArrays();
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+          break;  
         }
         // Convert incoming csv buffer index from string to float and add to value array
         value_array[i] = parseFloatInString(idx, 0);
@@ -580,7 +575,10 @@ void loop() {
     // HEB HIER incomingCount veranderd voor dataIndex!!!! Als het niet meer werkt terugveranderen (08-12-2025 16:28)
     } else if (strncmp(command, "RUN", 3) == 0) {
       if (dataIndex == 0) {
-        Serial.println("Dataset is empty! Upload first using LOAD command.");
+        DEBUG_PRINTLN("Dataset is empty! Upload first using LOAD command.");
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
       } else {
         isExecuting = true;
         runStartTime = millis();
@@ -592,7 +590,7 @@ void loop() {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
 
-      if (command == "O") {
+      if (strlen(command) == 1) {
         duration = 0; // 0 means stay open
         DEBUG_PRINTLN("Opening valve indefinitely");
       } else {
@@ -638,7 +636,7 @@ void loop() {
       // D = detect droplet and open indefinitely, D <ms> = open for specified
       // time
 
-      if (command == "D") {
+      if (strlen(command) == 1) {
         duration = 0; // 0 means stay open
         DEBUG_PRINTLN("Droplet detection: valve will stay open");
       } else {

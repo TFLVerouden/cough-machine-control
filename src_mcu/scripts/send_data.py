@@ -2,9 +2,9 @@ import csv
 import serial
 
 # Configure variables
-serial_port = "COM9"
+serial_port = "COM5"
 baud = 115200
-filename = "curve2.csv"
+filename = "drawn_curve.csv"
 
 # =========================================================================================
 # Extract time and value arrays from csv file. Input: "filename", "delimiter"
@@ -28,7 +28,7 @@ def extract(filename, delimiter = ','):
             else:
                 time.append(rows[0].replace(',', '.'))  # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
                 mA.append(rows[1].replace(',', '.'))    
-                idx += 1
+                row_idx += 1
 
     return time, mA
 
@@ -58,7 +58,7 @@ def format(time_array, mA_array, prefix = "LOAD", handshake_delim = " ", data_de
 # =========================================================================================
 sc = serial.Serial(serial_port, baud, timeout=1)
 
-data = extract(filename, ',')               # data[0] is time array, data[1] is mA array
+data = extract(filename, ';')               # data[0] is time array, data[1] is mA array
 serial_command = format(data[0], data[1])
 
 print(serial_command)                       # Debug print
