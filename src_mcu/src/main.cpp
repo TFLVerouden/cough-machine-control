@@ -15,7 +15,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -445,6 +445,8 @@ void loop() {
             return;
         } else {
             valve.set_mA(value_array[sequenceIndex]);
+            // This Serial.print(); shows that the timing is accurate to within a ms and that the DEBUG prints delay the code
+            // Serial.println((now / 1000) - time_array[sequenceIndex]);
             // Debug print dataset execution, expected time and value vs actual time and value
             DEBUG_PRINT("Sequence index: ");
             DEBUG_PRINT(sequenceIndex);
