@@ -37,13 +37,15 @@ def extract(filename, delimiter = ','):
 # =========================================================================================
 def format(time_array, mA_array, prefix = "LOAD", handshake_delim = " ", data_delim = ",", line_feed = '\n'):
 
+    duration = time_array[-1]
+
     # Check for inconsistent dataset length
     if len(time_array) != len(mA_array) or len(time_array) == 0 or len(mA_array) == 0:
         print(f"Arrays are not compatible! Time length: {len(time_array)}, mA length: {len(mA_array)}")
         return
     else:
         # Create 'handshake' sequence
-        header = [prefix, handshake_delim, str(len(time_array)), handshake_delim]
+        header = [prefix, handshake_delim, str(len(time_array)), handshake_delim, duration, handshake_delim]
 
         # Append timestamps and values in order <time0, mA0, time1, mA1, time2, mA2> 
         data = [str(val) for time, mA in zip(time_array, mA_array) for val in (time, mA)]
