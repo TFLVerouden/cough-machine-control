@@ -297,9 +297,10 @@ void resetDataArrays() {
     memset(time_array, 0, sizeof(time_array));
     memset(value_array, 0, sizeof(value_array));
     incomingCount = 0;
-    // Added these two resets after testing, need reviewing!
+    // Added these three resets after testing, need reviewing!
     dataIndex = 0;
     sequenceIndex = 0;
+    datasetDuration = 0;
 }
 
 // ============================================================================
@@ -485,8 +486,6 @@ void loop() {
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_valve || current > max_mA) { 
           valve.set_mA(default_valve);
-          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
-          DEBUG_PRINTLN(pressure.get_last_set_bitval());
           DEBUG_PRINT("ERROR: input outside of allowable range (");
           DEBUG_PRINT(min_mA_valve);
           DEBUG_PRINT(" - ");
@@ -499,6 +498,8 @@ void loop() {
       // Set T_Click to input mA
       } else {
           valve.set_mA(current);
+          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
+          DEBUG_PRINTLN(pressure.get_last_set_bitval());
       }
 
     } else if (strncmp(command, "SP", 2) == 0) {
@@ -514,8 +515,6 @@ void loop() {
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_pres_reg || current > max_mA) { 
           pressure.set_mA(default_pressure);
-          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
-          DEBUG_PRINTLN(pressure.get_last_set_bitval());
           DEBUG_PRINT("ERROR: input outside of allowable range (");
           DEBUG_PRINT(min_mA_pres_reg);
           DEBUG_PRINT(" - ");
@@ -528,6 +527,8 @@ void loop() {
       // Set T_Click to input mA
       } else {
           pressure.set_mA(current);
+          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
+          DEBUG_PRINTLN(pressure.get_last_set_bitval());
       }
 
     } else if (strncmp(command, "SHOW", 4) == 0) {
@@ -570,6 +571,7 @@ void loop() {
         DEBUG_PRINT("ERROR: data length is not allowed: 0 < N < ");
         DEBUG_PRINT(MAX_DATA_LENGTH);
         DEBUG_PRINTLN(", upload new dataset!");
+        resetDataArrays();
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
@@ -578,6 +580,7 @@ void loop() {
         DEBUG_PRINT("ERROR: dataset duration is too short, must be at least ");
         DEBUG_PRINT(-valve_delay_close / 1000);
         DEBUG_PRINTLN(" ms, upload new dataset!");
+        resetDataArrays();
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
