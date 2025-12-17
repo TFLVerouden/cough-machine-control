@@ -1,8 +1,5 @@
 *To do in this document:*
-- [ ] Check which coil is used in valve #1, [see below](/docs/components.md#valve-1-solenoid-valve).
 - [ ] Check and add laser safety label/regulations here.
-- [ ] Check pins of cable connecting pressure sensor - is pin 4 (N.C.) on the breadboard actually connected to the black wire (pin 2 on device)?
-- [ ] Check whether NC pin for valve 2 is nr 5 or 0!!!
 
 # Component list
 ## Airflow
@@ -11,9 +8,11 @@ Connected by means of, among other components, Swagelok male connector fittings 
 ### Pressure regulator
 *FESTO VPPE-3-1-1/8-10-420-E1*
 - [Website manufacturer](https://www.festo.com/nl/nl/a/557776)
-- [Datasheet](/docs/airflow/FESTO_pressureregulator_VPPE-3-1-1:8-10-420-E1_datasheet.pdf)
-- [Installation manual](/docs/airflow/FESTO_pressureregulator_VPPE-3-1-1:8-10-420-E1_manual.pdf)
+- [Datasheet](/docs/airflow/FESTO_pressureregulator_VPPE-3-1-18-10-420-E1_datasheet.pdf)
+- [Installation manual](/docs/airflow/FESTO_pressureregulator_VPPE-3-1-18-10-420-E1_manual.pdf)
 - [Catalogue/info](/docs/airflow/FESTO_pressureregulator_info.pdf)
+
+The pressure regulator has three parameter presets that range from slow (Pr1) to fast with overshoot (Pr3). Preset 2 seems to suit our needs. 
 
 Connected using a *Pepperl+Fuchs V15-W-2M-PVC* female M12 to 5-way unterminated cable.
 - [Website manufacturer](https://nl.rs-online.com/web/p/sensor-actuator-cables/8919448)
@@ -32,7 +31,7 @@ On breadboard left-to-right:
 | 3   | Blue (BU)    | Ground (0 V)                  |
 | 4   | Black (BK)   | +, 4-20 mA setpoint current   |
 | 5   | Gray (GY)    | 4-20 mA analog out            |
-| 6/0   |              | N.C. for 180° turn protection |
+| 6   |              | N.C. for 180° turn protection |
 
 
 ### Air reservoir
@@ -44,12 +43,11 @@ On breadboard left-to-right:
 *FESTO VUVS-LT25-M32C-MZD-G14-F8-1C1*
 - [Website manufacturer](https://www.festo.com/nl/nl/a/8035170/)
 - [Datasheet](/docs/airflow/FESTO_valve1_VUVS-LT25-M32C-MZD-G14-F8-1C1%20datasheet.pdf)
-- [Manual of coil VACN-N-A1-1-EX4-A](/docs/airflow/FESTO_valve1_VACN-N-A1-1-EX4-A_coil_manual.pdf) - pretty sure we have this one)
 
 ### Valve #2 (proportional valve)
 *FESTO MPYE-5-1/4-420-B*
 - [Website manufacturer](https://www.festo.com/nl/nl/a/161980/)
-- [Datasheet](/docs/airflow/FESTO_valve2_MPYE-5-1:4-420-B_datasheet.pdf)
+- [Datasheet](/docs/airflow/FESTO_valve2_MPYE-5-14-420-B_datasheet.pdf)
 - [Installation manual](/docs/airflow/FESTO_valve2_manual.pdf)
 - [Catalogue/info](/docs/airflow/FESTO_valve2_info.pdf)
 
@@ -68,7 +66,7 @@ On breadboard left-to-right:
 | 2   | White (WH)   | Ground/- (0 V)                |
 | 3   | Blue (BU)    | +, 12-20 mA setpoint current   |
 | 4   | Black (BK)   | −, 0 mA setpoint current      |
-| 5/0   |              | N.C. for 180° turn protection |
+| 5   |              | N.C. for 180° turn protection |
 
 ### Obsolete
 - ~~Bronkhorst EL-FLOW Select F-113AC flow meter~~
