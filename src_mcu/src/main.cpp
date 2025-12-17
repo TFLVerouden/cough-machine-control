@@ -64,7 +64,7 @@ uint32_t tick = 0;                    // Timestamp for timing events [µs]
 uint32_t tick_delay = 59500;          // Delay before opening valve [µs]
 uint32_t pda_delay = 10000;           // Delay before photodiode starts detecting [µs]
 uint32_t valve_delay_open = 11000;    // Delay between solenoid valve and proportional valve opening [µs]
-uint32_t valve_delay_close = 40000;   // Delay between solenoid valve and proportional valve closing [µs]
+int32_t valve_delay_close = -40000;   // Delay between solenoid valve and proportional valve closing [µs]
 uint32_t runCalltTime = 0;            // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
@@ -260,6 +260,8 @@ void readPressure(bool valveOpen) {
   Serial.println();
   // Restore LED color based on valve state
   setLedColor(valveOpen ? COLOR_VALVE_OPEN : COLOR_IDLE);
+  DEBUG_PRINT("R Click bitvalue: ");
+  DEBUG_PRINTLN(R_click.get_EMA_bitval());
 }
 
 void readTemperature(bool valveOpen) {
@@ -317,6 +319,7 @@ void loop() {
   static uint32_t detectionStartTime = 0; // When laser/detection was started [µs]
   static bool continuousDetection = false;// Tracks if in continuous detection mode
   static bool isExecuting = false;        // Tracks if waiting to run loaded sequence
+  static bool setPressure = false;        // Tracks if pressure regulator has been set at least once
 
 
   // -------------------------------------------------------------------------
@@ -425,13 +428,13 @@ void loop() {
       setLedColor(COLOR_VALVE_OPEN);
     }
 
-    if (solValveOpen && (now / 1000) >= (datasetDuration - (valve_delay_close / 1000))) {
+    if (solValveOpen && (now / 1000) >= (datasetDuration + (valve_delay_close / 1000))) {
       closeValve();
       solValveOpen = false;
       DEBUG_PRINT("Solenoïd valve closed after ");
       DEBUG_PRINT(now / 1000);
       DEBUG_PRINT("ms, time goal: ");
-      DEBUG_PRINTLN(datasetDuration - (valve_delay_close / 1000));
+      DEBUG_PRINTLN(datasetDuration + (valve_delay_close / 1000));
     }
 
     // If time since start execution >= (dataset index time + valve timing delay) -> set mA value of valve to dataset index value
@@ -482,6 +485,8 @@ void loop() {
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_valve || current > max_mA) { 
           valve.set_mA(default_valve);
+          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
+          DEBUG_PRINTLN(pressure.get_last_set_bitval());
           DEBUG_PRINT("ERROR: input outside of allowable range (");
           DEBUG_PRINT(min_mA_valve);
           DEBUG_PRINT(" - ");
@@ -500,11 +505,17 @@ void loop() {
       // Command: SP <mA>
       // Set milli amps of pressure regulator to <mA>
 
+      if (!setPressure) {
+        setPressure = true;
+      }
+
       float current = parseFloatInString(command, 2);     // Parse float from char array command
 
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_pres_reg || current > max_mA) { 
           pressure.set_mA(default_pressure);
+          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
+          DEBUG_PRINTLN(pressure.get_last_set_bitval());
           DEBUG_PRINT("ERROR: input outside of allowable range (");
           DEBUG_PRINT(min_mA_pres_reg);
           DEBUG_PRINT(" - ");
@@ -563,6 +574,14 @@ void loop() {
         delay(300);
         setLedColor(COLOR_OFF);
         return;
+      } else if ((datasetDuration + (valve_delay_close / 1000)) < 0) {
+        DEBUG_PRINT("ERROR: dataset duration is too short, must be at least ");
+        DEBUG_PRINT(-valve_delay_close / 1000);
+        DEBUG_PRINTLN(" ms, upload new dataset!");
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
+        return;
       }
 
       dataIndex = 0; // Used later to only read valuable data from data arrays
@@ -613,12 +632,14 @@ void loop() {
       // LED color off when whole dataset is received
       setLedColor(COLOR_OFF);
 
-    } else if (strncmp(command, "R", 1) == 0) {
+    } else if (strncmp(command, "RUN", 3) == 0) {
       if (dataIndex == 0) {
-        DEBUG_PRINTLN("Dataset is empty! Upload first using LOAD command.");
+        printError("Dataset is empty! Upload first using LOAD command.");
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
+      } else if (!setPressure) {
+        printError("Pressure regulator not set! Set it first using SP command.");
       } else {
         isExecuting = true;
         runCalltTime = micros();
@@ -728,7 +749,7 @@ void loop() {
       DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
       DEBUG_PRINTLN("SP <mA> - Set pressure regulator milliamps to <mA>");
       DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: <ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
-      DEBUG_PRINTLN("R       - Execute loaded dataset");
+      DEBUG_PRINTLN("RUN     - Execute loaded dataset");
       DEBUG_PRINTLN("P?      - Read pressure");
       DEBUG_PRINTLN("T?      - Read temperature & humidity");
       DEBUG_PRINTLN("S?      - System status");
