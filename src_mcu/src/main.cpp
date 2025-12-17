@@ -15,7 +15,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -200,7 +200,7 @@ void openValveTrigger() {
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
   DEBUG_PRINTLN(
-      "Solenoïd valve opened"); // Valve opened confirmation (debug only for speed)
+      "Solenoïd valve opened using openValveTrigger()"); // Valve opened confirmation (debug only for speed)
 }
 
 void closeValve() {
@@ -210,7 +210,7 @@ void closeValve() {
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
   DEBUG_PRINT(
-      "Solenoïd valve closed"); // Valve closed confirmation (debug only for speed)
+      "Solenoïd valve closed using closeValve()"); // Valve closed confirmation (debug only for speed)
   Serial.println("!");
 }
 
@@ -419,8 +419,8 @@ void loop() {
     //Caclulate time since start execution
     uint32_t now = (micros() - runCalltTime); // Time since RUN is called [µs]
 
-    // If valves aren't open and timing of first datapoint has been reached open solenoid valve
-    if (!solValveOpen && !propValveOpen && now >= time_array[0]) {
+    // If valve isn't open and timing of first datapoint has been reached open solenoid valve
+    if (!solValveOpen && sequenceIndex == 0 && (now / 1000) >= time_array[0]) {
       openValveTrigger();     // Open solenoid valve
       tick = micros();
       DEBUG_PRINT("Time to opening solenoid valve: ");DEBUG_PRINT(now / 1000);DEBUG_PRINTLN(" ms.");
@@ -432,20 +432,21 @@ void loop() {
     int32_t solValveCloseTime = datasetDuration + (valve_delay_close / 1000);
 
     // Check if solenoid valve needs to be closed
-    if (solValveOpen || (now / 1000) >= (uint32_t)solValveCloseTime) {
+    if (solValveOpen && (now / 1000) >= (uint32_t)solValveCloseTime) {
         closeValve();
         solValveOpen = false;
-        DEBUG_PRINT("Solenoïd valve closed after ");
+        DEBUG_PRINT("Solenoïd valve closed after: ");
         DEBUG_PRINT(now / 1000);
         DEBUG_PRINT("ms, time goal: ");
         DEBUG_PRINTLN(solValveCloseTime);
       }
 
     // If time since start execution >= (dataset index time + valve timing delay) -> set mA value of valve to dataset index value
-    if (now / 1000 >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
+    if ((now / 1000) >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
         // If whole dataset has been executed, exit execution state
         if (sequenceIndex >= dataIndex) {
-            isExecuting = false;          // Reset executing flag        
+            isExecuting = false;          // Reset executing flag  
+            sequenceIndex = 0;            // Reset dataset index      
             valve.set_mA(default_valve);  // Close proportional valve
             propValveOpen = false;
             setLedColor(COLOR_OFF);
