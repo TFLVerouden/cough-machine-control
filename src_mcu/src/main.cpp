@@ -421,7 +421,8 @@ void loop() {
 
     // If valve isn't open and timing of first datapoint has been reached open solenoid valve
     if (!solValveOpen && sequenceIndex == 0 && (now / 1000) >= time_array[0]) {
-      openValveTrigger();     // Open solenoid valve
+      openValveTrigger();         // Open solenoid valve and trigger
+      performingTrigger = true;   // Set trigger flag
       tick = micros();
       DEBUG_PRINT("Time to opening solenoid valve: ");DEBUG_PRINT(now / 1000);DEBUG_PRINTLN(" ms.");
       solValveOpen = true;
