@@ -246,6 +246,7 @@ piv/processed/.DS_Store
 # PlatformIO/VSCode
 **/.pio
 **/.vscode
+src_mcu/.vscode
 
 # Temporary Microsoft Visio files
 *.~vsdx
