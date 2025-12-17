@@ -123,8 +123,21 @@ On breadboard left-to-right:
 
 
 ## Peripherals
-- Malvern SprayTec
+### Syringe pump
+*Harvard Apparatus PHD 2000*
+- [Manual](/docs/peripherals/Harvard_PHD2000_syringe_pump_manual.pdf)
+
+Make sure to set the correct syringe diameter. Commonly used Hamilton-Microliter Series Gastight syringes:
+| Volume (mL) | Diameter (mm) |
+| ----------- | ------------- |
+| 1.0         | 4.61          |
+| 2.5         | 7.28          |
+| 5.0         | 10.3          |
+
+### Laser diffraction particle sizer
+*Malvern SprayTec*
     - Lift?
-- Harvard Apparatus PHD 2000 syringe pump
+
+### Optics
 - Thorlabs R2L2S3P3 (500 μm) and R2L2S3P4 (1 mm) distortion grid targets: https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P3 and https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P4
     - Thorlabs B3C/M platform and FFM1 holder for grids: https://www.thorlabs.com/thorproduct.cfm?partnumber=B3C/M and https://www.thorlabs.com/thorproduct.cfm?partnumber=FFM1
