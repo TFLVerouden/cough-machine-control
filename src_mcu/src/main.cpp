@@ -63,8 +63,8 @@ const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
 uint32_t tick_delay = 59500;          // Delay before opening valve [µs]
 uint32_t pda_delay = 10000;           // Delay before photodiode starts detecting [µs]
-uint32_t valve_delay_open = 11000;    // Delay between solenoid valve and proportional valve opening [µs]
-int32_t valve_delay_close = -40000;   // Delay between solenoid valve and proportional valve closing [µs]
+uint32_t valve_delay_open = 11000;    // Delay between solenoid valve and proportional valve opening [µs] (positive is sol first)
+int32_t valve_delay_close = -40000;   // Delay between proportional valve and solenoid valve closing [µs] (negative is sol first)
 uint32_t runCalltTime = 0;            // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
@@ -429,14 +429,17 @@ void loop() {
       setLedColor(COLOR_VALVE_OPEN);
     }
 
-    if (solValveOpen && (now / 1000) >= (datasetDuration + (valve_delay_close / 1000))) {
-      closeValve();
-      solValveOpen = false;
-      DEBUG_PRINT("Solenoïd valve closed after ");
-      DEBUG_PRINT(now / 1000);
-      DEBUG_PRINT("ms, time goal: ");
-      DEBUG_PRINTLN(datasetDuration + (valve_delay_close / 1000));
-    }
+    int32_t solValveCloseTime = datasetDuration + (valve_delay_close / 1000);
+
+    // Check if solenoid valve needs to be closed
+    if (solValveOpen || (now / 1000) >= (uint32_t)solValveCloseTime) {
+        closeValve();
+        solValveOpen = false;
+        DEBUG_PRINT("Solenoïd valve closed after ");
+        DEBUG_PRINT(now / 1000);
+        DEBUG_PRINT("ms, time goal: ");
+        DEBUG_PRINTLN(solValveCloseTime);
+      }
 
     // If time since start execution >= (dataset index time + valve timing delay) -> set mA value of valve to dataset index value
     if (now / 1000 >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
@@ -498,8 +501,8 @@ void loop() {
       // Set T_Click to input mA
       } else {
           valve.set_mA(current);
-          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
-          DEBUG_PRINTLN(pressure.get_last_set_bitval());
+          DEBUG_PRINT("Last set bitvalue of proportional valve: ");
+          DEBUG_PRINTLN(valve.get_last_set_bitval());
       }
 
     } else if (strncmp(command, "SP", 2) == 0) {
@@ -576,6 +579,7 @@ void loop() {
         delay(300);
         setLedColor(COLOR_OFF);
         return;
+      // Check if dataset duration minus valve delay is not negative (needs to be compared to uint32_t later)
       } else if ((datasetDuration + (valve_delay_close / 1000)) < 0) {
         DEBUG_PRINT("ERROR: dataset duration is too short, must be at least ");
         DEBUG_PRINT(-valve_delay_close / 1000);
