@@ -64,7 +64,7 @@ On breadboard left-to-right:
 | --- | ------------ | ----------------------------- |
 | 1   | Brown (BN)   | 24 V power supply             |
 | 2   | White (WH)   | Ground/- (0 V)                |
-| 3   | Blue (BU)    | +, 12-20 mA setpoint current   |
+| 3   | Blue (BU)    | +, 12-20 mA setpoint current  |
 | 4   | Black (BK)   | −, 0 mA setpoint current      |
 | 5   |              | N.C. for 180° turn protection |
 
@@ -72,11 +72,17 @@ On breadboard left-to-right:
 - ~~Bronkhorst EL-FLOW Select F-113AC flow meter~~
 
 ## Electronics
+
+Note: when making any physical changes to the current loop of R-click or T-click, reset the microcontroller because the current will be incorrect (~ 2 mA) otherwise.
+
 - Adafruit ItsyBitsy M4 Express: https://learn.adafruit.com/introducing-adafruit-itsybitsy-m4/pinouts
     - ATSAMD51G19A chip: https://www.microchip.com/en-us/product/ATSAMD51G19A
 - MIKROE 4-20 mA T-click: https://www.mikroe.com/4-20ma-t-click
+    - Calibration values for both pressure regulator and proportional valve setpoint: bitval 796 <=> 3.97 mA; bitval 3982 <=> 19.90 mA.
 - MIKROE 4-20 mA R-click: https://www.mikroe.com/4-20ma-r-click
    - Modified to act as passive current receiver (not supplying any voltage), see notes in the [MIKROE_4_20mA_RT_Click library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main/active_to_passive_R_click_modification)
+   - Calibration value for pressure regulator readout:
+   bitval 806 <=> 4.04 mA, bitval 2191 <=> 10.98 mA.
 - Adafruit MOSFET driver: https://learn.adafruit.com/adafruit-mosfet-driver
 - Adafruit SHT45 temperature \& humidity sensor: https://learn.adafruit.com/adafruit-sht40-temperature-humidity-sensor
     - SHT4X chip: https://sensirion.com/products/catalog/SHT45
