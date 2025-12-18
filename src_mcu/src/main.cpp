@@ -5,11 +5,17 @@
  * Monitors pressure and environmental conditions.
  */
 
+#include "DvG_StreamCommand.h"
 #include "MIKROE_4_20mA_RT_Click.h"
 #include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
-#include "DvG_StreamCommand.h"
+
+// TODO: Add/change function to adjust all delays via serial command
+// TODO: Make it so the opening procedure using loaded protocol can be used with
+// droplet detection
+// TODO: Streamline function names (can they all be one character, consistent
+// question mark, etc?)
 
 // ============================================================================
 // DEBUG CONFIGURATION
@@ -28,10 +34,10 @@
 // ============================================================================
 // PIN DEFINITIONS
 // ============================================================================
-const int PIN_VALVE = 7;     // MOSFET gate pin for solenoid valve control
-const int PIN_PROP_VALVE = 11;  // Chip select for proportional valve
-const int PIN_PRES_REG = 10;  // Chip select for pressure regulator
-const int PIN_CS_RCLICK = 2; // Chip select for R-Click pressure sensor (SPI)
+const int PIN_VALVE = 7;       // MOSFET gate pin for solenoid valve control
+const int PIN_PROP_VALVE = 11; // Chip select for proportional valve
+const int PIN_PRES_REG = 10;   // Chip select for pressure regulator
+const int PIN_CS_RCLICK = 2;   // Chip select for R-Click pressure sensor (SPI)
 const int PIN_TRIG = 9; // Trigger output for peripheral devices synchronization
 const int PIN_LASER = 12; // Laser MOSFET gate pin for droplet detection
 const int PIN_PDA = A2;   // Analog input from photodetector
@@ -40,21 +46,22 @@ const int PIN_PDA = A2;   // Analog input from photodetector
 // ============================================================================
 // INITIALIZE DVG_STREAMCOMMAND AND FLOW CURVE DATASETS
 // ============================================================================
-const int MAX_DATA_LENGTH = 2000;                       // Max serial dataset size
-const uint16_t CMD_BUF_LEN = 32000;                     // RAM size allocation for Serial buffer size
-int incomingCount = 0;                                  // Declare incoming dataset length globally
-char cmd_buf[CMD_BUF_LEN]{'\0'};                        // Instantiate empty Serial buffer
-uint32_t time_array[MAX_DATA_LENGTH];                   // Time dataset
-float value_array[MAX_DATA_LENGTH];                     // mA dataset
+const int MAX_DATA_LENGTH = 2000; // Max serial dataset size
+const uint16_t CMD_BUF_LEN =
+    32000;                       // RAM size allocation for Serial buffer size
+int incomingCount = 0;           // Declare incoming dataset length globally
+char cmd_buf[CMD_BUF_LEN]{'\0'}; // Instantiate empty Serial buffer
+uint32_t time_array[MAX_DATA_LENGTH]; // Time dataset
+float value_array[MAX_DATA_LENGTH];   // mA dataset
 // Create DvG_StreamCommand object on Serial stream
 DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 
 // ============================================================================
 // DATASET PROCESSING & EXECUTION VARIABLES
 // ============================================================================
-int sequenceIndex = 0;          // Index of dataset to execute on time
-int dataIndex = 0;              // Number of datapoints of dataset stored
-int datasetDuration = 0.0;    // Duration of the uploaded flow profile
+int sequenceIndex = 0;     // Index of dataset to execute on time
+int dataIndex = 0;         // Number of datapoints of dataset stored
+int datasetDuration = 0.0; // Duration of the uploaded flow profile
 
 // ============================================================================
 // TIMING PARAMETERS
@@ -62,10 +69,14 @@ int datasetDuration = 0.0;    // Duration of the uploaded flow profile
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
 uint32_t tick_delay = 59500;          // Delay before opening valve [µs]
-uint32_t pda_delay = 10000;           // Delay before photodiode starts detecting [µs]
-uint32_t valve_delay_open = 11000;    // Delay between solenoid valve and proportional valve opening [µs] (positive is sol first)
-int32_t valve_delay_close = -40000;   // Delay between proportional valve and solenoid valve closing [µs] (negative is sol first)
-uint32_t runCalltTime = 0;            // Time elapsed since "RUN" command [µs]
+uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
+uint32_t valve_delay_open =
+    11000; // Delay between solenoid valve and proportional valve opening [µs]
+           // (positive is sol first)
+int32_t valve_delay_close =
+    -40000; // Delay between proportional valve and solenoid valve closing [µs]
+            // (negative is sol first)
+uint32_t runCalltTime = 0; // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -74,7 +85,7 @@ uint32_t runCalltTime = 0;            // Time elapsed since "RUN" command [µs]
 const uint32_t EMA_INTERVAL = 500; // Sampling interval for EMA [µs]
 const float EMA_LP_FREQ = 200.;    // Low-pass filter cutoff frequency [Hz]
 // Initialize with calibration values: p1_mA, p2_mA, p1_bitval, p2_bitval
-R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{3.99, 9.75, 795, 1943});
+R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{4.04, 10.98, 806, 2191});
 
 // Temperature & humidity sensor (SHT4x I2C)
 Adafruit_SHT4x sht4;
@@ -94,8 +105,8 @@ T_Click pressure(PIN_PRES_REG, RT_Click_Calibration{3.97, 19.90, 796, 3982});
 const float max_mA = 20.0;
 const float min_mA_valve = 12.0;
 const float min_mA_pres_reg = 4.0;
-const float default_valve = 12.0;
-const float default_pressure = 4.0;
+const float default_valve = 12.0;   // mA
+const float default_pressure = 4.0; // mA
 
 // ============================================================================
 // LED CONFIGURATION
@@ -111,10 +122,11 @@ const uint32_t COLOR_ERROR = 0xFF4000;      // Orange - error state
 const uint32_t COLOR_READING = 0xFF0040;    // Cyan - taking measurement
 const uint32_t COLOR_LASER = 0x100000;      // Dim blue - started detection
 const uint32_t COLOR_DROPLET = 0xFF0000;    // Bright blue - droplet detected
-const uint32_t COLOR_WAITING = 0x400040; // Purple - waiting for valve opening
+const uint32_t COLOR_WAITING = 0x400040;   // Purple - waiting for valve opening
 const uint32_t COLOR_RECEIVING = 0x100000; // Dim red - receiving dataset
-const uint32_t COLOR_EXECUTING = 0xFF0000; // Bright red - executing loaded dataset
-const uint32_t COLOR_OFF = 0x000000;     // Off
+const uint32_t COLOR_EXECUTING =
+    0xFF0000;                        // Bright red - executing loaded dataset
+const uint32_t COLOR_OFF = 0x000000; // Off
 
 // ============================================================================
 // LED HELPER FUNCTION
@@ -200,7 +212,9 @@ void openValveTrigger() {
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
   DEBUG_PRINTLN(
-      "Solenoïd valve opened using openValveTrigger()"); // Valve opened confirmation (debug only for speed)
+      "Solenoïd valve opened using openValveTrigger()"); // Valve opened
+                                                         // confirmation (debug
+                                                         // only for speed)
 }
 
 void closeValve() {
@@ -210,7 +224,8 @@ void closeValve() {
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
   DEBUG_PRINT(
-      "Solenoïd valve closed using closeValve()"); // Valve closed confirmation (debug only for speed)
+      "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
+                                                   // (debug only for speed)
   Serial.println("!");
 }
 
@@ -256,7 +271,7 @@ void readPressure(bool valveOpen) {
   // where I is the 4-20mA current output
   setLedColor(COLOR_READING); // Show color during reading
   Serial.print("P");
-  Serial.print(0.6249 * R_click.get_EMA_mA() - 2.4882);
+  Serial.print(0.62350602 * R_click.get_EMA_mA() - 2.51344790);
   Serial.println();
   // Restore LED color based on valve state
   setLedColor(valveOpen ? COLOR_VALVE_OPEN : COLOR_IDLE);
@@ -294,13 +309,13 @@ float readPhotodetector() {
 }
 
 void resetDataArrays() {
-    memset(time_array, 0, sizeof(time_array));
-    memset(value_array, 0, sizeof(value_array));
-    incomingCount = 0;
-    // Added these three resets after testing, need reviewing!
-    dataIndex = 0;
-    sequenceIndex = 0;
-    datasetDuration = 0;
+  memset(time_array, 0, sizeof(time_array));
+  memset(value_array, 0, sizeof(value_array));
+  incomingCount = 0;
+  // Added these three resets after testing, need reviewing!
+  dataIndex = 0;
+  sequenceIndex = 0;
+  datasetDuration = 0;
 }
 
 // ============================================================================
@@ -309,19 +324,24 @@ void resetDataArrays() {
 
 void loop() {
   // Static variables persist across loop iterations
-  static uint32_t duration = 0;           // How long valve should stay open [µs]
-  static bool solValveOpen = false;       // Tracks if valve is currently open
-  static bool propValveOpen = false;      // Tracks if proportional valve is currently open
-  static bool performingTrigger = false;  // Tracks if trigger pulse is active
-  static bool detectingDroplet = false;   // Tracks if in droplet detection mode
-  static bool belowThreshold = false;     // Tracks if signal is below threshold
-  static bool waitingToOpenValve = false; // Tracks if waiting for delay before opening valve
-  static uint32_t waitStartTime = 0;      // When waiting for valve opening started [µs]
-  static uint32_t detectionStartTime = 0; // When laser/detection was started [µs]
-  static bool continuousDetection = false;// Tracks if in continuous detection mode
-  static bool isExecuting = false;        // Tracks if waiting to run loaded sequence
-  static bool setPressure = false;        // Tracks if pressure regulator has been set at least once
-
+  static uint32_t duration = 0;     // How long valve should stay open [µs]
+  static bool solValveOpen = false; // Tracks if valve is currently open
+  static bool propValveOpen =
+      false; // Tracks if proportional valve is currently open
+  static bool performingTrigger = false; // Tracks if trigger pulse is active
+  static bool detectingDroplet = false;  // Tracks if in droplet detection mode
+  static bool belowThreshold = false;    // Tracks if signal is below threshold
+  static bool waitingToOpenValve =
+      false; // Tracks if waiting for delay before opening valve
+  static uint32_t waitStartTime =
+      0; // When waiting for valve opening started [µs]
+  static uint32_t detectionStartTime =
+      0; // When laser/detection was started [µs]
+  static bool continuousDetection =
+      false;                       // Tracks if in continuous detection mode
+  static bool isExecuting = false; // Tracks if waiting to run loaded sequence
+  static bool setPressure =
+      false; // Tracks if pressure regulator has been set at least once
 
   // -------------------------------------------------------------------------
   // Handle trigger pulse timing
@@ -416,15 +436,18 @@ void loop() {
 
   // Execute loaded dataset
   if (isExecuting) {
-    //Caclulate time since start execution
+    // Caclulate time since start execution
     uint32_t now = (micros() - runCalltTime); // Time since RUN is called [µs]
 
-    // If valve isn't open and timing of first datapoint has been reached open solenoid valve
+    // If valve isn't open and timing of first datapoint has been reached open
+    // solenoid valve
     if (!solValveOpen && sequenceIndex == 0 && (now / 1000) >= time_array[0]) {
-      openValveTrigger();         // Open solenoid valve and trigger
-      performingTrigger = true;   // Set trigger flag
+      openValveTrigger();       // Open solenoid valve and trigger
+      performingTrigger = true; // Set trigger flag
       tick = micros();
-      DEBUG_PRINT("Time to opening solenoid valve: ");DEBUG_PRINT(now / 1000);DEBUG_PRINTLN(" ms.");
+      DEBUG_PRINT("Time to opening solenoid valve: ");
+      DEBUG_PRINT(now / 1000);
+      DEBUG_PRINTLN(" ms.");
       solValveOpen = true;
       propValveOpen = true;
       setLedColor(COLOR_VALVE_OPEN);
@@ -434,41 +457,43 @@ void loop() {
 
     // Check if solenoid valve needs to be closed
     if (solValveOpen && (now / 1000) >= (uint32_t)solValveCloseTime) {
-        closeValve();
-        solValveOpen = false;
-        DEBUG_PRINT("Solenoïd valve closed after: ");
+      closeValve();
+      solValveOpen = false;
+      DEBUG_PRINT("Solenoïd valve closed after: ");
+      DEBUG_PRINT(now / 1000);
+      DEBUG_PRINT("ms, time goal: ");
+      DEBUG_PRINTLN(solValveCloseTime);
+    }
+
+    // If time since start execution >= (dataset index time + valve timing
+    // delay) -> set mA value of valve to dataset index value
+    if ((now / 1000) >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
+      // If whole dataset has been executed, exit execution state
+      if (sequenceIndex >= dataIndex) {
+        isExecuting = false;         // Reset executing flag
+        sequenceIndex = 0;           // Reset dataset index
+        valve.set_mA(default_valve); // Close proportional valve
+        propValveOpen = false;
+        setLedColor(COLOR_OFF);
+        return;
+      } else {
+        valve.set_mA(value_array[sequenceIndex]);
+        // This Serial.print(); shows that the timing is accurate to within a ms
+        // and that the DEBUG prints delay the code Serial.println((now / 1000)
+        // - time_array[sequenceIndex]); Debug print dataset execution, expected
+        // time and value vs actual time and value
+        DEBUG_PRINT("Sequence index: ");
+        DEBUG_PRINT(sequenceIndex);
+        DEBUG_PRINT(", time elapsed: ");
         DEBUG_PRINT(now / 1000);
         DEBUG_PRINT("ms, time goal: ");
-        DEBUG_PRINTLN(solValveCloseTime);
-      }
+        DEBUG_PRINT(time_array[sequenceIndex]);
+        DEBUG_PRINT("ms, difference: ");
+        DEBUG_PRINT((now / 1000) - time_array[sequenceIndex]);
+        DEBUG_PRINT("ms, setpoint: ");
+        DEBUG_PRINTLN(value_array[sequenceIndex]);
 
-    // If time since start execution >= (dataset index time + valve timing delay) -> set mA value of valve to dataset index value
-    if ((now / 1000) >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
-        // If whole dataset has been executed, exit execution state
-        if (sequenceIndex >= dataIndex) {
-            isExecuting = false;          // Reset executing flag  
-            sequenceIndex = 0;            // Reset dataset index      
-            valve.set_mA(default_valve);  // Close proportional valve
-            propValveOpen = false;
-            setLedColor(COLOR_OFF);
-            return;
-        } else {
-            valve.set_mA(value_array[sequenceIndex]);
-            // This Serial.print(); shows that the timing is accurate to within a ms and that the DEBUG prints delay the code
-            // Serial.println((now / 1000) - time_array[sequenceIndex]);
-            // Debug print dataset execution, expected time and value vs actual time and value
-            DEBUG_PRINT("Sequence index: ");
-            DEBUG_PRINT(sequenceIndex);
-            DEBUG_PRINT(", time elapsed: ");
-            DEBUG_PRINT(now / 1000);
-            DEBUG_PRINT("ms, time goal: ");
-            DEBUG_PRINT(time_array[sequenceIndex]);
-            DEBUG_PRINT("ms, difference: ");
-            DEBUG_PRINT((now / 1000) - time_array[sequenceIndex]);
-            DEBUG_PRINT("ms, setpoint: ");
-            DEBUG_PRINTLN(value_array[sequenceIndex]);
-
-            sequenceIndex++;
+        sequenceIndex++;
       }
     }
   }
@@ -477,7 +502,8 @@ void loop() {
   // Process serial commands
   // =========================================================================
   if (sc.available()) {
-    char *command = sc.getCommand();  // Pointer to memory location of serial buffer contents
+    char *command =
+        sc.getCommand(); // Pointer to memory location of serial buffer contents
 
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
@@ -486,25 +512,26 @@ void loop() {
       // Command: SV <mA>
       // Set milli amps of proportional valve to <mA>
 
-      float current = parseFloatInString(command, 2);     // Parse float from char array 'command'
+      float current = parseFloatInString(
+          command, 2); // Parse float from char array 'command'
 
       // Handle out of allowable range inputs, defaults to specified value
-      if (!current || current < min_mA_valve || current > max_mA) { 
-          valve.set_mA(default_valve);
-          DEBUG_PRINT("ERROR: input outside of allowable range (");
-          DEBUG_PRINT(min_mA_valve);
-          DEBUG_PRINT(" - ");
-          DEBUG_PRINT(max_mA);
-          DEBUG_PRINTLN("), valve set to default value.");
-          setLedColor(COLOR_ERROR);
-          delay(300);
-          setLedColor(COLOR_OFF);
-      
-      // Set T_Click to input mA
+      if (!current || current < min_mA_valve || current > max_mA) {
+        valve.set_mA(default_valve);
+        DEBUG_PRINT("ERROR: input outside of allowable range (");
+        DEBUG_PRINT(min_mA_valve);
+        DEBUG_PRINT(" - ");
+        DEBUG_PRINT(max_mA);
+        DEBUG_PRINTLN("), valve set to default value.");
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
+
+        // Set T_Click to input mA
       } else {
-          valve.set_mA(current);
-          DEBUG_PRINT("Last set bitvalue of proportional valve: ");
-          DEBUG_PRINTLN(valve.get_last_set_bitval());
+        valve.set_mA(current);
+        DEBUG_PRINT("Last set bitvalue of proportional valve: ");
+        DEBUG_PRINTLN(valve.get_last_set_bitval());
       }
 
     } else if (strncmp(command, "SP", 2) == 0) {
@@ -515,25 +542,28 @@ void loop() {
         setPressure = true;
       }
 
-      float current = parseFloatInString(command, 2);     // Parse float from char array command
+      float bar =
+          parseFloatInString(command, 2); // Parse float from char array command
+      float current = (bar + 2.48821429) / 0.62242857;
 
       // Handle out of allowable range inputs, defaults to specified value
-      if (!current || current < min_mA_pres_reg || current > max_mA) { 
-          pressure.set_mA(default_pressure);
-          DEBUG_PRINT("ERROR: input outside of allowable range (");
-          DEBUG_PRINT(min_mA_pres_reg);
-          DEBUG_PRINT(" - ");
-          DEBUG_PRINT(max_mA);
-          DEBUG_PRINTLN("), valve set to default value.");
-          setLedColor(COLOR_ERROR);
-          delay(300);
-          setLedColor(COLOR_OFF);
-      
-      // Set T_Click to input mA
+      // TODO: Put calculation in function
+      if (!current || current < min_mA_pres_reg || current > max_mA) {
+        pressure.set_mA(default_pressure);
+        DEBUG_PRINT("ERROR: input outside of allowable range (");
+        DEBUG_PRINT(min_mA_pres_reg);
+        DEBUG_PRINT(" - ");
+        DEBUG_PRINT(max_mA);
+        DEBUG_PRINTLN(" mA), valve set to default value.");
+        setLedColor(COLOR_ERROR);
+        delay(300);
+        setLedColor(COLOR_OFF);
+
+        // Set T_Click to input mA
       } else {
-          pressure.set_mA(current);
-          DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
-          DEBUG_PRINTLN(pressure.get_last_set_bitval());
+        pressure.set_mA(current);
+        DEBUG_PRINT("Last set bitvalue of pressure regulator: ");
+        DEBUG_PRINTLN(pressure.get_last_set_bitval());
       }
 
     } else if (strncmp(command, "SHOW", 4) == 0) {
@@ -549,11 +579,12 @@ void loop() {
       }
 
     } else if (strncmp(command, "LOAD", 4) == 0) {
-    // Parse incomming dataset. Command: "LOAD <N_datapoints> <Time0>,<mA0>,<Time1>,<mA1>,<TimeN>,<mAN>" 
+      // Parse incomming dataset. Command: "LOAD <N_datapoints>
+      // <Time0>,<mA0>,<Time1>,<mA1>,<TimeN>,<mAN>"
 
       setLedColor(COLOR_RECEIVING);
 
-      const char* delim = ",";  // Serial dataset delimiter
+      const char *delim = ","; // Serial dataset delimiter
 
       if (strlen(command) < 6) {
         DEBUG_PRINTLN("ERROR: \"LOAD\" command is not followed by dataset");
@@ -562,14 +593,15 @@ void loop() {
         setLedColor(COLOR_OFF);
         return;
       }
-      
-      // read dataset length from char 5 until space (_) "LOAD_<length>_<dataset>" 
-      // and instantialize position to start reading data from in strtok
-      char* idx = strtok(command + 5, " ");
-      incomingCount = atoi(idx);      // Dataset length (int)
+
+      // read dataset length from char 5 until space (_)
+      // "LOAD_<length>_<dataset>" and instantialize position to start reading
+      // data from in strtok
+      char *idx = strtok(command + 5, " ");
+      incomingCount = atoi(idx); // Dataset length (int)
 
       idx = strtok(NULL, " ");
-      datasetDuration = atoi(idx);    // Dataset duration
+      datasetDuration = atoi(idx); // Dataset duration
 
       // Check if data length is acceptable
       if (incomingCount > MAX_DATA_LENGTH || incomingCount <= 0) {
@@ -581,7 +613,8 @@ void loop() {
         delay(300);
         setLedColor(COLOR_OFF);
         return;
-      // Check if dataset duration minus valve delay is not negative (needs to be compared to uint32_t later)
+        // Check if dataset duration minus valve delay is not negative (needs to
+        // be compared to uint32_t later)
       } else if ((datasetDuration + (valve_delay_close / 1000)) < 0) {
         DEBUG_PRINT("ERROR: dataset duration is too short, must be at least ");
         DEBUG_PRINT(-valve_delay_close / 1000);
@@ -598,10 +631,12 @@ void loop() {
       // Parsing rest of the dataset after handshake
       for (int i = 0; i < incomingCount; i++) {
 
-        idx = strtok(NULL, delim);  // Get next item from buffer (str_cmd). This item is the timestamp
+        idx = strtok(NULL, delim); // Get next item from buffer (str_cmd). This
+                                   // item is the timestamp
         // If the item is NULL, break
         if (idx == NULL) {
-          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (error at data index: ");
+          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new "
+                      "dataset! (error at data index: ");
           DEBUG_PRINT(dataIndex);
           DEBUG_PRINTLN(")");
           resetDataArrays();
@@ -610,22 +645,27 @@ void loop() {
           setLedColor(COLOR_OFF);
           break;
         }
-        // Convert incoming csv buffer index from string to int and add to time array
+        // Convert incoming csv buffer index from string to int and add to time
+        // array
         time_array[i] = atoi(idx);
 
-        idx = strtok(NULL, delim); // Get next csv buffer index. This item is the mA value
+        idx = strtok(
+            NULL,
+            delim); // Get next csv buffer index. This item is the mA value
         // Check again if item is not NULL
         if (idx == NULL) {
-          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new dataset! (data index: ");
+          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new "
+                      "dataset! (data index: ");
           DEBUG_PRINT(dataIndex);
           DEBUG_PRINTLN(")");
           resetDataArrays();
           setLedColor(COLOR_ERROR);
           delay(300);
           setLedColor(COLOR_OFF);
-          break;  
+          break;
         }
-        // Convert incoming csv buffer index from string to float and add to value array
+        // Convert incoming csv buffer index from string to float and add to
+        // value array
         value_array[i] = parseFloatInString(idx, 0);
 
         // Debug print whole received dataset
@@ -634,7 +674,8 @@ void loop() {
         DEBUG_PRINT(", mA: ");
         DEBUG_PRINTLN(value_array[i]);
 
-        // Increase working index, used later to only read valuable data from data arrays
+        // Increase working index, used later to only read valuable data from
+        // data arrays
         dataIndex++;
       }
 
@@ -648,7 +689,8 @@ void loop() {
         delay(300);
         setLedColor(COLOR_OFF);
       } else if (!setPressure) {
-        printError("Pressure regulator not set! Set it first using SP command.");
+        printError(
+            "Pressure regulator not set! Set it first using SP command.");
       } else {
         isExecuting = true;
         runCalltTime = micros();
@@ -754,10 +796,12 @@ void loop() {
       DEBUG_PRINTLN("C       - Close valve immediately");
       DEBUG_PRINTLN("D       - Detect droplet, open valve indefinitely");
       DEBUG_PRINTLN("D <ms>  - Detect droplet, open for <ms> milliseconds");
-      DEBUG_PRINTLN("L <us>  - Set delay before valve opening to <us> microseconds");
+      DEBUG_PRINTLN(
+          "L <us>  - Set delay before valve opening to <us> microseconds");
       DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
-      DEBUG_PRINTLN("SP <mA> - Set pressure regulator milliamps to <mA>");
-      DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: <ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
+      DEBUG_PRINTLN("SP <bar> - Set pressure regulator to <bar>");
+      DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: "
+                    "<ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
       DEBUG_PRINTLN("RUN     - Execute loaded dataset");
       DEBUG_PRINTLN("P?      - Read pressure");
       DEBUG_PRINTLN("T?      - Read temperature & humidity");
