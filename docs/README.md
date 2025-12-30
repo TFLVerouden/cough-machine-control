@@ -1,9 +1,16 @@
 *To do in this document:*
 - [ ] Check and add laser safety label/regulations here.
+- [ ] Add link to (micro)rheology repo(s) once applicable.
+- [ ] Add link to SprayTec lift (and other) class(es) once properly sorted.
+- [ ] Finish adding all electronics pdfs.
+- [ ] Add pump cable pinouts below.
+
 
 # Component list
 ## Airflow
 Connected by means of, among other components, Swagelok male connector fittings and tube adapters (see [catalogue & installation instructions](/docs/airflow/Swagelok_fittings_ms-01-140_catalogue.pdf)). Advantage of connecting via these tubes is that the parts can be turned in any desired direction, rather than the angle being limited to keeping seals tight.
+
+[![Cough machine airflow diagram](/docs/schematics/cough_machine_airflow.jpg)](https://github.com/TFLVerouden/cough-machine-control/blob/main/docs/cough_machine_airflow.pdf?raw=true)
 
 ### Pressure regulator
 *FESTO VPPE-3-1-1/8-10-420-E1*
@@ -72,8 +79,26 @@ On breadboard left-to-right:
 - ~~Bronkhorst EL-FLOW Select F-113AC flow meter~~
 
 ## Electronics
+[![Cough machine wiring diagram](/docs/schematics/cough_machine_wiring.jpg)](https://github.com/TFLVerouden/cough-machine-control/blob/main/docs/cough_machine_wiring.pdf?raw=true)
 
 Note: when making any physical changes to the current loop of R-click or T-click, reset the microcontroller because the current will be incorrect (~ 2 mA) otherwise.
+
+Breadboard top view:
+![Cough machine control breadboard top view](/docs/breadboard_top_view.jpeg)
+
+Breadboard bottom view:
+![Cough machine control breadboard bottom view](/docs/breadboard_bottom_view.jpeg)
+
+### Power supplies
+*TracoPower TBLC-06-105* 5 V power supply
+- [Data sheet](/docs/electronics/TracoPower_tblc06_datasheet.pdf)
+- [Manual](/docs/electronics/TracoPower_tblc06_installation.pdf)
+
+*TracoPower TBLC-15-124* 24 V power supply
+- [Data sheet](/docs/electronics/TracoPower_tblc15_datasheet.pdf)
+- [Manual](/docs/electronics/TracoPower_tblc15_installation.pdf)
+
+
 
 - Adafruit ItsyBitsy M4 Express: https://learn.adafruit.com/introducing-adafruit-itsybitsy-m4/pinouts
     - ATSAMD51G19A chip: https://www.microchip.com/en-us/product/ATSAMD51G19A
@@ -122,16 +147,24 @@ On breadboard left-to-right:
 ### Laser
 *Thorlabs CPS635R*
 - [Website manufacturer](https://www.thorlabs.com/thorproduct.cfm?partnumber=CPS635R)
+- [Datasheet](/docs/piv_addon/Thorlabs_laser_CPS635R-specsheet.pdf)
 
 
-    - Thorlabs MK11F/M laser diode mount: https://www.thorlabs.com/thorproduct.cfm?partnumber=MK11F/M
-- Thorlabs PDA36A2 photodiode: https://www.thorlabs.com/thorproduct.cfm?partnumber=PDA36A2
+Mounted using a [Thorlabs MK11F/M laser diode mount](https://www.thorlabs.com/thorproduct.cfm?partnumber=MK11F/M)
+
+### Photodiode
+*Thorlabs PDA36A2*
+- [Website manufacturer](https://www.thorlabs.com/thorproduct.cfm?partnumber=PDA36A2)
+- [Manual](/docs/piv_addon/Thorlabs_photodiode_PDA36A2-manual.pdf)
 
 
 ## Peripherals
 ### Syringe pump
 *Harvard Apparatus PHD 2000*
 - [Manual](/docs/peripherals/Harvard_PHD2000_syringe_pump_manual.pdf)
+- [Recommended Python serial control code](https://github.com/WetenSchaap/pumpy3)
+
+The pump is connected using a custom RJ12 to DB9 cable, which consists of an [Assmann AT-S-26-6-6-S-7](/docs/peripherals/pump_cable/Assmann_AT-S-26-6-6-S-7_RJ12_straight_through_cable.pdf) RJ12 straight-through cable and an [L-COM RBA096F](/docs/peripherals/pump_cable/L-COM_RBA096F_adaptor_DB9F-RJ12.pdf) RJ12 to DB9 female adapter.
 
 Make sure to set the correct syringe diameter. Commonly used Hamilton-Microliter Series Gastight syringes:
 | Volume (mL) | Diameter (mm) |
@@ -142,8 +175,20 @@ Make sure to set the correct syringe diameter. Commonly used Hamilton-Microliter
 
 ### Laser diffraction particle sizer
 *Malvern SprayTec*
-    - Lift?
+- [Website manufacturer](https://www.malvernpanalytical.com/en/products/product-range/spraytec)
+- [Manual](/docs/peripherals/Malvern_SprayTec_manual.pdf)
+- [Presentation before installation](/docs/peripherals/Malvern_SprayTec_installation_slides.pdf)
+- [Brochure](/docs/peripherals/Malvern_SprayTec_brochure.pdf)
+- [Troubleshooting: set trigger for dilute sprays](/docs/peripherals/spraytec/SprayTec_support_set_trigger_dilute_spray.pdf)
+- [Troubleshooting: ambient light](/docs/peripherals/spraytec/SprayTec_support_ambient_light.pdf)
+- [Troubleshooting: alarms at low signal](/docs/peripherals/spraytec/SprayTec_support_alarm_at_low_signal.pdf)
+    
+The SprayTec sits on top of a lift that can be controlled over serial.
 
 ### Optics
-- Thorlabs R2L2S3P3 (500 μm) and R2L2S3P4 (1 mm) distortion grid targets: https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P3 and https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P4
-    - Thorlabs B3C/M platform and FFM1 holder for grids: https://www.thorlabs.com/thorproduct.cfm?partnumber=B3C/M and https://www.thorlabs.com/thorproduct.cfm?partnumber=FFM1
+The distortion targets we use in our lab for calibrating high-speed video recordings are the [Thorlabs R2L2S3P3 (500 μm)](https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P3) and [R2L2S3P4 (1 mm)](https://www.thorlabs.com/thorproduct.cfm?partnumber=R2L2S3P4) glass targets. They are positioned using the [B3C/M](https://www.thorlabs.com/thorproduct.cfm?partnumber=B3C/M) platform and [FFM1](https://www.thorlabs.com/thorproduct.cfm?partnumber=FFM1) holder. 
+
+### Rheometry
+Characterisation of the liquids is done using an Anton Paar rheometer.
+- [Software quickstart](/docs/peripherals/AntonPaar_RheoCompass_quickstart.pdf)
+- [Software manual](/docs/peripherals/AntonPaar_RheoCompass_manual.pdf)
