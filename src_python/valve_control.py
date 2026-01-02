@@ -106,6 +106,13 @@ def reading_temperature(verbose=False):
         print(f'Temperature: {Temperature} °C; relative humidity: {RH} %')
     return RH, Temperature
 
+def reading_pressure():
+    ser.write('P?\n'.encode())
+    time.sleep(0.1) #wait for the response
+    pressure = ser.readline().decode('utf-8').rstrip()
+    pressure_value = pressure.lstrip('P')
+    return float(pressure_value)
+
 class SprayTecLift(serial.Serial):
     def __init__(self, port, baudrate=9600, timeout=1):
         super().__init__(port=port, baudrate=baudrate, timeout=timeout)
