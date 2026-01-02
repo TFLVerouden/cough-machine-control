@@ -18,7 +18,7 @@ print(parent_dir)
 function_dir = os.path.join(parent_dir,'functions')
 print(function_dir)
 sys.path.append(function_dir)
-import Gupta2009 as Gupta
+from functions import Gupta2009 as Gupta
 import pumpy 
 # from Ximea import Ximea #not needed anymore
 
