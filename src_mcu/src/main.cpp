@@ -175,7 +175,7 @@ void recordEvent(int8_t v1, float v2, float press) {
 // ============================================================================
 void saveToFlash() {
   File file = fatfs.open("experiment1.csv", FILE_WRITE);
-  file.println("us,v1,mA,bar"); // Header
+  file.println("µs,v1 action,v2 set mA,bar"); // Header
   for (int i = 0; i < currentCount; i++) {
     file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1, logs[i].valve2_mA, logs[i].pressure);
   }
@@ -255,6 +255,8 @@ void openValveTrigger() {
       ((1 << g_APinDescription[PIN_VALVE].ulPin) |
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
+  recordEvent(1, 0, 0); // Log valve open event
+
   DEBUG_PRINTLN(
       "Solenoïd valve opened using openValveTrigger()"); // Valve opened
                                                          // confirmation (debug
@@ -266,6 +268,8 @@ void closeValve() {
   // Equivalent to digitalWrite(PIN_VALVE, LOW);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
+    
+  recordEvent(0, 0, 0); // Log valve close event
 
   DEBUG_PRINT(
       "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
