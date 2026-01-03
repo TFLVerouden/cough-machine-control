@@ -679,6 +679,8 @@ void loop() {
         dataIndex++;
       }
 
+      Serial.println("DATASET_RECEIVED");
+
       // LED color off when whole dataset is received
       setLedColor(COLOR_OFF);
 
