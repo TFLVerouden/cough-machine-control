@@ -528,6 +528,8 @@ void loop() {
         DEBUG_PRINT("ms, setpoint: ");
         DEBUG_PRINTLN(value_array[sequenceIndex]);
 
+        recordEvent(-1, value_array[sequenceIndex], 0.62350602 * R_click.get_EMA_mA() - 2.51344790);
+
         sequenceIndex++;
       }
     }
