@@ -5,6 +5,7 @@ import serial
 serial_port = "COM14"
 baud = 115200
 filename = "drawn_curve.csv"
+delimiter = ';'
 
 # =========================================================================================
 # Extract time and value arrays from csv file. Input: "filename", "delimiter"
@@ -71,7 +72,7 @@ def format(time_array, mA_array, prefix="LOAD", handshake_delim=" ", data_delim=
 sc = serial.Serial(serial_port, baud, timeout=1)
 
 # data[0] is time array, data[1] is mA array
-data = extract(filename, ';')
+data = extract(filename, delimiter)
 serial_command = format(data[0], data[1])
 
 print(serial_command)                       # Debug print
