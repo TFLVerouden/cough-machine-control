@@ -9,7 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import pumpy 
-from functions import Gupta2009 as Gupta
+
+# from functions import Gupta2009 as Gupta
 
 cwd = os.path.abspath(os.path.dirname(__file__))
 
@@ -108,6 +109,54 @@ def reading_pressure(verbose=False):
         print(f'Pressure: {pressure_value} mbar')
     return pressure_value
 
+def extract_csv_dataset(filename, delimiter=','):
+    # Define output variables
+    time = []
+    mA = []
+    row_idx = 0
+
+    with open(filename, 'r') as csvfile:
+        # Reader object of the file
+        csvreader = csv.reader(csvfile, delimiter=delimiter)
+
+        # extract data from the file and create time and value arrays
+        for rows in csvreader:
+            if not rows[0] or not rows[1]:
+                print(f"Encountered empty cell at row index {row_idx}!")
+                time = []
+                mA = []
+                break
+            else:
+                # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
+                time.append(rows[0].replace(',', '.'))
+                mA.append(rows[1].replace(',', '.'))
+                row_idx += 1
+
+    return time, mA
+
+def format_csv_dataset(time_array, mA_array, prefix="LOAD", handshake_delim=" ", data_delim=",", line_feed='\n'):
+
+    duration = time_array[-1]
+
+    # Check for inconsistent dataset length
+    if len(time_array) != len(mA_array) or len(time_array) == 0 or len(mA_array) == 0:
+        print(
+            f"Arrays are not compatible! Time length: {len(time_array)}, mA length: {len(mA_array)}")
+        return
+    else:
+        # Create 'handshake' sequence
+        header = [prefix, handshake_delim, str(
+            len(time_array)), handshake_delim, duration, handshake_delim]
+
+        # Append timestamps and values in order <time0, mA0, time1, mA1, time2, mA2>
+        data = [str(val) for time, mA in zip(time_array, mA_array)
+                for val in (time, mA)]
+
+        # format into one string to send over serial
+        output = "".join(header) + data_delim.join(data) + line_feed
+
+    return output
+
 class SprayTecLift(serial.Serial):
     def __init__(self, port, baudrate=9600, timeout=1):
         super().__init__(port=port, baudrate=baudrate, timeout=timeout)
@@ -134,7 +183,65 @@ class SprayTecLift(serial.Serial):
         self.close()
         print("Lift connection closed.")
 
+def manual_mode():
+    print("\n=== MANUAL MODE ===")
+    print("Enter commands to send to MCU (type 'exit' to return to main menu)\n")
+
+    while True:
+        cmd = input("Enter command: ").strip()
+
+        if cmd.lower() == 'exit':
+            next_step_default = "q"
+            next_step = (input("What to do next - continue to experimental mode or quit? (c/q): ").strip().lower() or next_step_default)
+            if next_step == 'q':
+                print("Exiting program.")
+                exit()
+            elif next_step == 'c':
+                break
+
+        if cmd:
+            ser.write((cmd + '\n').encode('utf-8'))
+            time.sleep(0.1)  # wait for response
+            while ser.in_waiting() > 0:
+                response = ser.readline().decode('utf-8').rstrip()
+                print(f"Response: {response}")
+
+def send_dataset():
+    default_delimiter = ','
+    delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip() or default_delimiter)
+    default_filename = 'drawn_curve.csv'
+    filename = (input(f'Enter dataset filename (press ENTER for "{default_filename}"): ').strip() or default_filename)
+    data = extract_csv_dataset(filename, delimiter)
+    serial_command = format_csv_dataset(data[0], data[1])
+    ser.write(serial_command.encode('utf-8'))
+
+def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", timeout_sec=5):
+    start_time = time.time()
+    
+    while (time.time() - start_time) < timeout_sec:
+        if ser.in_waiting > 0:
+            line = ser.readline().decode('utf-8').strip()
+            if line == expected_msg:
+                return True
+        time.sleep(0.1)  # Small sleep to reduce CPU usage
+        
+    print("Error: MCU confirmation timed out.")
+    return False
+
+
 if __name__ == '__main__':
+
+    # Set up the Arduino serial connection
+    arduino_port = find_serial_device(description='ItsyBitsy')
+    arduino_baudrate = 115200
+
+    if arduino_port:
+        ser = serial.Serial(arduino_port, arduino_baudrate,
+                            timeout=0)  # Non-blocking mode
+        time.sleep(1)  # Wait for the connection to establish
+        print(f'Connected to Arduino on {arduino_port}')
+    else:
+        raise SystemError('Arduino not found')
 
     # Create the data directory if it doesn't exist
     Spraytec_data_saved_check()
@@ -143,14 +250,23 @@ if __name__ == '__main__':
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
 
+    # Ask which mode to use
+    mode_default = "m"
+    mode = (input("Select mode - manual or experimental? (m/e): ").strip().lower() or mode_default)
+
+    if mode == 'm':
+        manual_mode()
+    elif mode == "e":
+        print("\n=== EXPERIMENT MODE ===")
+
     # Ask if the user wants to save the data
     save_default = "n"
-    save = (input('Do you want to save the data? (y/n): ').strip().lower()
+    save = (input('Do you want to save the experimental data? (y/n): ').strip().lower()
             or save_default)
     
     # Get the experiment name
-    experiment_name_default = "test"
     if save == "y":
+        experiment_name_default = "test"
         experiment_name = (input(f'Enter experiment name (press ENTER for '
                                 f'"{experiment_name_default}"): ').strip()
                         or experiment_name_default)
@@ -158,41 +274,90 @@ if __name__ == '__main__':
     #Processing compare to model
     if save == "y":
         model_default = "n"
-        model = (input('Do you want to include the model in the data? (y/n): ').strip().lower()
+        model = (input('Do you want to include the Gupta model in the data? (y/n): ').strip().lower()
                 or model_default)
         
     # Set the before and after times
     before_time_ms = 0
     after_time_ms = 1000
-
-    # Set up the Arduino serial connection
-    arduino_port = find_serial_device(description='ItsyBitsy')
-    arduino_baudrate = 115200
-    if arduino_port:
-        ser = serial.Serial(arduino_port, arduino_baudrate,
-                            timeout=0)  # Non-blocking mode
-        time.sleep(1)  # Wait for the connection to establish
-        print(f'Connected to Arduino on {arduino_port}')
-    else:
-        raise SystemError('Arduino not found')
     
-    # Readout SprayTec lift height; if not found, give warning message but continue
+    # Connect to SprayTec lift if available
     lift_port = find_serial_device(description='Mega', continue_on_error=True)
     if lift_port:
         lift = SprayTecLift(lift_port)
     else:
         print('Warning: SprayTec lift not found; height will not be recorded.')
 
-    # check if ready to start experiment
-    ready = (input('Ready to cough?'))
+    # Ask if the user wants to load a dataset
+    load_dataset_default = "y"
+    load_dataset = (input('Do you want to upload a flow curve? (y/n): ').strip().lower() or load_dataset_default)
+    if load_dataset == 'y':
+        send_dataset()
 
-    # Take humidity, temprature and pressure readings
+        # Immediately check for the confirmation
+        if verify_mcu_dataset_received_with_timeout():
+            print("Proceeding to valve control phase.")
+        else:
+            print("Failed to sync with MCU. Aborting.")
+            sys.exit(1)
+    elif load_dataset == 'n':
+        print("Proceeding without loading a dataset.")
+
+    default_pressure = 1
+    pressure = (input(f'Enter target tank pressure in bar (press ENTER for {default_pressure} bar): ').strip() or str(default_pressure))
+    ser.write(f'SP {pressure}\n'.encode())
+
+    # Ask if ready to execute experiment
+    while True:
+        ready_default = "y"
+        ready = (input('Ready to start the experiment? (y/n): ').strip().lower() or ready_default)
+        if ready == 'y':
+            ser.write("RUN\n".encode())
+            while ser.in_waiting() > 0:
+                response = ser.readline().decode('utf-8').rstrip()
+                if response == "EXECUTING_DATASET":
+                    print("MCU has started executing the dataset.")
+                else:
+                    print(f"Something went wrong, response: {response}")
+            break
+        else:
+            print('Take your time. Press y when ready.')
+
+
+    # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature(verbose=True)
     pressure = reading_pressure(verbose=True)
 
-    # Read out the lift height
     if lift_port:
         height = lift.get_height()
     else:
         height = np.nan
 
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+    loop_start_time = time.time()
+    print('Starting experiment...')
+
+    starting_experiment = True
+    finished_experiment = False
+
+
+    while True:
+        # Keep track of elapsed time
+        current_time = time.time()
+        elapsed_time = current_time - loop_start_time
+
+        if ser.in_waiting() > 0:
+            response = ser.readline().decode('utf-8').rstrip()
+
+            if response == "DONE_SAVING_TO_FLASH":
+                starting_experiment = False
+                finished_experiment = True
+                if save:
+                    print("Saved experiment detected. Starting file retrieval...")
+
+                    timestamp = time.strftime("%Y%m%d-%H%M%S")
+                    filename = f"experiment_{timestamp}.csv"
+
+                    retreive_experiment_data(filename, experiment_name, start_time, Temperature, RH, pressure, height)
+                else:
+                    print("Experiment completed. Data not saved as per user choice.")
