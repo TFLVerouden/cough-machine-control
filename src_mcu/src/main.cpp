@@ -10,6 +10,8 @@
 #include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
+#include "Adafruit_SPIFlash.h"
+#include "SdFat.h"
 
 // TODO: Add/change function to adjust all delays via serial command
 // TODO: Make it so the opening procedure using loaded protocol can be used with
@@ -62,6 +64,13 @@ DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 int sequenceIndex = 0;     // Index of dataset to execute on time
 int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
+
+// Setup for the ItsyBitsy M4 internal QSPI flash
+Adafruit_FlashTransport_QSPI flashTransport;
+Adafruit_SPIFlash flash(&flashTransport);
+
+// The filesystem object
+FatFileSystem fatfs;
 
 // ============================================================================
 // DATASET EXECUTION LOGGING STRUCTURE (IN RAM)
@@ -507,6 +516,7 @@ void loop() {
       if (sequenceIndex >= dataIndex) {
         isExecuting = false;         // Reset executing flag
         sequenceIndex = 0;           // Reset dataset index
+        currentCount = 0;          // Reset log count
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
@@ -528,6 +538,7 @@ void loop() {
         DEBUG_PRINT("ms, setpoint: ");
         DEBUG_PRINTLN(value_array[sequenceIndex]);
 
+        // Record event in packed structure in RAM
         recordEvent(-1, value_array[sequenceIndex], 0.62350602 * R_click.get_EMA_mA() - 2.51344790);
 
         sequenceIndex++;
@@ -738,6 +749,10 @@ void loop() {
         Serial.println("EXECUTING_DATASET");
       }
 
+    } else if (strncmp(command, "G", 1) == 0) {
+
+      DEBUG_PRINTLN("Storing data to flash");
+      
     } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
