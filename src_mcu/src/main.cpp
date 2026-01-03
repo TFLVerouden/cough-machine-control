@@ -64,7 +64,7 @@ int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
 
 // ============================================================================
-// DATASET EXECUTION LOGGING STRUCTURE
+// DATASET EXECUTION LOGGING STRUCTURE (IN RAM)
 // ============================================================================
 struct __attribute__((__packed__)) LogEntry {
   uint32_t timestamp; // 4 bytes (micros)
@@ -72,6 +72,11 @@ struct __attribute__((__packed__)) LogEntry {
   float valve2_mA;    // 4 bytes
   float pressure;     // 4 bytes
 };
+
+// INITIALIZE LOGGING ARRAY IN RAM
+#define MAX_RECORDS 2000
+LogEntry logs[MAX_RECORDS]; 
+int currentCount = 0;
 
 // ============================================================================
 // TIMING PARAMETERS
@@ -141,11 +146,31 @@ const uint32_t COLOR_OFF = 0x000000; // Off
 // ============================================================================
 // LED HELPER FUNCTION
 // ============================================================================
-
 void setLedColor(uint32_t color) {
   // Set the DotStar LED to a specific color
   led.setPixelColor(0, color);
   led.show();
+}
+// ============================================================================
+// FUNCTION TO STORE EXECUTION EVENTS IN RAM
+// ============================================================================
+void recordEvent(int8_t v1, float v2, float press) {
+  if (currentCount < MAX_RECORDS) {
+    logs[currentCount] = {micros(), v1, v2, press};
+    currentCount++;
+  }
+}
+
+// ============================================================================
+// FUNCTION TO STORE DATA TO FLASH INSTEAD OF RAM
+// ============================================================================
+void saveToFlash() {
+  File file = fatfs.open("experiment1.csv", FILE_WRITE);
+  file.println("us,v1,mA,bar"); // Header
+  for (int i = 0; i < currentCount; i++) {
+    file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1, logs[i].valve2_mA, logs[i].pressure);
+  }
+  file.close();
 }
 
 // ============================================================================
