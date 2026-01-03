@@ -64,6 +64,16 @@ int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
 
 // ============================================================================
+// DATASET EXECUTION LOGGING STRUCTURE
+// ============================================================================
+struct __attribute__((__packed__)) LogEntry {
+  uint32_t timestamp; // 4 bytes (micros)
+  int8_t valve1;      // 1 byte (1, 0, -1)
+  float valve2_mA;    // 4 bytes
+  float pressure;     // 4 bytes
+};
+
+// ============================================================================
 // TIMING PARAMETERS
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
@@ -698,6 +708,7 @@ void loop() {
         runCalltTime = micros();
         sequenceIndex = 0;
         setLedColor(COLOR_EXECUTING);
+        Serial.println("EXECUTING_DATASET");
       }
 
     } else if (strncmp(command, "O", 1) == 0) {
