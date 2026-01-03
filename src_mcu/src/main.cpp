@@ -174,12 +174,22 @@ void recordEvent(int8_t v1, float v2, float press) {
 // FUNCTION TO STORE DATA TO FLASH INSTEAD OF RAM
 // ============================================================================
 void saveToFlash() {
-  File file = fatfs.open("experiment1.csv", FILE_WRITE);
-  file.println("µs,v1 action,v2 set mA,bar"); // Header
-  for (int i = 0; i < currentCount; i++) {
-    file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1, logs[i].valve2_mA, logs[i].pressure);
+ // Remove the old file if it exists
+  if (fatfs.exists("experiment_dataset.csv")) {
+    fatfs.remove("experiment_dataset.csv");
   }
-  file.close();
+
+  File file = fatfs.open("experiment_dataset.csv", FILE_WRITE);
+
+  if (file) {
+    file.println("µs,v1 action,v2 set mA,bar"); // Header
+    for (int i = 0; i < currentCount; i++) {
+      file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1, logs[i].valve2_mA, logs[i].pressure);
+    }
+    file.close();
+  } else {
+    DEBUG_PRINTLN("Error opening file for writing!");
+  }
 }
 
 // ============================================================================
@@ -520,7 +530,8 @@ void loop() {
       if (sequenceIndex >= dataIndex) {
         isExecuting = false;         // Reset executing flag
         sequenceIndex = 0;           // Reset dataset index
-        currentCount = 0;          // Reset log count
+        saveToFlash();              // Save log to flash instead of RAM
+        currentCount = 0;           // Reset log count
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
