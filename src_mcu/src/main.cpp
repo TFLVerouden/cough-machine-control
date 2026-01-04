@@ -207,14 +207,13 @@ void dumpToSerial() {
     while (file.available()) {
       Serial.write(file.read());
     }
-    
+
     Serial.println("END_OF_FILE");
     file.close();
   } else {
     DEBUG_PRINTLN("Error opening file for reading!");
   }
 }
-
 
 // ============================================================================
 // INITIALIZATION
