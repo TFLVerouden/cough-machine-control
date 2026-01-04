@@ -184,13 +184,37 @@ void saveToFlash() {
   if (file) {
     file.println("µs,v1 action,v2 set mA,bar"); // Header
     for (int i = 0; i < currentCount; i++) {
-      file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1, logs[i].valve2_mA, logs[i].pressure);
+      file.printf("%lu,%d,%.2f,%.2f\n",logs[i].timestamp,logs[i].valve1,logs[i].valve2_mA,logs[i].pressure);
     }
     file.close();
+    Serial.println("DONE_SAVING_TO_FLASH");
   } else {
     DEBUG_PRINTLN("Error opening file for writing!");
   }
 }
+
+void dumpToSerial() {
+
+  if (!fatfs.exists("experiment_dataset.csv")) {
+    DEBUG_PRINTLN("No dataset file found in flash!");
+    return;
+  } 
+
+  File file = fatfs.open("experiment_dataset.csv", FILE_READ);
+  if (file) {
+    Serial.println("START_OF_FILE");
+
+    while (file.available()) {
+      Serial.write(file.read());
+    }
+    
+    Serial.println("END_OF_FILE");
+    file.close();
+  } else {
+    DEBUG_PRINTLN("Error opening file for reading!");
+  }
+}
+
 
 // ============================================================================
 // INITIALIZATION
@@ -530,8 +554,8 @@ void loop() {
       if (sequenceIndex >= dataIndex) {
         isExecuting = false;         // Reset executing flag
         sequenceIndex = 0;           // Reset dataset index
-        saveToFlash();              // Save log to flash instead of RAM
-        currentCount = 0;           // Reset log count
+        saveToFlash();               // Save log to flash instead of RAM
+        currentCount = 0;            // Reset log count RAM storage
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
