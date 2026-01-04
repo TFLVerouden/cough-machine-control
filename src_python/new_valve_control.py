@@ -90,8 +90,8 @@ def find_serial_device(description, continue_on_error=False):
 def reading_temperature(verbose=False):
     ser.write('T?\n'.encode())
     time.sleep(0.1) #wait for the response
-    Temperature = ser.readline().decode('utf-8').rstrip()
-    RH= ser.readline().decode('utf-8').rstrip()
+    Temperature = ser.readline().decode('utf-8', errors='ignore').rstrip()
+    RH= ser.readline().decode('utf-8', errors='ignore').rstrip()
     Temperature = Temperature.lstrip('T')
     RH = RH.lstrip('RH')
 
@@ -102,7 +102,7 @@ def reading_temperature(verbose=False):
 def reading_pressure(verbose=False):
     ser.write('P?\n'.encode())
     time.sleep(0.1) #wait for the response
-    pressure = ser.readline().decode('utf-8').rstrip()
+    pressure = ser.readline().decode('utf-8', errors='ignore').rstrip()
     pressure_value = pressure.lstrip('P')
 
     if verbose:
@@ -170,7 +170,7 @@ class SprayTecLift(serial.Serial):
             response = self.readlines()
             for line in response:
                 if line.startswith(b'  Platform height [mm]: '):
-                    height = line.split(b': ')[1].strip().decode('utf-8')
+                    height = line.split(b': ')[1].strip().decode('utf-8', errors='ignore')
                     return float(height)
             print('Warning: No valid response containing "Platform height [mm]" was found.')
             return None
@@ -203,7 +203,7 @@ def manual_mode():
             ser.write((cmd + '\n').encode('utf-8'))
             time.sleep(0.1)  # wait for response
             while ser.in_waiting() > 0:
-                response = ser.readline().decode('utf-8').rstrip()
+                response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 print(f"Response: {response}")
 
 def send_dataset():
@@ -220,7 +220,7 @@ def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", ti
     
     while (time.time() - start_time) < timeout_sec:
         if ser.in_waiting > 0:
-            line = ser.readline().decode('utf-8').strip()
+            line = ser.readline().decode('utf-8', errors='ignore').strip()
             if line == expected_msg:
                 return True
         time.sleep(0.1)  # Small sleep to reduce CPU usage
@@ -228,6 +228,32 @@ def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", ti
     print("Error: MCU confirmation timed out.")
     return False
 
+def retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height):
+    
+    started = False
+
+    with open(filename, "w") as f:
+        f.write(f"Experiment Name,{experiment_name}\n")
+        f.write(f"Start Time (UTC),{start_time.isoformat()}\n")
+        f.write(f"End Time (UTC),{end_time.isoformat()}\n")
+        f.write(f"Temperature (°C),{Temperature}\n")
+        f.write(f"Relative Humidity (%),{RH}\n")
+        f.write(f"Lift Height (mm),{height}\n")
+
+        ser.write('F\n'.encode())
+
+        while True:
+            raw_line = ser.readline().decode('utf-8', errors='ignore')
+            line = raw_line.strip()
+
+            if "START_OF_FILE" in line:
+                started = True
+                continue
+            elif "END_OF_FILE" in line:
+                break
+            if started:
+                f.write(line + '\n')
+    print(f"Experiment data saved to {filename} in {os.path.abspath(filename)}")
 
 if __name__ == '__main__':
 
@@ -314,7 +340,7 @@ if __name__ == '__main__':
         if ready == 'y':
             ser.write("RUN\n".encode())
             while ser.in_waiting() > 0:
-                response = ser.readline().decode('utf-8').rstrip()
+                response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 if response == "EXECUTING_DATASET":
                     print("MCU has started executing the dataset.")
                 else:
@@ -326,7 +352,6 @@ if __name__ == '__main__':
 
     # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature(verbose=True)
-    pressure = reading_pressure(verbose=True)
 
     if lift_port:
         height = lift.get_height()
@@ -342,14 +367,12 @@ if __name__ == '__main__':
 
 
     while True:
-        # Keep track of elapsed time
-        current_time = time.time()
-        elapsed_time = current_time - loop_start_time
 
         if ser.in_waiting() > 0:
-            response = ser.readline().decode('utf-8').rstrip()
+            response = ser.readline().decode('utf-8', errors='ignore').rstrip()
 
             if response == "DONE_SAVING_TO_FLASH":
+                end_time = datetime.datetime.now(datetime.timezone.utc)
                 starting_experiment = False
                 finished_experiment = True
                 if save:
@@ -358,6 +381,6 @@ if __name__ == '__main__':
                     timestamp = time.strftime("%Y%m%d-%H%M%S")
                     filename = f"experiment_{timestamp}.csv"
 
-                    retreive_experiment_data(filename, experiment_name, start_time, Temperature, RH, pressure, height)
+                    retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height)
                 else:
                     print("Experiment completed. Data not saved as per user choice.")

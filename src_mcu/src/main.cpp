@@ -182,6 +182,7 @@ void saveToFlash() {
   File file = fatfs.open("experiment_dataset.csv", FILE_WRITE);
 
   if (file) {
+    file.printf("Trigger T0 (µs),%lu\n", tick);
     file.println("µs,v1 action,v2 set mA,bar"); // Header
     for (int i = 0; i < currentCount; i++) {
       file.printf("%lu,%d,%.2f,%.2f\n",logs[i].timestamp,logs[i].valve1,logs[i].valve2_mA,logs[i].pressure);
@@ -553,11 +554,11 @@ void loop() {
       if (sequenceIndex >= dataIndex) {
         isExecuting = false;         // Reset executing flag
         sequenceIndex = 0;           // Reset dataset index
-        saveToFlash();               // Save log to flash instead of RAM
-        currentCount = 0;            // Reset log count RAM storage
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
+        saveToFlash();               // Save log to flash instead of RAM
+        currentCount = 0;            // Reset log count RAM storage
         return;
       } else {
         valve.set_mA(value_array[sequenceIndex]);
@@ -787,10 +788,11 @@ void loop() {
         Serial.println("EXECUTING_DATASET");
       }
 
-    } else if (strncmp(command, "G", 1) == 0) {
+    } else if (strncmp(command, "F", 1) == 0) {
 
-      DEBUG_PRINTLN("Storing data to flash");
-      
+      DEBUG_PRINTLN("Dumping data to serial");
+      dumpToSerial();
+
     } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
       // O = open indefinitely, O <ms> = open for specified time
@@ -893,9 +895,10 @@ void loop() {
           "L <us>  - Set delay before valve opening to <us> microseconds");
       DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
       DEBUG_PRINTLN("SP <bar> - Set pressure regulator to <bar>");
-      DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: "
+      DEBUG_PRINTLN("LOAD <N_datapoints> <dataset duration (ms)> <csv dataset> - Load dataset, format: "
                     "<ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
       DEBUG_PRINTLN("RUN     - Execute loaded dataset");
+      DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
       DEBUG_PRINTLN("P?      - Read pressure");
       DEBUG_PRINTLN("T?      - Read temperature & humidity");
       DEBUG_PRINTLN("S?      - System status");
