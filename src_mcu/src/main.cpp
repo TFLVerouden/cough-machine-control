@@ -16,6 +16,9 @@
 // droplet detection
 // TODO: Streamline function names (can they all be one character, consistent
 // question mark, etc?)
+// TODO: Enable/disable debug mode via serial command
+// TODO: Allowed set pressure range is slightly above 0.00 bar, change mA range
+// to 3.99?
 
 // ============================================================================
 // DEBUG CONFIGURATION
