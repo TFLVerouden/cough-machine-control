@@ -68,7 +68,6 @@ int datasetDuration = 0.0; // Duration of the uploaded flow profile
 // Setup for the ItsyBitsy M4 internal QSPI flash
 Adafruit_FlashTransport_QSPI flashTransport;
 Adafruit_SPIFlash flash(&flashTransport);
-
 // The filesystem object
 FatFileSystem fatfs;
 
@@ -276,6 +275,29 @@ void setup() {
 
   // Show idle color to indicate system is ready
   setLedColor(COLOR_IDLE);
+
+  // Initialize flash and filesystem
+  if (!flash.begin()) {
+    DEBUG_PRINTLN("Flash initialization failed!");
+  }
+  DEBUG_PRINTLN("Flash initialized.");
+
+  // Mount the filesystem
+  if (!fatfs.begin(&flash)) {
+    DEBUG_PRINTLN("Flash chip could also not be mounted, trying to format...");
+
+    if (!flash.eraseChip()) {
+        Serial.println("ERROR: Failed to erase chip!");
+        while(1) delay(100);
+    }
+    
+    // Try mounting again
+    if (!fatfs.begin(&flash)) {
+        Serial.println("ERROR: Still cannot mount filesystem!");
+        while(1) delay(100);
+    }
+  }
+  DEBUG_PRINTLN("Flash filesystem mounted successfully.");
 }
 
 // ============================================================================
