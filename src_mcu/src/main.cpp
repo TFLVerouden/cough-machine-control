@@ -23,7 +23,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -181,8 +181,8 @@ void saveToFlash() {
   File file = fatfs.open("experiment_dataset.csv", FILE_WRITE);
 
   if (file) {
-    file.printf("Trigger T0 (µs),%lu\n", tick);
-    file.println("µs,v1 action,v2 set mA,bar"); // Header
+    file.printf("Trigger T0 (us),%lu\n", tick);
+    file.println("us,v1 action,v2 set mA,bar"); // Header
     for (int i = 0; i < currentCount; i++) {
       file.printf("%lu,%d,%.2f,%.2f\n",logs[i].timestamp,logs[i].valve1,logs[i].valve2_mA,logs[i].pressure);
     }
@@ -287,14 +287,12 @@ void setup() {
     DEBUG_PRINTLN("Flash chip could also not be mounted, trying to format...");
 
     if (!flash.eraseChip()) {
-        Serial.println("ERROR: Failed to erase chip!");
-        while(1) delay(100);
+        DEBUG_PRINTLN("ERROR: Failed to erase chip!");
     }
     
     // Try mounting again
     if (!fatfs.begin(&flash)) {
-        Serial.println("ERROR: Still cannot mount filesystem!");
-        while(1) delay(100);
+        DEBUG_PRINTLN("ERROR: Still cannot mount filesystem!");
     }
   }
   DEBUG_PRINTLN("Flash filesystem mounted successfully.");

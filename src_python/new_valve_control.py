@@ -88,6 +88,7 @@ def find_serial_device(description, continue_on_error=False):
         return f'COM{choice}'
     
 def reading_temperature(verbose=False):
+    ser.reset_input_buffer()
     ser.write('T?\n'.encode())
     time.sleep(0.1) #wait for the response
     Temperature = ser.readline().decode('utf-8', errors='ignore').rstrip()
@@ -100,6 +101,7 @@ def reading_temperature(verbose=False):
     return RH, Temperature
 
 def reading_pressure(verbose=False):
+    ser.reset_input_buffer()
     ser.write('P?\n'.encode())
     time.sleep(0.1) #wait for the response
     pressure = ser.readline().decode('utf-8', errors='ignore').rstrip()
@@ -122,7 +124,7 @@ def extract_csv_dataset(filename, delimiter=','):
         # extract data from the file and create time and value arrays
         for rows in csvreader:
             if not rows[0] or not rows[1]:
-                print(f"Encountered empty cell at row index {row_idx}!")
+                print(f"Encountered empty cell in flow profile dataset, row index {row_idx}!")
                 time = []
                 mA = []
                 break
@@ -192,29 +194,32 @@ def manual_mode():
 
         if cmd.lower() == 'exit':
             next_step_default = "q"
-            next_step = (input("What to do next - continue to experimental mode or quit? (c/q): ").strip().lower() or next_step_default)
+            next_step = (input("What to do next - continue to experimental mode or quit? (e/q): ").strip().lower() or next_step_default)
             if next_step == 'q':
                 print("Exiting program.")
                 exit()
-            elif next_step == 'c':
+            elif next_step == 'e':
                 break
-
-        if cmd:
+        else:
             ser.write((cmd + '\n').encode('utf-8'))
             time.sleep(0.1)  # wait for response
-            while ser.in_waiting() > 0:
+            while ser.in_waiting > 0:
                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 print(f"Response: {response}")
 
 def send_dataset():
     default_delimiter = ','
     delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip() or default_delimiter)
-    default_filename = 'drawn_curve.csv'
-    
+
+    # Defining defaul file path
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_filepath = os.path.join(script_dir,'drawn_curve.csv')
+
     while True:
-        filename = (input(f'Enter dataset filename (press ENTER for "{default_filename}"): ').strip() or default_filename)
+        filename = (input(f'Enter dataset filename (press ENTER for "{default_filepath}"): ').strip() or default_filepath)
         try:
             data = extract_csv_dataset(filename, delimiter)
+            print(f'Sending dataset from file: {filename}')
             break  # Exit loop if file is successfully read
         except FileNotFoundError:
             print(f'Error: File "{filename}" not found. Please try again.')
@@ -229,6 +234,7 @@ def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", ti
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8', errors='ignore').strip()
             if line == expected_msg:
+                print("MCU confirmed dataset receipt.")
                 return True
         time.sleep(0.1)  # Small sleep to reduce CPU usage
         
@@ -243,23 +249,28 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
         f.write(f"Experiment Name,{experiment_name}\n")
         f.write(f"Start Time (UTC),{start_time.isoformat()}\n")
         f.write(f"End Time (UTC),{end_time.isoformat()}\n")
-        f.write(f"Temperature (°C),{Temperature}\n")
+        f.write(f"Temperature (C),{Temperature}\n")
         f.write(f"Relative Humidity (%),{RH}\n")
         f.write(f"Lift Height (mm),{height}\n")
 
         ser.write('F\n'.encode())  
 
         while True:
-            raw_line = ser.readline().decode('utf-8', errors='ignore')
-            line = raw_line.strip()
+            raw_line = ser.readline()
+            try:
+                line = raw_line.decode('utf-8')
+            except UnicodeDecodeError:
+                continue
 
-            if "START_OF_FILE" in line:
+            clean_line = line.strip()
+
+            if "START_OF_FILE" in clean_line:
                 started = True
                 continue
-            elif "END_OF_FILE" in line:
+            elif "END_OF_FILE" in clean_line:
                 break
             if started:
-                f.write(line + '\n')
+                f.write(line)
     print(f"Experiment data saved to {filename} in {os.path.abspath(filename)}")
 
 if __name__ == '__main__':
@@ -307,7 +318,7 @@ if __name__ == '__main__':
     #Processing compare to model
     if save == "y":
         model_default = "n"
-        model = (input('Do you want to include the Gupta model in the data? (y/n): ').strip().lower()
+        model = (input('Do you want to include the Gupta model in the data (press ENTER for 'f'"{model_default}")? (y/n): ').strip().lower()
                 or model_default)
         
     # Set the before and after times
@@ -346,7 +357,8 @@ if __name__ == '__main__':
         ready = (input('Ready to start the experiment? (y/n): ').strip().lower() or ready_default)
         if ready == 'y':
             ser.write("RUN\n".encode())
-            while ser.in_waiting() > 0:
+            time.sleep(0.1)  # wait for response
+            while ser.in_waiting > 0:
                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 if response == "EXECUTING_DATASET":
                     print("MCU has started executing the dataset.")
@@ -358,7 +370,7 @@ if __name__ == '__main__':
 
 
     # Take humidity, temprature, pressure readings and lift height readings
-    RH, Temperature = reading_temperature(verbose=True)
+    RH, Temperature = reading_temperature()
 
     if lift_port:
         height = lift.get_height()
@@ -375,18 +387,18 @@ if __name__ == '__main__':
 
     while True:
 
-        if ser.in_waiting() > 0:
+        if ser.in_waiting > 0:
             response = ser.readline().decode('utf-8', errors='ignore').rstrip()
 
             if response == "DONE_SAVING_TO_FLASH":
                 end_time = datetime.datetime.now(datetime.timezone.utc)
                 starting_experiment = False
                 finished_experiment = True
-                if save:
+                if save == 'y':
                     print("Saved experiment detected. Starting file retrieval...")
 
                     timestamp = time.strftime("%Y%m%d-%H%M%S")
-                    filename = f"experiment_{timestamp}.csv"
+                    filename = f"{experiment_name}_{timestamp}.csv"
 
                     retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height)
                 else:
