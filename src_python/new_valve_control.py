@@ -245,7 +245,11 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
     
     started = False
 
-    with open(filename, "w") as f:
+    directory = "C:\\CoughMachineData"
+    os.makedirs(directory, exist_ok=True)
+    full_path = os.path.join(directory, filename)
+
+    with open(full_path, "w") as f:
         f.write(f"Experiment Name,{experiment_name}\n")
         f.write(f"Start Time (UTC),{start_time.isoformat()}\n")
         f.write(f"End Time (UTC),{end_time.isoformat()}\n")
@@ -305,7 +309,7 @@ if __name__ == '__main__':
 
     # Ask if the user wants to save the data
     save_default = "n"
-    save = (input('Do you want to save the experimental data? (y/n): ').strip().lower()
+    save = (input(f'Do you want to save the experimental data (press ENTER for {save_default})? (y/n): ').strip().lower()
             or save_default)
     
     # Get the experiment name
@@ -318,12 +322,8 @@ if __name__ == '__main__':
     #Processing compare to model
     if save == "y":
         model_default = "n"
-        model = (input('Do you want to include the Gupta model in the data (press ENTER for 'f'"{model_default}")? (y/n): ').strip().lower()
+        model = (input('Do you want to include the Gupta model in the data (press ENTER for 'f'{model_default})? (y/n): ').strip().lower()
                 or model_default)
-        
-    # Set the before and after times
-    before_time_ms = 0
-    after_time_ms = 1000
     
     # Connect to SprayTec lift if available
     lift_port = find_serial_device(description='Mega', continue_on_error=True)
@@ -333,8 +333,8 @@ if __name__ == '__main__':
         print('Warning: SprayTec lift not found; height will not be recorded.')
 
     # Ask if the user wants to load a dataset
-    load_dataset_default = "y"
-    load_dataset = (input('Do you want to upload a flow curve? (y/n): ').strip().lower() or load_dataset_default)
+    load_dataset_default = "n"
+    load_dataset = (input(f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
     if load_dataset == 'y':
         send_dataset()
 
@@ -353,8 +353,8 @@ if __name__ == '__main__':
 
     # Ask if ready to execute experiment
     while True:
-        ready_default = "y"
-        ready = (input('Ready to start the experiment? (y/n): ').strip().lower() or ready_default)
+        ready_default = "n"
+        ready = (input('Ready to start the experiment (press ENTER for {ready_default})? (y/n): ').strip().lower() or ready_default)
         if ready == 'y':
             ser.write("RUN\n".encode())
             time.sleep(0.1)  # wait for response
@@ -384,7 +384,6 @@ if __name__ == '__main__':
     starting_experiment = True
     finished_experiment = False
 
-
     while True:
 
         if ser.in_waiting > 0:
@@ -403,3 +402,12 @@ if __name__ == '__main__':
                     retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height)
                 else:
                     print("Experiment completed. Data not saved as per user choice.")
+
+        # Break the loop if experiment is finished
+        if finished_experiment:
+            ser.close()
+            if lift_port:
+                lift.close_connection()
+            
+            print("Serial connections closed")
+            break
