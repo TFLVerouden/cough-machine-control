@@ -77,7 +77,7 @@ On breadboard left-to-right:
 - ~~Bronkhorst EL-FLOW Select F-113AC flow meter~~
 
 ## Electronics
-[![Cough machine wiring diagram](/docs/schematics/cough_machine_wiring.jpg)](https://github.com/TFLVerouden/cough-machine-control/blob/main/docs/cough_machine_wiring.pdf?raw=true)
+[![Cough machine wiring diagram](/docs/schematics/cough_machine_wiring.png)](https://github.com/TFLVerouden/cough-machine-control/blob/main/docs/cough_machine_wiring.pdf?raw=true)
 
 Note: when making any physical changes to the current loop of R-click or T-click, reset the microcontroller because the current will be incorrect (~ 2 mA) otherwise.
 
