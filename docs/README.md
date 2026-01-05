@@ -2,8 +2,6 @@
 - [ ] Check and add laser safety label/regulations here.
 - [ ] Add link to (micro)rheology repo(s) once applicable.
 - [ ] Add link to SprayTec lift (and other) class(es) once properly sorted.
-- [ ] Finish adding all electronics pdfs.
-- [ ] Add pump cable pinouts below.
 
 
 # Component list
@@ -90,31 +88,76 @@ Breadboard bottom view:
 ![Cough machine control breadboard bottom view](/docs/breadboard_bottom_view.jpeg)
 
 ### Power supplies
-*TracoPower TBLC-06-105* 5 V power supply
+*TracoPower TBLC-06-105* 5 V power supply unit (PSU)
 - [Data sheet](/docs/electronics/TracoPower_tblc06_datasheet.pdf)
 - [Manual](/docs/electronics/TracoPower_tblc06_installation.pdf)
+- [Website manufacturer](https://www.tracopower.com/int/series/tblc)
 
-*TracoPower TBLC-15-124* 24 V power supply
+*TracoPower TBLC-15-124* 24 V power supply unit (PSU)
 - [Data sheet](/docs/electronics/TracoPower_tblc15_datasheet.pdf)
 - [Manual](/docs/electronics/TracoPower_tblc15_installation.pdf)
+- [Website manufacturer](https://www.tracopower.com/int/series/tblc)
+
+### Control board
+*Adafruit ItsyBitsy M4 Express* microcontroller unit (MCU)
+- [Website manufacturer](https://learn.adafruit.com/introducing-adafruit-itsybitsy-m4/pinouts)
+- [Website manufacturer Microchip ATSAMD51G19A](https://www.microchip.com/en-us/product/ATSAMD51G19A)
+- [Data sheet Microchip ATSAMD51G19A](/docs/electronics/Adafruit_ItsyBitsy_M4_Express_datasheet_SAM-D5x-E5x.pdf)
+
+The MCU handles communication between the PC and other components, as well as precise timing. 
+
+### Current regulation
+*MIKROE 4-20 mA T-click* current transmitter
+- [Website manufacturer](https://www.mikroe.com/4-20ma-t-click)
+- [Schematic](/docs/electronics/MIKROE_4-20mA_T_click_schematic.pdf)
+- [Data sheet Texas Instruments XTR116 current loop transmitter](/docs/electronics/MIKROE_4-20mA_T_click_XTR116_datasheet.pdf)
+- [Data sheet Microchip MCP4921 DAC/SPI interface](/docs/electronics/MIKROE_4-20mA_T_click_MCP4921_datasheet.pdf)
+- [Data sheet Analog Devices ADuM1411 digital isolator](/docs/electronics/MIKROE_4-20mA_T_click_ADuM1411_datasheet.pdf)
+- [Recommended control library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main)
+
+Two T-click 4-20 mA current regulators are used. One to control the proportional valve (12 mA to close, 20 mA to 100% open; 4-12 mA range is not used), and another to control the pressure regulator (4 mA for 0.1 bar up to, theoretically, 20 mA for 10 bar). The calibration values for both T-click boards are:
+| Bit value | Current (mA) |
+|-----------|--------------|
+| 796       | 3.97         |
+| 3982      | 19.90        |
 
 
+*MIKROE 4-20 mA R-click* current receiver
+- [Website manufacturer](https://www.mikroe.com/4-20ma-r-click)
+- [Schematic](/docs/electronics/MIKROE_4-20mA_R_click_schematic.pdf)
+- [Data sheet Texas Instruments IN196 current shunt monitor](/docs/electronics/MIKROE_4-20mA_R_click_INA196_datasheet.pdf)
+- [Data sheet Microchip MCP3201 ADC/SPI interface](/docs/electronics/MIKROE_4-20mA_R_click_MCP3201_datasheet.pdf)
+- [Data sheet Maxim 6106 voltage reference](/docs/electronics/MIKROE_4-20mA_R_click_MAX6106_datasheet.pdf)
+- [Data sheet Texas Instruments TPS61041 boost converter](/docs/electronics/MIKROE_4-20mA_R_click_TPS61041_datasheet.pdf)
+- [Recommended control library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main)
 
-- Adafruit ItsyBitsy M4 Express: https://learn.adafruit.com/introducing-adafruit-itsybitsy-m4/pinouts
-    - ATSAMD51G19A chip: https://www.microchip.com/en-us/product/ATSAMD51G19A
-- MIKROE 4-20 mA T-click: https://www.mikroe.com/4-20ma-t-click
-    - Calibration values for both pressure regulator and proportional valve setpoint: bitval 796 <=> 3.97 mA; bitval 3982 <=> 19.90 mA.
-- MIKROE 4-20 mA R-click: https://www.mikroe.com/4-20ma-r-click
-   - Modified to act as passive current receiver (not supplying any voltage), see notes in the [MIKROE_4_20mA_RT_Click library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main/active_to_passive_R_click_modification)
-   - Calibration value for pressure regulator readout:
-   bitval 806 <=> 4.04 mA, bitval 2191 <=> 10.98 mA.
-- Adafruit MOSFET driver: https://learn.adafruit.com/adafruit-mosfet-driver
-- Adafruit SHT45 temperature \& humidity sensor: https://learn.adafruit.com/adafruit-sht40-temperature-humidity-sensor
-    - SHT4X chip: https://sensirion.com/products/catalog/SHT45
-- Traco Power TBLC power supplies: https://www.tracopower.com/int/series/tblc
-- Isocom 6N138 Optocoupler: https://nl.rs-online.com/web/p/optocouplers/1610989?srsltid=AfmBOopHfB2N8esy3AUzJydobraa8phtpUnF_R_vVBQSlnlFK72Xo9mU
+The R-click 4-20 mA current receiver is used to read out the pressure on the tank. It is modified to act as passive current receiver (not supplying any voltage), see notes in the [MIKROE_4_20mA_RT_Click library](https://github.com/Dennis-van-Gils/MIKROE_4_20mA_RT_Click/tree/main/active_to_passive_R_click_modification). The calibration values are:
+| Bit value | Current (mA) |
+|-----------|--------------|
+| 806       | 4.04         |
+| 2191      | 10.98        |
 
-- StarTech ICUSB2324I USB-RS232 hub: https://www.startech.com/nl-nl/kaarten-peripherals/icusb2324i?srsltid=AfmBOopFQCteDwa-6x80QMKLGdYEHS63esR50nsnaFysBw_U2jR4mku1
+
+### MOSFET driver
+*Adafruit MOSFET driver*
+- [Website manufacturer](https://learn.adafruit.com/adafruit-mosfet-driver)
+- [Data sheet Alpha & Omega AO3406 MOSFET](/docs/electronics/Adafruit_MOSFET_driver_datasheet_AO3406.pdf)
+
+Used to control the solenoid valve.
+
+### Temperature & relative humidity sensor
+*Adafruit SHT45 temperature \& humidity sensor*
+- [Website manufacturer](https://learn.adafruit.com/adafruit-sht40-temperature-humidity-sensor)
+- [Website manufacturer Sensirion SHT4X](https://sensirion.com/products/catalog/SHT45)
+- [Data sheet Sensirion SHT4X](/docs/electronics/Adafruit_SHT45_datasheet_SHT4x.pdf)
+
+### Trigger circuit
+*Isocom 6N138 optocoupler*
+- [Website supplier](https://nl.rs-online.com/web/p/optocouplers/1610989?srsltid=AfmBOopHfB2N8esy3AUzJydobraa8phtpUnF_R_vVBQSlnlFK72Xo9mU)
+- [Data sheet](/docs/electronics/Isocom_optocoupler_6N138_datasheet.pdf)
+
+The SprayTec and any other peripherals, like high-speed cameras, can be triggered with a 5 V signal that is pulled down to GND. The circuit uses an optocoupler to isolate the power supplies from "peripheral ground".
+
 
 ## PIV add-on
 ### Manual pressure regulator
@@ -164,14 +207,40 @@ Mounted using a [Thorlabs MK11F/M laser diode mount](https://www.thorlabs.com/th
 - [Manual](/docs/peripherals/Harvard_PHD2000_syringe_pump_manual.pdf)
 - [Recommended Python serial control code](https://github.com/WetenSchaap/pumpy3)
 
-The pump is connected using a custom RJ12 to DB9 cable, which consists of an [Assmann AT-S-26-6-6-S-7](/docs/peripherals/pump_cable/Assmann_AT-S-26-6-6-S-7_RJ12_straight_through_cable.pdf) RJ12 straight-through cable and an [L-COM RBA096F](/docs/peripherals/pump_cable/L-COM_RBA096F_adaptor_DB9F-RJ12.pdf) RJ12 to DB9 female adapter.
+The pump is connected using a custom RJ12 to DB9 cable, which consists of an [Assmann AT-S-26-6-6-S-7](/docs/peripherals/pump_cable/Assmann_AT-S-26-6-6-S-7_RJ12_straight_through_cable.pdf) RJ12 straight-through cable[^1] and an [L-COM RBA096F](/docs/peripherals/pump_cable/L-COM_RBA096F_adaptor_DB9F-RJ12.pdf) RJ12 to DB9 female adapter. They are connected as follows:
 
-Make sure to set the correct syringe diameter. Commonly used Hamilton-Microliter Series Gastight syringes:
+| Pump pin | Cable conn. | Wire colour | Adapter conn. | Assignment |
+|----------|-------------|-------------|---------------|------------|
+| 1        | 1 - 1       | White (WH)  | 1 - 9         | N.C.       |
+| 2        | 2 - 2       | Black (BK)  | **2 - 3**     | Ground     |
+| 3        | 3 - 3       | Red (RD)    | **3 - 2**     | Ground     |
+| 4        | 4 - 4       | Green (GN)  | **4 - 5**     | Transmit   |
+| 5        | 5 - 5       | Yellow (YL) | **5 - 4**     | Receive    |
+| 6        | 6 - 6       | Blue (BL)   | 6 - 1         | N.C.       |
+
+RS-232 IN port pin numbering on the pump (front view):
+![Pump RS-232 pinout](/docs/peripherals/pump_cable/Harvard_PHD2000_RS232_RJ12_pins.png)
+
+RJ12 to DB9 adapter pin numbering (front views):
+![RJ12 to DB9 adapter](/docs/peripherals/pump_cable/L-COM_adapter_pinout.png)
+
+In the pump settings, make sure to set the correct syringe diameter. Commonly used Hamilton-Microliter Series Gastight syringes:
 | Volume (mL) | Diameter (mm) |
 | ----------- | ------------- |
 | 1.0         | 4.61          |
 | 2.5         | 7.28          |
 | 5.0         | 10.3          |
+
+[^1]: "[A straight cord] is principally used for data, while reverse cords are for voice services. Straight cords feature an exactly duplicated arrangement of wires to pin connections on either side of the cable, while in reverse cables, the order of connections is mirrored i.e. in reverse order on the second side", from [RS-online](https://uk.rs-online.com/web/content/discovery/ideas-and-advice/telephone-cable-guide).
+
+### USB-RS232 hub
+*StarTech ICUSB2324I*
+- [Website manufacturer](https://www.startech.com/nl-nl/kaarten-peripherals/icusb2324i?srsltid=AfmBOopFQCteDwa-6x80QMKLGdYEHS63esR50nsnaFysBw_U2jR4mku1)
+- [Manual](/docs/electronics/StarTech_ICUSB2324I_manual.pdf)
+- [Schematic](/docs/electronics/StarTech_ICUSB2324I_diagram.pdf)
+- [Data sheet](/docs/electronics/StarTech_ICUSB2324I_datasheet.pdf)
+
+Currently only used to communicate with the syringe pump. 
 
 ### Laser diffraction particle sizer
 *Malvern SprayTec*
