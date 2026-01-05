@@ -210,8 +210,15 @@ def send_dataset():
     default_delimiter = ','
     delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip() or default_delimiter)
     default_filename = 'drawn_curve.csv'
-    filename = (input(f'Enter dataset filename (press ENTER for "{default_filename}"): ').strip() or default_filename)
-    data = extract_csv_dataset(filename, delimiter)
+    
+    while True:
+        filename = (input(f'Enter dataset filename (press ENTER for "{default_filename}"): ').strip() or default_filename)
+        try:
+            data = extract_csv_dataset(filename, delimiter)
+            break  # Exit loop if file is successfully read
+        except FileNotFoundError:
+            print(f'Error: File "{filename}" not found. Please try again.')
+    
     serial_command = format_csv_dataset(data[0], data[1])
     ser.write(serial_command.encode('utf-8'))
 
@@ -240,7 +247,7 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
         f.write(f"Relative Humidity (%),{RH}\n")
         f.write(f"Lift Height (mm),{height}\n")
 
-        ser.write('F\n'.encode())
+        ser.write('F\n'.encode())  
 
         while True:
             raw_line = ser.readline().decode('utf-8', errors='ignore')
