@@ -2,7 +2,7 @@ import csv
 import serial
 
 # Configure variables
-serial_port = "COM5"
+serial_port = "COM14"
 baud = 115200
 filename = "drawn_curve.csv"
 delimiter = ';'

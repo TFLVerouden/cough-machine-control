@@ -8,7 +8,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-import pumpy 
+import pumpy3
 
 # from functions import Gupta2009 as Gupta
 
@@ -16,16 +16,18 @@ cwd = os.path.abspath(os.path.dirname(__file__))
 
 parent_dir = os.path.dirname(cwd)
 print(parent_dir)
-#function_dir = os.path.join(parent_dir, 'cough-machine-control')
-function_dir = os.path.join(parent_dir,'functions')
+# function_dir = os.path.join(parent_dir, 'cough-machine-control')
+function_dir = os.path.join(parent_dir, 'functions')
 print(function_dir)
 sys.path.append(function_dir)
 
-####Finished loading Modules
+# Finished loading Modules
+
+
 def split_array_by_header_marker(arr, marker='Date-Time'):
     arr = np.array(arr)
-    header = arr[:,0]
-    rows = arr[:,1:]
+    header = arr[:, 0]
+    rows = arr[:, 1:]
 
     # Find indices where header has the marker
     split_indices = [i for i, val in enumerate(header) if val == marker]
@@ -40,6 +42,7 @@ def split_array_by_header_marker(arr, marker='Date-Time'):
 
     return result
 
+
 def Spraytec_data_saved_check():
     """
     This function saves the last spraytec measurement of the previous run to a .txt
@@ -47,28 +50,31 @@ def Spraytec_data_saved_check():
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     parent_path = os.path.dirname(current_dir)  # one level up
-    spraytec_path = os.path.join(parent_path,"spraytec")
-    path = os.path.join(spraytec_path,"SPRAYTEC_APPEND_FILE.txt")
+    spraytec_path = os.path.join(parent_path, "spraytec")
+    path = os.path.join(spraytec_path, "SPRAYTEC_APPEND_FILE.txt")
     save_path = os.path.join(spraytec_path, "individual_data_files")
-    file = np.loadtxt(path,dtype=str,delimiter=',')
+    file = np.loadtxt(path, dtype=str, delimiter=',')
     split_sections = split_array_by_header_marker(file)
     last_file = split_sections[-1]
-    time_created= last_file[1,0]
-    filename= last_file[1,1]
+    time_created = last_file[1, 0]
+    filename = last_file[1, 1]
     dt = datetime.datetime.strptime(time_created, '%d %b %Y %H:%M:%S.%f')
     # Format as YYYY_MM_DD_HH_MM
     file_name_time = dt.strftime('%Y_%m_%d_%H_%M')
-    save_path = os.path.join(save_path,file_name_time +"_" +filename + ".txt")
+    save_path = os.path.join(
+        save_path, file_name_time + "_" + filename + ".txt")
     if not os.path.exists(save_path):
-        np.savetxt(save_path,last_file,fmt='%s',delimiter=',')
+        np.savetxt(save_path, last_file, fmt='%s', delimiter=',')
         print(f"Saved spraytec_data of {file_name_time}")
+
 
 def find_serial_device(description, continue_on_error=False):
     ports = list(serial.tools.list_ports.comports())
     ports.sort(key=lambda port: int(port.device.replace('COM', '')))
 
     # Filter ports where the description contains the provided keyword
-    matching_ports = [port.device for port in ports if description in port.description]
+    matching_ports = [
+        port.device for port in ports if description in port.description]
 
     if len(matching_ports) == 1:
         return matching_ports[0]
@@ -86,13 +92,14 @@ def find_serial_device(description, continue_on_error=False):
             print(f'{port.device} - {port.description}')
         choice = input(f'Enter the COM port number for "{description}": COM')
         return f'COM{choice}'
-    
+
+
 def reading_temperature(verbose=False):
     ser.reset_input_buffer()
     ser.write('T?\n'.encode())
-    time.sleep(0.1) #wait for the response
+    time.sleep(0.1)  # wait for the response
     Temperature = ser.readline().decode('utf-8', errors='ignore').rstrip()
-    RH= ser.readline().decode('utf-8', errors='ignore').rstrip()
+    RH = ser.readline().decode('utf-8', errors='ignore').rstrip()
     Temperature = Temperature.lstrip('T')
     RH = RH.lstrip('RH')
 
@@ -100,16 +107,18 @@ def reading_temperature(verbose=False):
         print(f'Temperature: {Temperature} °C; relative humidity: {RH} %')
     return RH, Temperature
 
+
 def reading_pressure(verbose=False):
     ser.reset_input_buffer()
     ser.write('P?\n'.encode())
-    time.sleep(0.1) #wait for the response
+    time.sleep(0.1)  # wait for the response
     pressure = ser.readline().decode('utf-8', errors='ignore').rstrip()
     pressure_value = pressure.lstrip('P')
 
     if verbose:
         print(f'Pressure: {pressure_value} mbar')
     return pressure_value
+
 
 def extract_csv_dataset(filename, delimiter=','):
     # Define output variables
@@ -124,7 +133,8 @@ def extract_csv_dataset(filename, delimiter=','):
         # extract data from the file and create time and value arrays
         for rows in csvreader:
             if not rows[0] or not rows[1]:
-                print(f"Encountered empty cell in flow profile dataset, row index {row_idx}!")
+                print(
+                    f"Encountered empty cell in flow profile dataset, row index {row_idx}!")
                 time = []
                 mA = []
                 break
@@ -135,6 +145,7 @@ def extract_csv_dataset(filename, delimiter=','):
                 row_idx += 1
 
     return time, mA
+
 
 def format_csv_dataset(time_array, mA_array, prefix="LOAD", handshake_delim=" ", data_delim=",", line_feed='\n'):
 
@@ -159,6 +170,7 @@ def format_csv_dataset(time_array, mA_array, prefix="LOAD", handshake_delim=" ",
 
     return output
 
+
 class SprayTecLift(serial.Serial):
     def __init__(self, port, baudrate=9600, timeout=1):
         super().__init__(port=port, baudrate=baudrate, timeout=timeout)
@@ -172,9 +184,11 @@ class SprayTecLift(serial.Serial):
             response = self.readlines()
             for line in response:
                 if line.startswith(b'  Platform height [mm]: '):
-                    height = line.split(b': ')[1].strip().decode('utf-8', errors='ignore')
+                    height = line.split(b': ')[1].strip().decode(
+                        'utf-8', errors='ignore')
                     return float(height)
-            print('Warning: No valid response containing "Platform height [mm]" was found.')
+            print(
+                'Warning: No valid response containing "Platform height [mm]" was found.')
             return None
         except Exception as e:
             print(f"Error while reading lift height: {e}")
@@ -185,6 +199,7 @@ class SprayTecLift(serial.Serial):
         self.close()
         print("Lift connection closed.")
 
+
 def manual_mode():
     print("\n=== MANUAL MODE ===")
     print("Enter commands to send to MCU (type 'exit' to return to main menu)\n")
@@ -194,7 +209,8 @@ def manual_mode():
 
         if cmd.lower() == 'exit':
             next_step_default = "q"
-            next_step = (input("What to do next - continue to experimental mode or quit? (e/q): ").strip().lower() or next_step_default)
+            next_step = (input(
+                "What to do next - continue to experimental mode or quit? (e/q): ").strip().lower() or next_step_default)
             if next_step == 'q':
                 print("Exiting program.")
                 exit()
@@ -207,29 +223,33 @@ def manual_mode():
                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 print(f"Response: {response}")
 
+
 def send_dataset():
     default_delimiter = ','
-    delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip() or default_delimiter)
+    delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip(
+    ) or default_delimiter)
 
     # Defining defaul file path
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_filepath = os.path.join(script_dir,'drawn_curve.csv')
+    default_filepath = os.path.join(script_dir, 'drawn_curve.csv')
 
     while True:
-        filename = (input(f'Enter dataset filename (press ENTER for "{default_filepath}"): ').strip() or default_filepath)
+        filename = (input(f'Enter dataset filename (press ENTER for "{default_filepath}"): ').strip(
+        ) or default_filepath)
         try:
             data = extract_csv_dataset(filename, delimiter)
             print(f'Sending dataset from file: {filename}')
             break  # Exit loop if file is successfully read
         except FileNotFoundError:
             print(f'Error: File "{filename}" not found. Please try again.')
-    
+
     serial_command = format_csv_dataset(data[0], data[1])
     ser.write(serial_command.encode('utf-8'))
 
+
 def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", timeout_sec=5):
     start_time = time.time()
-    
+
     while (time.time() - start_time) < timeout_sec:
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8', errors='ignore').strip()
@@ -237,12 +257,13 @@ def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", ti
                 print("MCU confirmed dataset receipt.")
                 return True
         time.sleep(0.1)  # Small sleep to reduce CPU usage
-        
+
     print("Error: MCU confirmation timed out.")
     return False
 
+
 def retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height):
-    
+
     started = False
 
     directory = "C:\\CoughMachineData"
@@ -257,7 +278,7 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
         f.write(f"Relative Humidity (%),{RH}\n")
         f.write(f"Lift Height (mm),{height}\n")
 
-        ser.write('F\n'.encode())  
+        ser.write('F\n'.encode())
 
         while True:
             raw_line = ser.readline()
@@ -275,7 +296,9 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
                 break
             if started:
                 f.write(line)
-    print(f"Experiment data saved to {filename} in {os.path.abspath(filename)}")
+    print(
+        f"Experiment data saved to {filename} in {full_path}")
+
 
 if __name__ == '__main__':
 
@@ -300,7 +323,8 @@ if __name__ == '__main__':
 
     # Ask which mode to use
     mode_default = "m"
-    mode = (input("Select mode - manual or experimental? (m/e): ").strip().lower() or mode_default)
+    mode = (input(
+        "Select mode - manual or experimental? (m/e): ").strip().lower() or mode_default)
 
     if mode == 'm':
         manual_mode()
@@ -311,20 +335,20 @@ if __name__ == '__main__':
     save_default = "n"
     save = (input(f'Do you want to save the experimental data (press ENTER for {save_default})? (y/n): ').strip().lower()
             or save_default)
-    
+
     # Get the experiment name
     if save == "y":
         experiment_name_default = "test"
         experiment_name = (input(f'Enter experiment name (press ENTER for '
-                                f'"{experiment_name_default}"): ').strip()
-                        or experiment_name_default)
+                                 f'"{experiment_name_default}"): ').strip()
+                           or experiment_name_default)
 
-    #Processing compare to model
+    # Processing compare to model
     if save == "y":
         model_default = "n"
         model = (input('Do you want to include the Gupta model in the data (press ENTER for 'f'{model_default})? (y/n): ').strip().lower()
-                or model_default)
-    
+                 or model_default)
+
     # Connect to SprayTec lift if available
     lift_port = find_serial_device(description='Mega', continue_on_error=True)
     if lift_port:
@@ -332,42 +356,64 @@ if __name__ == '__main__':
     else:
         print('Warning: SprayTec lift not found; height will not be recorded.')
 
-    # Ask if the user wants to load a dataset
-    load_dataset_default = "n"
-    load_dataset = (input(f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
-    if load_dataset == 'y':
-        send_dataset()
+    while True:
+        experiment_type_default = "1"
+        experiment_type = (input(
+            f'Select experiment type - 1: Flow profile, 0: Square profile (press ENTER for {experiment_type_default}): ').strip()
+            or experiment_type_default)
 
-        # Immediately check for the confirmation
-        if verify_mcu_dataset_received_with_timeout():
-            print("Proceeding to valve control phase.")
-        else:
-            print("Failed to sync with MCU. Aborting.")
-            sys.exit(1)
-    elif load_dataset == 'n':
-        print("Proceeding without loading a dataset.")
+        if experiment_type == "0":
+            duration_default = 500
+            duration = int((input(
+                f'Enter valve open duration in ms (press ENTER for {duration_default} ms): ')).strip() or duration_default)
+            break
+        elif experiment_type == "1":
+            # Ask if the user wants to load a dataset
+            load_dataset_default = "n"
+            load_dataset = (input(
+                f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
+            if load_dataset == 'y':
+                send_dataset()
+
+                # Immediately check for the confirmation
+                if verify_mcu_dataset_received_with_timeout():
+                    print("Proceeding to valve control phase.")
+                    break
+                else:
+                    print("Failed to sync with MCU. Aborting.")
+                    sys.exit(1)
+            elif load_dataset == 'n':
+                print("Proceeding without loading a dataset.")
+                break
 
     default_pressure = 1
-    pressure = (input(f'Enter target tank pressure in bar (press ENTER for {default_pressure} bar): ').strip() or str(default_pressure))
+    pressure = (input(f'Enter target tank pressure in bar (press ENTER for {default_pressure} bar): ').strip(
+    ) or str(default_pressure))
     ser.write(f'SP {pressure}\n'.encode())
 
     # Ask if ready to execute experiment
     while True:
         ready_default = "n"
-        ready = (input('Ready to start the experiment (press ENTER for {ready_default})? (y/n): ').strip().lower() or ready_default)
+        ready = (input(
+            f'Ready to start the experiment (press ENTER for {ready_default})? (y/n): ').strip().lower() or ready_default)
         if ready == 'y':
-            ser.write("RUN\n".encode())
-            time.sleep(0.1)  # wait for response
-            while ser.in_waiting > 0:
-                response = ser.readline().decode('utf-8', errors='ignore').rstrip()
-                if response == "EXECUTING_DATASET":
-                    print("MCU has started executing the dataset.")
-                else:
-                    print(f"Something went wrong, response: {response}")
-            break
+            if experiment_type == '1':
+                ser.write("RUN\n".encode())
+                time.sleep(0.1)  # wait for response
+                while ser.in_waiting > 0:
+                    response = ser.readline().decode('utf-8', errors='ignore').rstrip()
+                    if response == "EXECUTING_DATASET":
+                        print("MCU has started executing the dataset.")
+                    else:
+                        print(f"Something went wrong, response: {response}")
+                break
+            elif experiment_type == '0':
+                ser.write("SV 20\n".encode())
+                time.sleep(0.2)  # wait for proportional valve to open
+                ser.write(f"O {duration}\n".encode())
+                break
         else:
             print('Take your time. Press y when ready.')
-
 
     # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature()
@@ -393,13 +439,19 @@ if __name__ == '__main__':
                 end_time = datetime.datetime.now(datetime.timezone.utc)
                 starting_experiment = False
                 finished_experiment = True
+
+                # Close the proportional valve if necessary
+                if experiment_type == '0':
+                    ser.write('SV 12\n'.encode())
+
                 if save == 'y':
                     print("Saved experiment detected. Starting file retrieval...")
 
                     timestamp = time.strftime("%Y%m%d-%H%M%S")
                     filename = f"{experiment_name}_{timestamp}.csv"
 
-                    retreive_experiment_data(filename, experiment_name, start_time, end_time, Temperature, RH, height)
+                    retreive_experiment_data(
+                        filename, experiment_name, start_time, end_time, Temperature, RH, height)
                 else:
                     print("Experiment completed. Data not saved as per user choice.")
 
@@ -408,6 +460,6 @@ if __name__ == '__main__':
             ser.close()
             if lift_port:
                 lift.close_connection()
-            
+
             print("Serial connections closed")
             break

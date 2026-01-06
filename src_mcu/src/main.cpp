@@ -23,7 +23,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -66,7 +66,7 @@ int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
 
 // ============================================================================
-// SETUP FOR QSPIFLASH FILESYSTEM
+// SETUP FOR QSPI FLASH FILESYSTEM
 // ============================================================================
 // Setup for the ItsyBitsy M4 internal QSPI flash
 Adafruit_FlashTransport_QSPI flashTransport;
@@ -333,7 +333,7 @@ void closeValve() {
   DEBUG_PRINT(
       "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
                                                    // (debug only for speed)
-  Serial.println("!");
+  // Serial.println("!");
 }
 
 void startLaser() {
@@ -469,6 +469,7 @@ void loop() {
     DEBUG_PRINTLN("Solenoïd valve closed after duration check.");
     closeValve();
     solValveOpen = false;
+    saveToFlash(); // Save log to flash
 
     // If in continuous detection mode, restart detection immediately
     if (continuousDetection) {
@@ -851,6 +852,7 @@ void loop() {
       // Command: C
       // Manually close valve (override)
       closeValve();
+      saveToFlash(); // Save log to flash
       solValveOpen = false;
 
       // Stop detection if it was running
