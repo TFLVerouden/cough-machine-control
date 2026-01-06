@@ -5,13 +5,13 @@
  * Monitors pressure and environmental conditions.
  */
 
+#include "Adafruit_SPIFlash.h"
 #include "DvG_StreamCommand.h"
 #include "MIKROE_4_20mA_RT_Click.h"
+#include "SdFat.h"
 #include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
-#include "Adafruit_SPIFlash.h"
-#include "SdFat.h"
 
 // TODO: Add/change function to adjust all delays via serial command
 // TODO: Make it so the opening procedure using loaded protocol can be used with
@@ -23,7 +23,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -65,6 +65,9 @@ int sequenceIndex = 0;     // Index of dataset to execute on time
 int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
 
+// ============================================================================
+// SETUP FOR QSPIFLASH FILESYSTEM
+// ============================================================================
 // Setup for the ItsyBitsy M4 internal QSPI flash
 Adafruit_FlashTransport_QSPI flashTransport;
 Adafruit_SPIFlash flash(&flashTransport);
@@ -83,7 +86,7 @@ struct __attribute__((__packed__)) LogEntry {
 
 // INITIALIZE LOGGING ARRAY IN RAM
 #define MAX_RECORDS 2000
-LogEntry logs[MAX_RECORDS]; 
+LogEntry logs[MAX_RECORDS];
 int currentCount = 0;
 
 // ============================================================================
@@ -173,7 +176,7 @@ void recordEvent(int8_t v1, float v2, float press) {
 // FUNCTION TO STORE DATA TO FLASH INSTEAD OF RAM
 // ============================================================================
 void saveToFlash() {
- // Remove the old file if it exists
+  // Remove the old file if it exists
   if (fatfs.exists("experiment_dataset.csv")) {
     fatfs.remove("experiment_dataset.csv");
   }
@@ -184,13 +187,15 @@ void saveToFlash() {
     file.printf("Trigger T0 (us),%lu\n", tick);
     file.println("us,v1 action,v2 set mA,bar"); // Header
     for (int i = 0; i < currentCount; i++) {
-      file.printf("%lu,%d,%.2f,%.2f\n",logs[i].timestamp,logs[i].valve1,logs[i].valve2_mA,logs[i].pressure);
+      file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1,
+                  logs[i].valve2_mA, logs[i].pressure);
     }
     file.close();
     Serial.println("DONE_SAVING_TO_FLASH");
   } else {
     DEBUG_PRINTLN("Error opening file for writing!");
   }
+  currentCount = 0; // Reset RAM log count after saving
 }
 
 void dumpToSerial() {
@@ -198,7 +203,7 @@ void dumpToSerial() {
   if (!fatfs.exists("experiment_dataset.csv")) {
     DEBUG_PRINTLN("No dataset file found in flash!");
     return;
-  } 
+  }
 
   File file = fatfs.open("experiment_dataset.csv", FILE_READ);
   if (file) {
@@ -287,12 +292,12 @@ void setup() {
     DEBUG_PRINTLN("Flash chip could also not be mounted, trying to format...");
 
     if (!flash.eraseChip()) {
-        DEBUG_PRINTLN("ERROR: Failed to erase chip!");
+      DEBUG_PRINTLN("ERROR: Failed to erase chip!");
     }
-    
+
     // Try mounting again
     if (!fatfs.begin(&flash)) {
-        DEBUG_PRINTLN("ERROR: Still cannot mount filesystem!");
+      DEBUG_PRINTLN("ERROR: Still cannot mount filesystem!");
     }
   }
   DEBUG_PRINTLN("Flash filesystem mounted successfully.");
@@ -309,7 +314,7 @@ void openValveTrigger() {
       ((1 << g_APinDescription[PIN_VALVE].ulPin) |
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
-  recordEvent(1, 0, 0); // Log valve open event
+  recordEvent(1, -1, -1); // Log valve open event
 
   DEBUG_PRINTLN(
       "Solenoïd valve opened using openValveTrigger()"); // Valve opened
@@ -322,8 +327,8 @@ void closeValve() {
   // Equivalent to digitalWrite(PIN_VALVE, LOW);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
-    
-  recordEvent(0, 0, 0); // Log valve close event
+
+  recordEvent(0, -1, -1); // Log valve close event
 
   DEBUG_PRINT(
       "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
@@ -414,6 +419,7 @@ void resetDataArrays() {
   memset(time_array, 0, sizeof(time_array));
   memset(value_array, 0, sizeof(value_array));
   incomingCount = 0;
+  // Todo: Review if these resets are necessary
   // Added these three resets after testing, need reviewing!
   dataIndex = 0;
   sequenceIndex = 0;
@@ -577,8 +583,7 @@ void loop() {
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
-        saveToFlash();               // Save log to flash instead of RAM
-        currentCount = 0;            // Reset log count RAM storage
+        saveToFlash(); // Save log to flash instead of RAM
         return;
       } else {
         valve.set_mA(value_array[sequenceIndex]);
@@ -598,7 +603,8 @@ void loop() {
         DEBUG_PRINTLN(value_array[sequenceIndex]);
 
         // Record event in packed structure in RAM
-        recordEvent(-1, value_array[sequenceIndex], 0.62350602 * R_click.get_EMA_mA() - 2.51344790);
+        recordEvent(-1, value_array[sequenceIndex],
+                    0.62350602 * R_click.get_EMA_mA() - 2.51344790);
 
         sequenceIndex++;
       }
@@ -915,7 +921,8 @@ void loop() {
           "L <us>  - Set delay before valve opening to <us> microseconds");
       DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
       DEBUG_PRINTLN("SP <bar> - Set pressure regulator to <bar>");
-      DEBUG_PRINTLN("LOAD <N_datapoints> <dataset duration (ms)> <csv dataset> - Load dataset, format: "
+      DEBUG_PRINTLN("LOAD <N_datapoints> <dataset duration (ms)> <csv dataset> "
+                    "- Load dataset, format: "
                     "<ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
       DEBUG_PRINTLN("RUN     - Execute loaded dataset");
       DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
@@ -941,7 +948,7 @@ void loop() {
         }
       }
       DEBUG_PRINT("Proportional valve: ");
-      DEBUG_PRINTLN(propValveOpen ? "OPEN" : "CLOSED");
+      DEBUG_PRINTLN(valve.get_last_set_bitval() > 2402 ? "OPEN" : "CLOSED");
       DEBUG_PRINT("Dataset in memory: ");
       DEBUG_PRINTLN((dataIndex == 0) ? "FALSE" : "TRUE");
       DEBUG_PRINT("Executing dataset: ");
@@ -963,6 +970,8 @@ void loop() {
       DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Pressure (raw): ");
       DEBUG_PRINT(R_click.get_EMA_mA());
+      DEBUG_PRINT("Pressure (bar): ");
+      DEBUG_PRINTLN(0.62350602 * R_click.get_EMA_mA() - 2.51344790);
       DEBUG_PRINTLN(" mA");
       DEBUG_PRINT("Uptime: ");
       DEBUG_PRINT(millis() / 1000);
