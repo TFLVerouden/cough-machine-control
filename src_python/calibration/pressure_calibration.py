@@ -10,12 +10,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import linregress
 
-# Ensure repo root is on sys.path without redefining project helpers
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # repo root
-
-from functions.file_dialogs import ask_open_file, find_repo_root
-from functions.time_utils import timestamp_str, timestamp_from_file
-from functions.io_utils import path_relative_to, load_two_column_numeric
+from tcm_utils.file_dialogs import ask_open_file, find_repo_root
+from tcm_utils.time_utils import timestamp_str, timestamp_from_file
+from tcm_utils.io_utils import path_relative_to, load_two_column_numeric
 
 
 def load_data(data_file: Path) -> tuple[np.ndarray, np.ndarray]:
