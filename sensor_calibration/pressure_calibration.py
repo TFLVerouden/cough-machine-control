@@ -1,20 +1,24 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import linregress
-import os
+from pathlib import Path
 from tkinter import Tk, filedialog
+
+from time_utils import timestamp_str
 
 # Create a root window (hidden)
 root = Tk()
 root.withdraw()
 
 # Get the directory where this script is located
-script_dir = os.path.dirname(os.path.abspath(__file__))
+script_dir = Path(__file__).resolve().parent
+docs_calibration_dir = script_dir.parent / "docs" / "calibration"
+docs_calibration_dir.mkdir(parents=True, exist_ok=True)
 
 # Prompt user to select calibration file
 data_file = filedialog.askopenfilename(
     title="Select calibration data file",
-    initialdir=script_dir,
+    initialdir=str(script_dir),
     filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
 )
 
@@ -22,9 +26,9 @@ if not data_file:
     print("No file selected. Exiting.")
     exit()
 
-# Create output subfolder if it doesn't exist
-output_folder = os.path.join(script_dir, "calibration_outputs")
-os.makedirs(output_folder, exist_ok=True)
+# Create output subfolder in docs/calibration if it doesn't exist
+output_folder = docs_calibration_dir
+output_folder.mkdir(parents=True, exist_ok=True)
 
 # Load the calibration data
 # Comma-separated, skip header
@@ -33,7 +37,8 @@ pressure_values = data[:, 0]  # First column: pressure values
 sensor_readings = data[:, 1]  # Second column: sensor readings
 
 # Extract base filename without extension for output filenames
-base_filename = os.path.splitext(os.path.basename(data_file))[0]
+base_filename = Path(data_file).stem
+timestamp = timestamp_str()
 
 # Perform linear regression
 slope, intercept, r_value, p_value, std_err = linregress(
@@ -57,12 +62,11 @@ plt.legend()
 plt.grid()
 plt.tight_layout()
 
-# Save the plot as PDF to output folder
-output_plot = os.path.join(output_folder, f'{base_filename}_plot.pdf')
+# Save the plot as PDF to output folder with timestamped name
+output_plot = output_folder / f'{base_filename}_{timestamp}_plot.pdf'
 plt.savefig(output_plot)
 
-# Save calibration values to NPZ file in output folder
-output_npz = os.path.join(output_folder, f'{base_filename}_calibration.npz')
+output_npz = output_folder / f'{base_filename}_{timestamp}_calibration.npz'
 np.savez(output_npz,
          slope=slope,
          intercept=intercept,
