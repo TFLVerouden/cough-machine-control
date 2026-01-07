@@ -68,5 +68,4 @@ Thumbs.db
 *.~vsdx
 
 # Config files
-.config
-.config/**
+.config/
