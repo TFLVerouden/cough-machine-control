@@ -66,3 +66,7 @@ Thumbs.db
 
 # Microsoft Visio temporary files
 *.~vsdx
+
+# Config files
+.config
+.config/**
