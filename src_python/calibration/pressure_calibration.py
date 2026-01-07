@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import json
-import shutil
 from pathlib import Path
 import sys
 
@@ -12,11 +10,13 @@ from scipy.stats import linregress
 
 from tcm_utils.file_dialogs import ask_open_file, find_repo_root
 from tcm_utils.time_utils import timestamp_str, timestamp_from_file
-from tcm_utils.io_utils import path_relative_to, load_two_column_numeric
-
-
-def load_data(data_file: Path) -> tuple[np.ndarray, np.ndarray]:
-    return load_two_column_numeric(data_file, delimiter=",")
+from tcm_utils.io_utils import (
+    path_relative_to,
+    load_two_column_numeric,
+    save_metadata_json,
+    move_to_raw_subfolder,
+    create_timestamped_filename,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,7 +59,8 @@ def main(argv: list[str] | None = None) -> int:
     output_folder = docs_calibration_dir
     output_folder.mkdir(parents=True, exist_ok=True)
 
-    pressure_values, sensor_readings = load_data(data_file)
+    pressure_values, sensor_readings = load_two_column_numeric(
+        data_file, delimiter=",")
 
     base_filename = Path(data_file).stem
     if args.timestamp_source == "file":
@@ -98,10 +99,14 @@ def main(argv: list[str] | None = None) -> int:
     plt.grid()
     plt.tight_layout()
 
-    output_plot = output_folder / f"{base_filename}_{timestamp}_plot.pdf"
+    output_plot = output_folder / create_timestamped_filename(
+        base_filename, timestamp, "plot", "pdf"
+    )
     plt.savefig(output_plot)
 
-    output_csv = output_folder / f"{base_filename}_{timestamp}_calibration.csv"
+    output_csv = output_folder / create_timestamped_filename(
+        base_filename, timestamp, "calibration", "csv"
+    )
     csv_header = "sensor_reading_mA,pressure_bar,fit_pressure_bar,residual_bar"
     csv_data = np.column_stack(
         (sensor_readings, pressure_values, fit_pressure, residuals))
@@ -109,11 +114,7 @@ def main(argv: list[str] | None = None) -> int:
                header=csv_header, comments="")
 
     # Move the original raw file into a raw_data subfolder
-    raw_dir = output_folder / "raw_data"
-    raw_dir.mkdir(parents=True, exist_ok=True)
-    moved_raw = raw_dir / Path(data_file).name
-    if Path(data_file) != moved_raw:
-        shutil.move(str(data_file), str(moved_raw))
+    moved_raw = move_to_raw_subfolder(data_file, output_folder)
 
     metadata = {
         "timestamp": timestamp,
@@ -135,10 +136,10 @@ def main(argv: list[str] | None = None) -> int:
         },
     }
 
-    metadata_path = output_folder / \
-        f"{base_filename}_{timestamp}_metadata.json"
-    with metadata_path.open("w", encoding="utf-8") as fh:
-        json.dump(metadata, fh, indent=2)
+    metadata_path = output_folder / create_timestamped_filename(
+        base_filename, timestamp, "metadata", "json"
+    )
+    save_metadata_json(metadata, metadata_path)
 
     print(f"CSV written to {output_csv}")
     print(f"Metadata written to {metadata_path}")
