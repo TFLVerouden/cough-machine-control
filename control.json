@@ -1,0 +1,26 @@
+{
+    "serial": {
+        "arduino_com_port": 14,
+        "arduino_baud_rate": 115200,
+        "arduino_timeout": 0,
+        "spraytech_lift_com_port": 1,
+        "spraytech_lift_baud_rate": 9600,
+        "spraytech_timeout": 1,
+        "pump_com_port": null,
+        "pump_baud_rate": 19200,
+        "pump_timeout": 0.3
+    },
+    "dataset": {
+        "dataset_file_path": "C:\\CoughMachineData",
+        "delimiter": ",",
+        "save_output": true,
+        "save_name": "test",
+        "save_path": "C:\\CoughMachineData"
+    },
+    "pump": {
+        "flow_rate": 5,
+        "diameter": 10.3,
+        "mode": "PMP"
+    },
+    "mode": "manual"
+}

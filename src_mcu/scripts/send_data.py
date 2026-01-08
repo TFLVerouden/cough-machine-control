@@ -4,8 +4,8 @@ import serial
 # Configure variables
 serial_port = "COM14"
 baud = 115200
-filename = "drawn_curve.csv"
-delimiter = ';'
+filename = "PyramidFlowProfile.csv"
+delimiter = ','
 
 # =========================================================================================
 # Extract time and value arrays from csv file. Input: "filename", "delimiter"
