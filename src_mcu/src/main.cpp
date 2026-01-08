@@ -314,7 +314,9 @@ void openValveTrigger() {
       ((1 << g_APinDescription[PIN_VALVE].ulPin) |
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
-  recordEvent(1, -1, -1); // Log valve open event
+  recordEvent(1, -1,
+              0.62350602 * R_click.get_EMA_mA() -
+                  2.51344790); // Log valve open event
 
   DEBUG_PRINTLN(
       "Solenoïd valve opened using openValveTrigger()"); // Valve opened
@@ -328,7 +330,9 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
-  recordEvent(0, -1, -1); // Log valve close event
+  recordEvent(0, -1,
+              0.62350602 * R_click.get_EMA_mA() -
+                  2.51344790); // Log valve close event
 
   DEBUG_PRINT(
       "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
@@ -808,6 +812,7 @@ void loop() {
         printError(
             "Pressure regulator not set! Set it first using SP command.");
       } else {
+        duration = 0;
         isExecuting = true;
         runCalltTime = micros();
         sequenceIndex = 0;
