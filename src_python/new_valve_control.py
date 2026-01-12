@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import pumpy3
+import json
 
 # from functions import Gupta2009 as Gupta
 
@@ -208,14 +209,14 @@ def manual_mode():
         cmd = input("Enter command: ").strip()
 
         if cmd.lower() == 'exit':
-            next_step_default = "q"
-            next_step = (input(
-                "What to do next - continue to experimental mode or quit? (e/q): ").strip().lower() or next_step_default)
-            if next_step == 'q':
+            answer = input("Are you sure you want to exit manual mode? (y/n): " ).strip().lower()
+            if answer == 'y':
                 print("Exiting program.")
+                ser.close()
+                lift.close_connection()
                 exit()
-            elif next_step == 'e':
-                break
+            else:
+                continue
         else:
             ser.write((cmd + '\n').encode('utf-8'))
             time.sleep(0.1)  # wait for response
@@ -224,24 +225,21 @@ def manual_mode():
                 print(f"Response: {response}")
 
 
-def send_dataset():
-    default_delimiter = ','
-    delimiter = (input(f'Enter CSV delimiter (press ENTER for "{default_delimiter}"): ').strip(
-    ) or default_delimiter)
+def send_dataset(delimiter=',', file_path=None):
 
     # Defining defaul file path
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_filepath = os.path.join(script_dir, 'drawn_curve.csv')
-
-    while True:
-        filename = (input(f'Enter dataset filename (press ENTER for "{default_filepath}"): ').strip(
-        ) or default_filepath)
-        try:
-            data = extract_csv_dataset(filename, delimiter)
-            print(f'Sending dataset from file: {filename}')
-            break  # Exit loop if file is successfully read
-        except FileNotFoundError:
-            print(f'Error: File "{filename}" not found. Please try again.')
+    if file_path is None:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        filename = os.path.join(script_dir, 'drawn_curve.csv')
+    else:
+        filename = file_path
+    
+    try:
+        data = extract_csv_dataset(filename, delimiter)
+        print(f'Sending dataset from file: {filename}')
+    except FileNotFoundError:
+        print(f'Error: File "{filename}" not found.')
+        exit()
 
     serial_command = format_csv_dataset(data[0], data[1])
     ser.write(serial_command.encode('utf-8'))
@@ -299,12 +297,14 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
     print(
         f"Experiment data saved to {filename} in {full_path}")
     
-def initialize_pump(pump_baudrate = 19200, pump_timeout = 0.3, pump_diameter = 10.3, pump_mode = "PMP"):
+def initialize_pump(pump_com_port = None, pump_baudrate = 19200, pump_timeout = 0.3, pump_diameter = 10.3, pump_mode = "PMP"):
     # Initialize pump
     print("Initializing pump...")
-    pump_port = find_serial_device(description='PHD')
+    if not pump_com_port:
+        pump_com_port = find_serial_device(description='PHD')
+    
     chain = pumpy3.Chain(
-        pump_port,        
+        pump_com_port,        
         baudrate=pump_baudrate,  
         timeout=pump_timeout
     )
@@ -321,26 +321,67 @@ def initialize_pump(pump_baudrate = 19200, pump_timeout = 0.3, pump_diameter = 1
     pump.stop()
     print("Pump initialized and flushed.")
 
+def configure_settings():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, 'config.json')
+
+    try:
+        with open(config_path, 'r') as config_file:
+            config = json.load(config_file)
+            print("Configuration file succesfully loaded.")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading configuration: {e}")
+        exit()
+
+    return config
+
 
 if __name__ == '__main__':
+    """
+    LOAD ALL SETTINGS FROM CONFIG FILE
+    """
+    config = configure_settings()
+
+    # Load serial variables
+    arduino_com_port = config['serial']['arduino_com_port']
+    arduino_baudrate = config['serial']['arduino_baud_rate']
+    arduino_timeout = config['serial']['arduino_timeout']
+    spraytech_lift_com_port = config['serial']['spraytech_lift_com_port']
+    spraytech_lift_baud_rate = config['serial']['spraytech_lift_baud_rate']
+    spraytech_lift_timeout = config['serial']['spraytech_lift_timeout']
+    pump_com_port = config['serial']['pump_com_port']
+    pump_baudrate = config['serial']['pump_baudrate']
+    pump_timeout = config['serial']['pump_timeout']
+    # Load dataset variables
+    dataset_file_path = config['dataset']['dataset_file_path']
+    delimiter = config['dataset']['delimiter']
+    save_output = config['dataset']['save_output']
+    save_name = config['dataset']['save_name']
+    save_path = config['dataset']['save_path']
+    # Load pump variables
+    use_pump = config['pump']['use_pump']
+    pump_diameter = config['pump']['diameter']
+    pump_flow_rate = config['pump']['flow_rate']
+    pump_mode = config['pump']['mode']
+    # Load mode
+    mode = config['mode']
+
 
     # Set up the Arduino serial connection
-    arduino_port = find_serial_device(description='ItsyBitsy')
-    arduino_baudrate = 115200
+    if not arduino_com_port:
+        arduino_com_port = find_serial_device(description='ItsyBitsy')
 
-    if arduino_port:
-        ser = serial.Serial(arduino_port, arduino_baudrate,
-                            timeout=0)  # Non-blocking mode
+    if arduino_com_port:
+        ser = serial.Serial(arduino_com_port, arduino_baudrate,
+                            timeout=arduino_timeout)  # Non-blocking mode
         time.sleep(1)  # Wait for the connection to establish
-        print(f'Connected to Arduino on {arduino_port}')
+        print(f'Connected to Arduino on {arduino_com_port}')
     else:
         raise SystemError('Arduino not found')
     
-    use_pump_default = "y"
-    use_pump = (input(f'Do you want to use the pump (press ENTER for {use_pump_default})? (y/n): ').strip().lower()
-            or use_pump_default)
-    if use_pump == "y":
-        initialize_pump()
+
+    if use_pump == True:
+        initialize_pump(pump_com_port, pump_baudrate, pump_timeout, pump_diameter, pump_mode)
 
     # Create the data directory if it doesn't exist
     Spraytec_data_saved_check()
@@ -349,38 +390,17 @@ if __name__ == '__main__':
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
 
-    # Ask which mode to use
-    mode_default = "m"
-    mode = (input(
-        "Select mode - manual or experimental? (m/e): ").strip().lower() or mode_default)
-
-    if mode == 'm':
+    if mode == "manual":
         manual_mode()
-    elif mode == "e":
+    elif mode == "experimental":
         print("\n=== EXPERIMENT MODE ===")
 
-    # Ask if the user wants to save the data
-    save_default = "n"
-    save = (input(f'Do you want to save the experimental data (press ENTER for {save_default})? (y/n): ').strip().lower()
-            or save_default)
-
-    # Get the experiment name
-    if save == "y":
-        experiment_name_default = "test"
-        experiment_name = (input(f'Enter experiment name (press ENTER for '
-                                 f'"{experiment_name_default}"): ').strip()
-                           or experiment_name_default)
-
-    # Processing compare to model
-    if save == "y":
-        model_default = "n"
-        model = (input('Do you want to include the Gupta model in the data (press ENTER for 'f'{model_default})? (y/n): ').strip().lower()
-                 or model_default)
-
     # Connect to SprayTec lift if available
-    lift_port = find_serial_device(description='Mega', continue_on_error=True)
-    if lift_port:
-        lift = SprayTecLift(lift_port)
+    if not spraytech_lift_com_port:
+        spraytech_lift_com_port = find_serial_device(description='Mega', continue_on_error=True)
+
+    if spraytech_lift_com_port:
+        lift = SprayTecLift(spraytech_lift_com_port, spraytech_lift_baud_rate, spraytech_lift_timeout)
     else:
         print('Warning: SprayTec lift not found; height will not be recorded.')
 
@@ -401,7 +421,7 @@ if __name__ == '__main__':
             load_dataset = (input(
                 f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
             if load_dataset == 'y':
-                send_dataset()
+                send_dataset(delimiter, dataset_file_path)
 
                 # Immediately check for the confirmation
                 if verify_mcu_dataset_received_with_timeout():
@@ -446,7 +466,7 @@ if __name__ == '__main__':
     # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature()
 
-    if lift_port:
+    if spraytech_lift_com_port:
         height = lift.get_height()
     else:
         height = np.nan
@@ -476,10 +496,10 @@ if __name__ == '__main__':
                     print("Saved experiment detected. Starting file retrieval...")
 
                     timestamp = time.strftime("%Y%m%d-%H%M%S")
-                    filename = f"{experiment_name}_{timestamp}.csv"
+                    filename = f"{save_name}_{timestamp}.csv"
 
                     retreive_experiment_data(
-                        filename, experiment_name, start_time, end_time, Temperature, RH, height)
+                        filename, save_name, start_time, end_time, Temperature, RH, height)
                 else:
                     print("Experiment completed. Data not saved as per user choice.")
 
