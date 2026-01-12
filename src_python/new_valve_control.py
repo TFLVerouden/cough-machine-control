@@ -298,6 +298,28 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
                 f.write(line)
     print(
         f"Experiment data saved to {filename} in {full_path}")
+    
+def initialize_pump(pump_baudrate = 19200, pump_timeout = 0.3, pump_diameter = 10.3, pump_mode = "PMP"):
+    # Initialize pump
+    print("Initializing pump...")
+    pump_port = find_serial_device(description='PHD')
+    chain = pumpy3.Chain(
+        pump_port,        
+        baudrate=pump_baudrate,  
+        timeout=pump_timeout
+    )
+
+    pump = pumpy3.PumpPHD2000_Refill(chain, address=0, name="PHD2000")
+
+    print("Flushing pump...")
+
+    pump.set_diameter(pump_diameter)     
+    pump.set_mode(pump_mode)
+    pump.set_rate(1, "ml/mn")
+    pump.run()
+    time.sleep(1)
+    pump.stop()
+    print("Pump initialized and flushed.")
 
 
 if __name__ == '__main__':
@@ -313,6 +335,12 @@ if __name__ == '__main__':
         print(f'Connected to Arduino on {arduino_port}')
     else:
         raise SystemError('Arduino not found')
+    
+    use_pump_default = "y"
+    use_pump = (input(f'Do you want to use the pump (press ENTER for {use_pump_default})? (y/n): ').strip().lower()
+            or use_pump_default)
+    if use_pump == "y":
+        initialize_pump()
 
     # Create the data directory if it doesn't exist
     Spraytec_data_saved_check()
