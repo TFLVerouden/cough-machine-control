@@ -1,31 +1,36 @@
 {
     "serial": {
-        "arduino_com_port": 14,
-        "arduino_baud_rate": 115200,
+        "arduino_com_port": null,
+        "arduino_baudrate": 115200,
         "arduino_timeout": 0,
+        "arduino_description": "ItsyBitsy",
         "spraytech_lift_com_port": null,
-        "spraytech_lift_baud_rate": 9600,
+        "spraytech_lift_baudrate": 9600,
         "spraytech_lift_timeout": 1,
+        "spraytech_description": "Mega",
         "pump_com_port": null,
-        "pump_baud_rate": 19200,
-        "pump_timeout": 0.3
+        "pump_baudrate": 19200,
+        "pump_timeout": 0.3,
+        "pump_description": "PHD"
     },
     "dataset": {
-        "dataset_file_path": "C:\\CoughMachineData\\PyramidFlowProfile.csv",
+        "dataset_file_path": "C:\\CoughMachineData\\RampFlowProfile.csv",
         "delimiter": ",",
-        "save_output": true,
-        "save_name": "test",
-        "save_path": "C:\\CoughMachineData"
+        "upload_dataset": true
     },
     "pump": {
-        "use_pump": true,
+        "use_pump": false,
         "flow_rate": 0.3,
         "diameter": 10.3,
         "mode": "PMP"
     },
-    "mode": "experimental",
-    "experiment": {
+    "run": {
+        "mode": "experimental",
+        "save_output": true,
+        "save_name": "TestsquareProfile",
+        "save_path": "C:\\CoughMachineData",
         "type": "square",
+        "duration": 500,
         "tank_pressure": 1
     }
 }

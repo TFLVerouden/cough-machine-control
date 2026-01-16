@@ -80,7 +80,7 @@ def find_serial_device(description, continue_on_error=False):
     if len(matching_ports) == 1:
         return matching_ports[0]
     elif len(matching_ports) > 1:
-        print('Multiple matching devices found:')
+        print(f'Multiple matching devices found for "{description}":')
         for idx, port in enumerate(ports):
             print(f'{idx+1}. {port.device} - {port.description}')
         choice = input(f'Select the device number for "{description}": ')
@@ -88,7 +88,7 @@ def find_serial_device(description, continue_on_error=False):
     else:
         if continue_on_error:
             return None
-        print('No matching devices found. Available devices:')
+        print(f'No matching devices found for "{description}". Available devices:')
         for port in ports:
             print(f'{port.device} - {port.description}')
         choice = input(f'Enter the COM port number for "{description}": COM')
@@ -213,14 +213,16 @@ def manual_mode():
             if answer == 'y':
                 print("Exiting program.")
                 ser.close()
-                lift.close_connection()
+                if spraytech_lift_com_port:
+                    lift.close_connection()
                 exit()
             else:
                 continue
         else:
             ser.write((cmd + '\n').encode('utf-8'))
-            time.sleep(0.1)  # wait for response
-            while ser.in_waiting > 0:
+            time.sleep(0.1)  # Small delay to allow MCU to respond
+            
+            if ser.in_waiting > 0:
                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 print(f"Response: {response}")
 
@@ -230,10 +232,12 @@ def send_dataset(delimiter=',', file_path=None):
     # Defining defaul file path
     if file_path is None:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        filename = os.path.join(script_dir, 'drawn_curve.csv')
+        filename = os.path.join(script_dir, 'default.csv')
     else:
         filename = file_path
     
+    print(f'Preparing to send dataset from file.')
+
     try:
         data = extract_csv_dataset(filename, delimiter)
         print(f'Sending dataset from file: {filename}')
@@ -264,7 +268,7 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
 
     started = False
 
-    directory = "C:\\CoughMachineData"
+    directory = save_path
     os.makedirs(directory, exist_ok=True)
     full_path = os.path.join(directory, filename)
 
@@ -301,25 +305,32 @@ def initialize_pump(pump_com_port = None, pump_baudrate = 19200, pump_timeout = 
     # Initialize pump
     print("Initializing pump...")
     if not pump_com_port:
-        pump_com_port = find_serial_device(description='PHD')
+        pump_com_port = find_serial_device(description=pump_description, continue_on_error=False)
     
-    chain = pumpy3.Chain(
-        pump_com_port,        
-        baudrate=pump_baudrate,  
-        timeout=pump_timeout
-    )
+    try:
+        chain = pumpy3.Chain(
+            pump_com_port,        
+            baudrate=pump_baudrate,  
+            timeout=pump_timeout
+        )
 
-    pump = pumpy3.PumpPHD2000_Refill(chain, address=0, name="PHD2000")
+        pump = pumpy3.PumpPHD2000_Refill(chain, address=0, name="PHD2000")
 
-    print("Flushing pump...")
+        print("Flushing pump...")
 
-    pump.set_diameter(pump_diameter)     
-    pump.set_mode(pump_mode)
-    pump.set_rate(1, "ml/mn")
-    pump.run()
-    time.sleep(1)
-    pump.stop()
-    print("Pump initialized and flushed.")
+        pump.set_diameter(pump_diameter)     
+        pump.set_mode(pump_mode)
+        pump.set_rate(1, "ml/mn")
+        pump.run()
+        time.sleep(1)
+        pump.stop()
+        print("Pump initialized and flushed.")
+
+        return pump
+
+    except Exception as e:
+        print(f"Error initializing pump: {e}")
+        return None
 
 def configure_settings():
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -335,6 +346,9 @@ def configure_settings():
 
     return config
 
+def set_pressure(pressure_bar):
+    ser.write(f'SP {pressure_bar}\n'.encode())
+
 
 if __name__ == '__main__':
     """
@@ -344,44 +358,62 @@ if __name__ == '__main__':
 
     # Load serial variables
     arduino_com_port = config['serial']['arduino_com_port']
-    arduino_baudrate = config['serial']['arduino_baud_rate']
+    arduino_baudrate = config['serial']['arduino_baudrate']
     arduino_timeout = config['serial']['arduino_timeout']
+    arduino_description = config['serial']['arduino_description']
     spraytech_lift_com_port = config['serial']['spraytech_lift_com_port']
-    spraytech_lift_baud_rate = config['serial']['spraytech_lift_baud_rate']
+    spraytech_lift_baud_rate = config['serial']['spraytech_lift_baudrate']
     spraytech_lift_timeout = config['serial']['spraytech_lift_timeout']
+    spraytech_description = config['serial']['spraytech_description']
     pump_com_port = config['serial']['pump_com_port']
     pump_baudrate = config['serial']['pump_baudrate']
     pump_timeout = config['serial']['pump_timeout']
+    pump_description = config['serial']['pump_description']
     # Load dataset variables
     dataset_file_path = config['dataset']['dataset_file_path']
     delimiter = config['dataset']['delimiter']
-    save_output = config['dataset']['save_output']
-    save_name = config['dataset']['save_name']
-    save_path = config['dataset']['save_path']
+    upload_dataset = config['dataset']['upload_dataset']
     # Load pump variables
     use_pump = config['pump']['use_pump']
     pump_diameter = config['pump']['diameter']
     pump_flow_rate = config['pump']['flow_rate']
     pump_mode = config['pump']['mode']
-    # Load mode
-    mode = config['mode']
+    # Load run details
+    mode = config['run']['mode']
+    save_output = config['run']['save_output']
+    save_name = config['run']['save_name']
+    save_path = config['run']['save_path']
+    run_type = config['run']['type']
+    duration = config['run']['duration']
+    tank_pressure = config['run']['tank_pressure']
 
 
     # Set up the Arduino serial connection
     if not arduino_com_port:
-        arduino_com_port = find_serial_device(description='ItsyBitsy')
+        arduino_com_port = find_serial_device(description=arduino_description)
 
-    if arduino_com_port:
+    try:
         ser = serial.Serial(arduino_com_port, arduino_baudrate,
                             timeout=arduino_timeout)  # Non-blocking mode
         time.sleep(1)  # Wait for the connection to establish
         print(f'Connected to Arduino on {arduino_com_port}')
-    else:
-        raise SystemError('Arduino not found')
-    
+    except Exception as e:
+        print(f'Error connecting to Arduino: {e}')
+        exit()
 
+    # Initialize pump if required
     if use_pump == True:
-        initialize_pump(pump_com_port, pump_baudrate, pump_timeout, pump_diameter, pump_mode)
+        pump = initialize_pump(pump_com_port, pump_baudrate, pump_timeout, pump_diameter, pump_mode)
+
+    # Connect to SprayTec lift if available
+    if not spraytech_lift_com_port:
+        spraytech_lift_com_port = find_serial_device(description=spraytech_description, continue_on_error=False)
+
+    try:
+        lift = SprayTecLift(spraytech_lift_com_port, spraytech_lift_baud_rate, spraytech_lift_timeout)
+    except Exception as e:
+        print(f'Error connecting to SprayTec lift: {e}')
+        spraytech_lift_com_port = None
 
     # Create the data directory if it doesn't exist
     Spraytec_data_saved_check()
@@ -395,73 +427,23 @@ if __name__ == '__main__':
     elif mode == "experimental":
         print("\n=== EXPERIMENT MODE ===")
 
-    # Connect to SprayTec lift if available
-    if not spraytech_lift_com_port:
-        spraytech_lift_com_port = find_serial_device(description='Mega', continue_on_error=True)
+    if run_type == "profile" and upload_dataset == True:
 
-    if spraytech_lift_com_port:
-        lift = SprayTecLift(spraytech_lift_com_port, spraytech_lift_baud_rate, spraytech_lift_timeout)
-    else:
-        print('Warning: SprayTec lift not found; height will not be recorded.')
+        send_dataset(delimiter, dataset_file_path)
 
-    while True:
-        experiment_type_default = "1"
-        experiment_type = (input(
-            f'Select experiment type - 1: Flow profile, 0: Square profile (press ENTER for {experiment_type_default}): ').strip()
-            or experiment_type_default)
-
-        if experiment_type == "0":
-            duration_default = 500
-            duration = int((input(
-                f'Enter valve open duration in ms (press ENTER for {duration_default} ms): ')).strip() or duration_default)
-            break
-        elif experiment_type == "1":
-            # Ask if the user wants to load a dataset
-            load_dataset_default = "n"
-            load_dataset = (input(
-                f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
-            if load_dataset == 'y':
-                send_dataset(delimiter, dataset_file_path)
-
-                # Immediately check for the confirmation
-                if verify_mcu_dataset_received_with_timeout():
-                    print("Proceeding to valve control phase.")
-                    break
-                else:
-                    print("Failed to sync with MCU. Aborting.")
-                    sys.exit(1)
-            elif load_dataset == 'n':
-                print("Proceeding without loading a dataset.")
-                break
-
-    default_pressure = 1
-    pressure = (input(f'Enter target tank pressure in bar (press ENTER for {default_pressure} bar): ').strip(
-    ) or str(default_pressure))
-    ser.write(f'SP {pressure}\n'.encode())
-
-    # Ask if ready to execute experiment
-    while True:
-        ready_default = "n"
-        ready = (input(
-            f'Ready to start the experiment (press ENTER for {ready_default})? (y/n): ').strip().lower() or ready_default)
-        if ready == 'y':
-            if experiment_type == '1':
-                ser.write("RUN\n".encode())
-                time.sleep(0.1)  # wait for response
-                while ser.in_waiting > 0:
-                    response = ser.readline().decode('utf-8', errors='ignore').rstrip()
-                    if response == "EXECUTING_DATASET":
-                        print("MCU has started executing the dataset.")
-                    else:
-                        print(f"Something went wrong, response: {response}")
-                break
-            elif experiment_type == '0':
-                ser.write("SV 20\n".encode())
-                time.sleep(0.2)  # wait for proportional valve to open
-                ser.write(f"O {duration}\n".encode())
-                break
+        if verify_mcu_dataset_received_with_timeout():
+            print("Proceeding to valve control phase.")
         else:
-            print('Take your time. Press y when ready.')
+            print("Failed to send dataset to MCU. Aborting.")
+            sys.exit(1)
+
+    set_pressure(tank_pressure)
+
+    while True:
+        default_ready = "n"
+        ready = (input(f"Ready to start experiment (press ENTER for {default_ready})? (y/n): ").strip().lower() or default_ready)
+        if ready == 'y':
+            break
 
     # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature()
@@ -478,6 +460,95 @@ if __name__ == '__main__':
     starting_experiment = True
     finished_experiment = False
 
+    if run_type == 'profile':
+        ser.write("RUN\n".encode())
+        time.sleep(0.1)  # wait for response
+        while ser.in_waiting > 0:
+            response = ser.readline().decode('utf-8', errors='ignore').rstrip()
+            if response == "EXECUTING_DATASET":
+                print("MCU has started executing the dataset.")
+            else:
+                print(f"Something went wrong, response: {response}")
+    elif run_type == 'square':
+        ser.write("SV 20\n".encode())
+        time.sleep(0.2)  # wait for proportional valve to open
+        ser.write(f"O {duration}\n".encode())
+    
+
+    # while True:
+    #     experiment_type_default = "1"
+    #     experiment_type = (input(
+    #         f'Select experiment type - 1: Flow profile, 0: Square profile (press ENTER for {experiment_type_default}): ').strip()
+    #         or experiment_type_default)
+
+    #     if experiment_type == "0":
+    #         duration_default = 500
+    #         duration = int((input(
+    #             f'Enter valve open duration in ms (press ENTER for {duration_default} ms): ')).strip() or duration_default)
+    #         break
+    #     elif experiment_type == "1":
+    #         # Ask if the user wants to load a dataset
+    #         load_dataset_default = "n"
+    #         load_dataset = (input(
+    #             f'Do you want to upload a flow curve (press ENTER for {load_dataset_default})? (y/n): ').strip().lower() or load_dataset_default)
+    #         if load_dataset == 'y':
+    #             send_dataset(delimiter, dataset_file_path)
+
+    #             # Immediately check for the confirmation
+    #             if verify_mcu_dataset_received_with_timeout():
+    #                 print("Proceeding to valve control phase.")
+    #                 break
+    #             else:
+    #                 print("Failed to sync with MCU. Aborting.")
+    #                 sys.exit(1)
+    #         elif load_dataset == 'n':
+    #             print("Proceeding without loading a dataset.")
+    #             break
+
+    # default_pressure = 1
+    # pressure = (input(f'Enter target tank pressure in bar (press ENTER for {default_pressure} bar): ').strip(
+    # ) or str(default_pressure))
+    # ser.write(f'SP {pressure}\n'.encode())
+
+    # # Ask if ready to execute experiment
+    # while True:
+    #     ready_default = "n"
+    #     ready = (input(
+    #         f'Ready to start the experiment (press ENTER for {ready_default})? (y/n): ').strip().lower() or ready_default)
+    #     if ready == 'y':
+    #         if experiment_type == '1':
+    #             ser.write("RUN\n".encode())
+    #             time.sleep(0.1)  # wait for response
+    #             while ser.in_waiting > 0:
+    #                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
+    #                 if response == "EXECUTING_DATASET":
+    #                     print("MCU has started executing the dataset.")
+    #                 else:
+    #                     print(f"Something went wrong, response: {response}")
+    #             break
+    #         elif experiment_type == '0':
+    #             ser.write("SV 20\n".encode())
+    #             time.sleep(0.2)  # wait for proportional valve to open
+    #             ser.write(f"O {duration}\n".encode())
+    #             break
+    #     else:
+    #         print('Take your time. Press y when ready.')
+
+    # # Take humidity, temprature, pressure readings and lift height readings
+    # RH, Temperature = reading_temperature()
+
+    # if spraytech_lift_com_port:
+    #     height = lift.get_height()
+    # else:
+    #     height = np.nan
+
+    # start_time = datetime.datetime.now(datetime.timezone.utc)
+    # loop_start_time = time.time()
+    # print('Starting experiment...')
+
+    # starting_experiment = True
+    # finished_experiment = False
+
     while True:
 
         if ser.in_waiting > 0:
@@ -489,10 +560,10 @@ if __name__ == '__main__':
                 finished_experiment = True
 
                 # Close the proportional valve if necessary
-                if experiment_type == '0':
+                if run_type == 'square':
                     ser.write('SV 12\n'.encode())
 
-                if save == 'y':
+                if save_output == True:
                     print("Saved experiment detected. Starting file retrieval...")
 
                     timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -506,7 +577,7 @@ if __name__ == '__main__':
         # Break the loop if experiment is finished
         if finished_experiment:
             ser.close()
-            if lift_port:
+            if spraytech_lift_com_port:
                 lift.close_connection()
 
             print("Serial connections closed")
