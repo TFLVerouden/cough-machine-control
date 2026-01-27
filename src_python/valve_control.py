@@ -18,7 +18,7 @@ print(parent_dir)
 function_dir = os.path.join(parent_dir,'functions')
 print(function_dir)
 sys.path.append(function_dir)
-import Gupta2009 as Gupta
+from functions import Gupta2009 as Gupta
 import pumpy 
 # from Ximea import Ximea #not needed anymore
 
@@ -105,6 +105,16 @@ def reading_temperature(verbose=False):
     if verbose:
         print(f'Temperature: {Temperature} °C; relative humidity: {RH} %')
     return RH, Temperature
+
+def reading_pressure(verbose=False):
+    ser.write('P?\n'.encode())
+    time.sleep(0.1) #wait for the response
+    pressure = ser.readline().decode('utf-8').rstrip()
+    pressure_value = pressure.lstrip('P')
+
+    if verbose:
+        print(f'Pressure: {pressure_value} mbar')
+    return pressure_value
 
 class SprayTecLift(serial.Serial):
     def __init__(self, port, baudrate=9600, timeout=1):

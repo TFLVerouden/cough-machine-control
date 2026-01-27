@@ -5,8 +5,10 @@
  * Monitors pressure and environmental conditions.
  */
 
+#include "Adafruit_SPIFlash.h"
 #include "DvG_StreamCommand.h"
 #include "MIKROE_4_20mA_RT_Click.h"
+#include "SdFat.h"
 #include <Adafruit_DotStar.h>
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
@@ -24,7 +26,7 @@
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -65,6 +67,30 @@ DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 int sequenceIndex = 0;     // Index of dataset to execute on time
 int dataIndex = 0;         // Number of datapoints of dataset stored
 int datasetDuration = 0.0; // Duration of the uploaded flow profile
+
+// ============================================================================
+// SETUP FOR QSPI FLASH FILESYSTEM
+// ============================================================================
+// Setup for the ItsyBitsy M4 internal QSPI flash
+Adafruit_FlashTransport_QSPI flashTransport;
+Adafruit_SPIFlash flash(&flashTransport);
+// The filesystem object
+FatFileSystem fatfs;
+
+// ============================================================================
+// DATASET EXECUTION LOGGING STRUCTURE (IN RAM)
+// ============================================================================
+struct __attribute__((__packed__)) LogEntry {
+  uint32_t timestamp; // 4 bytes (micros)
+  int8_t valve1;      // 1 byte (1, 0, -1)
+  float valve2_mA;    // 4 bytes
+  float pressure;     // 4 bytes
+};
+
+// INITIALIZE LOGGING ARRAY IN RAM
+#define MAX_RECORDS 2000
+LogEntry logs[MAX_RECORDS];
+int currentCount = 0;
 
 // ============================================================================
 // TIMING PARAMETERS
@@ -134,11 +160,67 @@ const uint32_t COLOR_OFF = 0x000000; // Off
 // ============================================================================
 // LED HELPER FUNCTION
 // ============================================================================
-
 void setLedColor(uint32_t color) {
   // Set the DotStar LED to a specific color
   led.setPixelColor(0, color);
   led.show();
+}
+// ============================================================================
+// FUNCTION TO STORE EXECUTION EVENTS IN RAM
+// ============================================================================
+void recordEvent(int8_t v1, float v2, float press) {
+  if (currentCount < MAX_RECORDS) {
+    logs[currentCount] = {micros(), v1, v2, press};
+    currentCount++;
+  }
+}
+
+// ============================================================================
+// FUNCTION TO STORE DATA TO FLASH INSTEAD OF RAM
+// ============================================================================
+void saveToFlash() {
+  // Remove the old file if it exists
+  if (fatfs.exists("experiment_dataset.csv")) {
+    fatfs.remove("experiment_dataset.csv");
+  }
+
+  File file = fatfs.open("experiment_dataset.csv", FILE_WRITE);
+
+  if (file) {
+    file.printf("Trigger T0 (us),%lu\n", tick);
+    file.println("us,v1 action,v2 set mA,bar"); // Header
+    for (int i = 0; i < currentCount; i++) {
+      file.printf("%lu,%d,%.2f,%.2f\n", logs[i].timestamp, logs[i].valve1,
+                  logs[i].valve2_mA, logs[i].pressure);
+    }
+    file.close();
+    Serial.println("DONE_SAVING_TO_FLASH");
+  } else {
+    DEBUG_PRINTLN("Error opening file for writing!");
+  }
+  currentCount = 0; // Reset RAM log count after saving
+}
+
+void dumpToSerial() {
+
+  if (!fatfs.exists("experiment_dataset.csv")) {
+    DEBUG_PRINTLN("No dataset file found in flash!");
+    return;
+  }
+
+  File file = fatfs.open("experiment_dataset.csv", FILE_READ);
+  if (file) {
+    Serial.println("START_OF_FILE");
+
+    while (file.available()) {
+      Serial.write(file.read());
+    }
+
+    Serial.println("END_OF_FILE");
+    file.close();
+  } else {
+    DEBUG_PRINTLN("Error opening file for reading!");
+  }
 }
 
 // ============================================================================
@@ -201,6 +283,27 @@ void setup() {
 
   // Show idle color to indicate system is ready
   setLedColor(COLOR_IDLE);
+
+  // Initialize flash and filesystem
+  if (!flash.begin()) {
+    DEBUG_PRINTLN("Flash initialization failed!");
+  }
+  DEBUG_PRINTLN("Flash initialized.");
+
+  // Mount the filesystem
+  if (!fatfs.begin(&flash)) {
+    DEBUG_PRINTLN("Flash chip could also not be mounted, trying to format...");
+
+    if (!flash.eraseChip()) {
+      DEBUG_PRINTLN("ERROR: Failed to erase chip!");
+    }
+
+    // Try mounting again
+    if (!fatfs.begin(&flash)) {
+      DEBUG_PRINTLN("ERROR: Still cannot mount filesystem!");
+    }
+  }
+  DEBUG_PRINTLN("Flash filesystem mounted successfully.");
 }
 
 // ============================================================================
@@ -214,6 +317,10 @@ void openValveTrigger() {
       ((1 << g_APinDescription[PIN_VALVE].ulPin) |
        (1 << g_APinDescription[PIN_TRIG].ulPin));
 
+  recordEvent(1, -1,
+              0.62350602 * R_click.get_EMA_mA() -
+                  2.51344790); // Log valve open event
+
   DEBUG_PRINTLN(
       "Solenoïd valve opened using openValveTrigger()"); // Valve opened
                                                          // confirmation (debug
@@ -226,10 +333,14 @@ void closeValve() {
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
       (1 << g_APinDescription[PIN_VALVE].ulPin);
 
+  recordEvent(0, -1,
+              0.62350602 * R_click.get_EMA_mA() -
+                  2.51344790); // Log valve close event
+
   DEBUG_PRINT(
       "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
                                                    // (debug only for speed)
-  Serial.println("!");
+  // Serial.println("!");
 }
 
 void startLaser() {
@@ -315,6 +426,7 @@ void resetDataArrays() {
   memset(time_array, 0, sizeof(time_array));
   memset(value_array, 0, sizeof(value_array));
   incomingCount = 0;
+  // Todo: Review if these resets are necessary
   // Added these three resets after testing, need reviewing!
   dataIndex = 0;
   sequenceIndex = 0;
@@ -364,6 +476,7 @@ void loop() {
     DEBUG_PRINTLN("Solenoïd valve closed after duration check.");
     closeValve();
     solValveOpen = false;
+    saveToFlash(); // Save log to flash
 
     // If in continuous detection mode, restart detection immediately
     if (continuousDetection) {
@@ -478,6 +591,7 @@ void loop() {
         valve.set_mA(default_valve); // Close proportional valve
         propValveOpen = false;
         setLedColor(COLOR_OFF);
+        saveToFlash(); // Save log to flash instead of RAM
         return;
       } else {
         valve.set_mA(value_array[sequenceIndex]);
@@ -495,6 +609,10 @@ void loop() {
         DEBUG_PRINT((now / 1000) - time_array[sequenceIndex]);
         DEBUG_PRINT("ms, setpoint: ");
         DEBUG_PRINTLN(value_array[sequenceIndex]);
+
+        // Record event in packed structure in RAM
+        recordEvent(-1, value_array[sequenceIndex],
+                    0.62350602 * R_click.get_EMA_mA() - 2.51344790);
 
         sequenceIndex++;
       }
@@ -682,6 +800,8 @@ void loop() {
         dataIndex++;
       }
 
+      Serial.println("DATASET_RECEIVED");
+
       // LED color off when whole dataset is received
       setLedColor(COLOR_OFF);
 
@@ -695,11 +815,18 @@ void loop() {
         printError(
             "Pressure regulator not set! Set it first using SP command.");
       } else {
+        duration = 0;
         isExecuting = true;
         runCalltTime = micros();
         sequenceIndex = 0;
         setLedColor(COLOR_EXECUTING);
+        Serial.println("EXECUTING_DATASET");
       }
+
+    } else if (strncmp(command, "F", 1) == 0) {
+
+      DEBUG_PRINTLN("Dumping data to serial");
+      dumpToSerial();
 
     } else if (strncmp(command, "O", 1) == 0) {
       // Command: O or O <duration_ms>
@@ -733,6 +860,7 @@ void loop() {
       // Command: C
       // Manually close valve (override)
       closeValve();
+      saveToFlash(); // Save log to flash
       solValveOpen = false;
 
       // Stop detection if it was running
@@ -803,9 +931,11 @@ void loop() {
           "L <us>  - Set delay before valve opening to <us> microseconds");
       DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
       DEBUG_PRINTLN("SP <bar> - Set pressure regulator to <bar>");
-      DEBUG_PRINTLN("LOAD <N_datapoints> <csv dataset> - Load dataset, format: "
+      DEBUG_PRINTLN("LOAD <N_datapoints> <dataset duration (ms)> <csv dataset> "
+                    "- Load dataset, format: "
                     "<ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
       DEBUG_PRINTLN("RUN     - Execute loaded dataset");
+      DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
       DEBUG_PRINTLN("P?      - Read pressure");
       DEBUG_PRINTLN("T?      - Read temperature & humidity");
       DEBUG_PRINTLN("S?      - System status");
@@ -828,7 +958,7 @@ void loop() {
         }
       }
       DEBUG_PRINT("Proportional valve: ");
-      DEBUG_PRINTLN(propValveOpen ? "OPEN" : "CLOSED");
+      DEBUG_PRINTLN(valve.get_last_set_bitval() > 2402 ? "OPEN" : "CLOSED");
       DEBUG_PRINT("Dataset in memory: ");
       DEBUG_PRINTLN((dataIndex == 0) ? "FALSE" : "TRUE");
       DEBUG_PRINT("Executing dataset: ");
@@ -850,6 +980,8 @@ void loop() {
       DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Pressure (raw): ");
       DEBUG_PRINT(R_click.get_EMA_mA());
+      DEBUG_PRINT("Pressure (bar): ");
+      DEBUG_PRINTLN(0.62350602 * R_click.get_EMA_mA() - 2.51344790);
       DEBUG_PRINTLN(" mA");
       DEBUG_PRINT("Uptime: ");
       DEBUG_PRINT(millis() / 1000);
