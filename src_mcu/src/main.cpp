@@ -102,9 +102,8 @@ uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
 uint32_t valve_delay_open =
     11000; // Delay between solenoid valve and proportional valve opening [µs]
            // (positive is sol first)
-int32_t valve_delay_close =
-    -40000; // Delay between proportional valve and solenoid valve closing [µs]
-            // (negative is sol first)
+int32_t valve_delay_close = 0; // Delay between proportional valve and solenoid
+                               // valve closing [µs] (negative is sol first)
 uint32_t runCalltTime = 0; // Time elapsed since "RUN" command [µs]
 
 // ============================================================================

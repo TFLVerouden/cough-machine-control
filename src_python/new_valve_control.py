@@ -88,7 +88,8 @@ def find_serial_device(description, continue_on_error=False):
     else:
         if continue_on_error:
             return None
-        print(f'No matching devices found for "{description}". Available devices:')
+        print(
+            f'No matching devices found for "{description}". Available devices:')
         for port in ports:
             print(f'{port.device} - {port.description}')
         choice = input(f'Enter the COM port number for "{description}": COM')
@@ -209,7 +210,8 @@ def manual_mode():
         cmd = input("Enter command: ").strip()
 
         if cmd.lower() == 'exit':
-            answer = input("Are you sure you want to exit manual mode? (y/n): " ).strip().lower()
+            answer = input(
+                "Are you sure you want to exit manual mode? (y/n): ").strip().lower()
             if answer == 'y':
                 print("Exiting program.")
                 ser.close()
@@ -221,7 +223,7 @@ def manual_mode():
         else:
             ser.write((cmd + '\n').encode('utf-8'))
             time.sleep(0.1)  # Small delay to allow MCU to respond
-            
+
             if ser.in_waiting > 0:
                 response = ser.readline().decode('utf-8', errors='ignore').rstrip()
                 print(f"Response: {response}")
@@ -235,7 +237,7 @@ def send_dataset(delimiter=',', file_path=None):
         filename = os.path.join(script_dir, 'default.csv')
     else:
         filename = file_path
-    
+
     print(f'Preparing to send dataset from file.')
 
     try:
@@ -300,17 +302,19 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
                 f.write(line)
     print(
         f"Experiment data saved to {filename} in {full_path}")
-    
-def initialize_pump(pump_com_port = None, pump_baudrate = 19200, pump_timeout = 0.3, pump_diameter = 10.3, pump_mode = "PMP"):
+
+
+def initialize_pump(pump_com_port=None, pump_baudrate=19200, pump_timeout=0.3, pump_diameter=10.3, pump_mode="PMP"):
     # Initialize pump
     print("Initializing pump...")
     if not pump_com_port:
-        pump_com_port = find_serial_device(description=pump_description, continue_on_error=False)
-    
+        pump_com_port = find_serial_device(
+            description=pump_description, continue_on_error=False)
+
     try:
         chain = pumpy3.Chain(
-            pump_com_port,        
-            baudrate=pump_baudrate,  
+            pump_com_port,
+            baudrate=pump_baudrate,
             timeout=pump_timeout
         )
 
@@ -318,7 +322,7 @@ def initialize_pump(pump_com_port = None, pump_baudrate = 19200, pump_timeout = 
 
         print("Flushing pump...")
 
-        pump.set_diameter(pump_diameter)     
+        pump.set_diameter(pump_diameter)
         pump.set_mode(pump_mode)
         pump.set_rate(1, "ml/mn")
         pump.run()
@@ -331,6 +335,7 @@ def initialize_pump(pump_com_port = None, pump_baudrate = 19200, pump_timeout = 
     except Exception as e:
         print(f"Error initializing pump: {e}")
         return None
+
 
 def configure_settings():
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -345,6 +350,7 @@ def configure_settings():
         exit()
 
     return config
+
 
 def set_pressure(pressure_bar):
     ser.write(f'SP {pressure_bar}\n'.encode())
@@ -387,7 +393,6 @@ if __name__ == '__main__':
     duration = config['run']['duration']
     tank_pressure = config['run']['tank_pressure']
 
-
     # Set up the Arduino serial connection
     if not arduino_com_port:
         arduino_com_port = find_serial_device(description=arduino_description)
@@ -403,24 +408,28 @@ if __name__ == '__main__':
 
     # Initialize pump if required
     if use_pump == True:
-        pump = initialize_pump(pump_com_port, pump_baudrate, pump_timeout, pump_diameter, pump_mode)
+        pump = initialize_pump(pump_com_port, pump_baudrate,
+                               pump_timeout, pump_diameter, pump_mode)
 
     # Connect to SprayTec lift if available
     if not spraytech_lift_com_port:
-        spraytech_lift_com_port = find_serial_device(description=spraytech_description, continue_on_error=False)
+        spraytech_lift_com_port = find_serial_device(
+            description=spraytech_description, continue_on_error=False)
 
     try:
-        lift = SprayTecLift(spraytech_lift_com_port, spraytech_lift_baud_rate, spraytech_lift_timeout)
+        lift = SprayTecLift(spraytech_lift_com_port,
+                            spraytech_lift_baud_rate, spraytech_lift_timeout)
     except Exception as e:
         print(f'Error connecting to SprayTec lift: {e}')
         spraytech_lift_com_port = None
 
     # Create the data directory if it doesn't exist
-    Spraytec_data_saved_check()
-    # Create the data directory if it doesn't exist
-    data_dir = 'data'
-    if not os.path.exists(data_dir):
-        os.makedirs(data_dir)
+    if spraytech_lift_com_port:
+        Spraytec_data_saved_check()
+        # Create the data directory if it doesn't exist
+        data_dir = 'data'
+        if not os.path.exists(data_dir):
+            os.makedirs(data_dir)
 
     if mode == "manual":
         manual_mode()
@@ -441,7 +450,8 @@ if __name__ == '__main__':
 
     while True:
         default_ready = "n"
-        ready = (input(f"Ready to start experiment (press ENTER for {default_ready})? (y/n): ").strip().lower() or default_ready)
+        ready = (input(
+            f"Ready to start experiment (press ENTER for {default_ready})? (y/n): ").strip().lower() or default_ready)
         if ready == 'y':
             break
 
@@ -473,7 +483,6 @@ if __name__ == '__main__':
         ser.write("SV 20\n".encode())
         time.sleep(0.2)  # wait for proportional valve to open
         ser.write(f"O {duration}\n".encode())
-    
 
     # while True:
     #     experiment_type_default = "1"
