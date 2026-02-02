@@ -49,9 +49,9 @@ def Spraytec_data_saved_check():
     This function saves the last spraytec measurement of the previous run to a .txt
     in the folder individual_data_files. Do not touch this if you do not know waht you are doing!
     """
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    parent_path = os.path.dirname(current_dir)  # one level up
-    spraytec_path = os.path.join(parent_path, "spraytec")
+    # current_dir = os.path.dirname(os.path.abspath(__file__))
+    # parent_path = os.path.dirname(current_dir)  # one level up
+    spraytec_path = os.path.join("C:\\CoughMachineData\\SprayTec\\")
     path = os.path.join(spraytec_path, "SPRAYTEC_APPEND_FILE.txt")
     save_path = os.path.join(spraytec_path, "individual_data_files")
     file = np.loadtxt(path, dtype=str, delimiter=',')

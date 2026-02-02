@@ -21,12 +21,14 @@
 // TODO: Enable/disable debug mode via serial command
 // TODO: Allowed set pressure range is slightly above 0.00 bar, change mA range
 // to 3.99?
+// TODO: If droplet detection reports below certain threshold, power supply is
+// likely off so don't try to detect droplet then
 
 // ============================================================================
 // DEBUG CONFIGURATION
 // ============================================================================
 // Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define DEBUG_PRINT(x) Serial.print(x)
@@ -104,7 +106,7 @@ uint32_t valve_delay_open =
            // (positive is sol first)
 int32_t valve_delay_close = 0; // Delay between proportional valve and solenoid
                                // valve closing [µs] (negative is sol first)
-uint32_t runCalltTime = 0; // Time elapsed since "RUN" command [µs]
+uint32_t runCalltTime = 0;     // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -513,6 +515,7 @@ void loop() {
         waitingToOpenValve = true;
         waitStartTime = micros();
 
+        Serial.println("!");
         // Turn off laser immediately when droplet is detected
         stopLaser();
         detectingDroplet = false;
@@ -537,7 +540,8 @@ void loop() {
     // Open valve after delay has elapsed
     if (elapsed >= tick_delay) {
       // Open valve and trigger
-      openValveTrigger();
+      // openValveTrigger();
+      isExecuting = true;
 
       setLedColor(COLOR_VALVE_OPEN);
       solValveOpen = true;

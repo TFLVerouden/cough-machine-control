@@ -40,7 +40,7 @@ def read_temperature(verbose=False):
     Temperature = ser_mcu.readline().decode('utf-8').rstrip()
     RH = ser_mcu.readline().decode('utf-8').rstrip()
     Temperature = Temperature.lstrip('T')
-    RH = RH.lstrip('RH')
+    RH = RH.lstrip('H')
 
     if verbose:
         print(f'Temperature: {Temperature} °C; relative humidity: {RH} %')
@@ -63,7 +63,7 @@ print(f"Connected to MCU on {mcu_port} at {mcu_baudrate} baud.")
 # INITIALISE PUMP
 # Initialise chain and PHD 2000
 chain = pumpy3.Chain(
-    "COM10",        # Manually specified, no way to auto-detect (yet)
+    "COM11",        # Manually specified, no way to auto-detect (yet)
     baudrate=19200,  # Set to match pump
     timeout=0.3     # 300 ms timeout, increase if unstable
 )
@@ -77,7 +77,7 @@ input("Press Enter to start flushing the pump...")
 
 # Set MCU delay to 0 us, make sure it is not in droplet detection mode
 ser_mcu.write('L 0\n'.encode())
-ser_mcu.write('C'.encode())  # Close valve
+# ser_mcu.write('C'.encode())  # Close valve
 
 # Flush pump for a bit
 pump.set_rate(1, "ml/mn")   # Flow rate
@@ -91,12 +91,13 @@ ser_mcu.write('D 1\n'.encode())
 while True:
     if ser_mcu.in_waiting > 0:
         response = ser_mcu.readline().decode('utf-8').rstrip()
-        if response == "":
-            continue
-        elif response == "!":
+        if response == "!":
             pump.stop()
             ser_mcu.write('C'.encode())  # Disable droplet detection
             break
+        else:
+            print(f"Unknown response: {response}")
+            continue
 
 print("Droplet detected, pump stopped.")
 
@@ -134,9 +135,7 @@ while len(droplet_times) < nr_droplets:
     # Listen to commands
     if ser_mcu.in_waiting > 0:
         response = ser_mcu.readline().decode('utf-8').rstrip()
-        if response == "":
-            continue
-        elif response == "!":
+        if response == "!":
             droplet_times.append(elapsed)
             print(
                 f"Droplet {len(droplet_times)} detected at {elapsed:.3f} s")
@@ -144,6 +143,10 @@ while len(droplet_times) < nr_droplets:
             pressure = response.lstrip("P")
             if pressure != "":
                 readings = np.append(readings, [elapsed, float(pressure)])
+        else:
+            print(f"Unknown response: {response}")
+            continue
+
 
 ser_mcu.write('C'.encode())  # Disable droplet detection
 pump.stop()
