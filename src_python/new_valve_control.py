@@ -11,6 +11,11 @@ import sys
 import pumpy3
 import json
 
+
+# TODO: Add extra column to csv file (write new example without commas because commas suck) containing binary indicating whether solenoid valve should be open or closed
+# TODO: In Main.cpp, add code to read that extra column and open/close solenoid valve accordingly. Increase RAM allocation if necessary.
+# TODO: Consider: when trigger? --> we trigger always with opening of solenoid valve because the timing is more precise when adjusting both at the same time at low-level (direct port manipulation)
+
 # from functions import Gupta2009 as Gupta
 
 cwd = os.path.abspath(os.path.dirname(__file__))

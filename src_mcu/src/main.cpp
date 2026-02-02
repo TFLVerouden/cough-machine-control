@@ -99,14 +99,21 @@ int currentCount = 0;
 // ============================================================================
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
-uint32_t tick_delay = 59500;          // Delay before opening valve [µs]
+
+// TODO: Change name of tick_delay
+uint32_t tick_delay =
+    59500; // Delay between droplet detection/RUN command and opening valve [µs]
 uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
+
+// TODO: REMOVE:
 uint32_t valve_delay_open =
     11000; // Delay between solenoid valve and proportional valve opening [µs]
            // (positive is sol first)
 int32_t valve_delay_close = 0; // Delay between proportional valve and solenoid
-                               // valve closing [µs] (negative is sol first)
-uint32_t runCalltTime = 0;     // Time elapsed since "RUN" command [µs]
+// valve closing [µs] (negative is sol first)
+
+// This is just another ticker
+uint32_t runCalltTime = 0; // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -312,7 +319,7 @@ void setup() {
 // ============================================================================
 
 void openValveTrigger() {
-  // Open valve and trigger using direct PORT register access for speed
+  // Open solenoid valve and trigger using direct PORT register access for speed
   // Equivalent to digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
       ((1 << g_APinDescription[PIN_VALVE].ulPin) |
@@ -323,7 +330,7 @@ void openValveTrigger() {
                   2.51344790); // Log valve open event
 
   DEBUG_PRINTLN(
-      "Solenoïd valve opened using openValveTrigger()"); // Valve opened
+      "Solenoid valve opened using openValveTrigger()"); // Valve opened
                                                          // confirmation (debug
                                                          // only for speed)
 }
@@ -339,7 +346,7 @@ void closeValve() {
                   2.51344790); // Log valve close event
 
   DEBUG_PRINT(
-      "Solenoïd valve closed using closeValve()"); // Valve closed confirmation
+      "Solenoid valve closed using closeValve()"); // Valve closed confirmation
                                                    // (debug only for speed)
   // Serial.println("!");
 }
