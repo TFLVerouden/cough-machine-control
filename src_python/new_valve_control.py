@@ -12,9 +12,10 @@ import pumpy3
 import json
 
 
-# TODO: Add extra column to csv file (write new example without commas because commas suck) containing binary indicating whether solenoid valve should be open or closed
-# TODO: In Main.cpp, add code to read that extra column and open/close solenoid valve accordingly. Increase RAM allocation if necessary.
-# TODO: Consider: when trigger? --> we trigger always with opening of solenoid valve because the timing is more precise when adjusting both at the same time at low-level (direct port manipulation)
+# TODO: Consider: add config options for droplet detection delay (PRE) and
+#       detection mode (single/continuous) in config.json.
+# TODO: Should trigger time also go to Log file separately?
+# TODO: Split this up into functions and classes for better readability, turn into module
 
 # from functions import Gupta2009 as Gupta
 
@@ -131,46 +132,53 @@ def extract_csv_dataset(filename, delimiter=','):
     # Define output variables
     time = []
     mA = []
+    enable = []
     row_idx = 0
 
     with open(filename, 'r') as csvfile:
         # Reader object of the file
         csvreader = csv.reader(csvfile, delimiter=delimiter)
 
-        # extract data from the file and create time and value arrays
+        # extract data from the file and create time, value and enable arrays
         for rows in csvreader:
-            if not rows[0] or not rows[1]:
+            if len(rows) < 3 or not rows[0] or not rows[1] or rows[2] == '':
                 print(
                     f"Encountered empty cell in flow profile dataset, row index {row_idx}!")
                 time = []
                 mA = []
+                enable = []
                 break
             else:
                 # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
                 time.append(rows[0].replace(',', '.'))
                 mA.append(rows[1].replace(',', '.'))
+                e = rows[2].strip()
+                if e not in ('0', '1'):
+                    raise ValueError(
+                        f"Invalid enable value '{e}' at row {row_idx}; expected 0 or 1")
+                enable.append(e)
                 row_idx += 1
 
-    return time, mA
+    return time, mA, enable
 
 
-def format_csv_dataset(time_array, mA_array, prefix="LOAD", handshake_delim=" ", data_delim=",", line_feed='\n'):
+def format_csv_dataset(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", data_delim=",", line_feed='\n'):
 
     duration = time_array[-1]
 
     # Check for inconsistent dataset length
-    if len(time_array) != len(mA_array) or len(time_array) == 0 or len(mA_array) == 0:
+    if len(time_array) != len(mA_array) or len(time_array) != len(enable_array) or len(time_array) == 0:
         print(
-            f"Arrays are not compatible! Time length: {len(time_array)}, mA length: {len(mA_array)}")
+            f"Arrays are not compatible! Time length: {len(time_array)}, mA length: {len(mA_array)}, enable length: {len(enable_array)}")
         return
     else:
         # Create 'handshake' sequence
         header = [prefix, handshake_delim, str(
             len(time_array)), handshake_delim, duration, handshake_delim]
 
-        # Append timestamps and values in order <time0, mA0, time1, mA1, time2, mA2>
-        data = [str(val) for time, mA in zip(time_array, mA_array)
-                for val in (time, mA)]
+        # Append timestamps and values in order <time0, mA0, e0, time1, mA1, e1, ...>
+        data = [str(val) for time, mA, e in zip(time_array, mA_array, enable_array)
+                for val in (time, mA, e)]
 
         # format into one string to send over serial
         output = "".join(header) + data_delim.join(data) + line_feed
@@ -252,7 +260,7 @@ def send_dataset(delimiter=',', file_path=None):
         print(f'Error: File "{filename}" not found.')
         exit()
 
-    serial_command = format_csv_dataset(data[0], data[1])
+    serial_command = format_csv_dataset(data[0], data[1], data[2])
     ser.write(serial_command.encode('utf-8'))
 
 
@@ -287,7 +295,7 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
         f.write(f"Relative Humidity (%),{RH}\n")
         f.write(f"Lift Height (mm),{height}\n")
 
-        ser.write('F\n'.encode())
+        ser.write('L\n'.encode())
 
         while True:
             raw_line = ser.readline()
@@ -358,7 +366,7 @@ def configure_settings():
 
 
 def set_pressure(pressure_bar):
-    ser.write(f'SP {pressure_bar}\n'.encode())
+    ser.write(f'P {pressure_bar}\n'.encode())
 
 
 if __name__ == '__main__':
@@ -397,6 +405,7 @@ if __name__ == '__main__':
     run_type = config['run']['type']
     duration = config['run']['duration']
     tank_pressure = config['run']['tank_pressure']
+    pre_trigger_delay_us = config['run'].get('pre_trigger_delay_us', 0)
 
     # Set up the Arduino serial connection
     if not arduino_com_port:
@@ -452,6 +461,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
     set_pressure(tank_pressure)
+    ser.write(f'W {pre_trigger_delay_us}\n'.encode())
 
     while True:
         default_ready = "n"
@@ -476,7 +486,7 @@ if __name__ == '__main__':
     finished_experiment = False
 
     if run_type == 'profile':
-        ser.write("RUN\n".encode())
+        ser.write("R\n".encode())
         time.sleep(0.1)  # wait for response
         while ser.in_waiting > 0:
             response = ser.readline().decode('utf-8', errors='ignore').rstrip()
@@ -485,9 +495,11 @@ if __name__ == '__main__':
             else:
                 print(f"Something went wrong, response: {response}")
     elif run_type == 'square':
-        ser.write("SV 20\n".encode())
-        time.sleep(0.2)  # wait for proportional valve to open
-        ser.write(f"O {duration}\n".encode())
+        print(
+            "Square runs are now expected to be encoded in the dataset. "
+            "Please provide a dataset with the enable column instead of using O/C."
+        )
+        sys.exit(1)
 
     # while True:
     #     experiment_type_default = "1"
@@ -572,10 +584,6 @@ if __name__ == '__main__':
                 end_time = datetime.datetime.now(datetime.timezone.utc)
                 starting_experiment = False
                 finished_experiment = True
-
-                # Close the proportional valve if necessary
-                if run_type == 'square':
-                    ser.write('SV 12\n'.encode())
 
                 if save_output == True:
                     print("Saved experiment detected. Starting file retrieval...")

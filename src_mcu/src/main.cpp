@@ -58,8 +58,9 @@ const uint16_t CMD_BUF_LEN =
     32000;                       // RAM size allocation for Serial buffer size
 int incomingCount = 0;           // Declare incoming dataset length globally
 char cmd_buf[CMD_BUF_LEN]{'\0'}; // Instantiate empty Serial buffer
-uint32_t time_array[MAX_DATA_LENGTH]; // Time dataset
-float value_array[MAX_DATA_LENGTH];   // mA dataset
+uint32_t time_array[MAX_DATA_LENGTH];      // Time dataset
+float value_array[MAX_DATA_LENGTH];        // mA dataset
+uint8_t sol_enable_array[MAX_DATA_LENGTH]; // 0/1: solenoid enable
 // Create DvG_StreamCommand object on Serial stream
 DvG_StreamCommand sc(Serial, cmd_buf, CMD_BUF_LEN);
 
@@ -101,19 +102,13 @@ const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
 
 uint32_t pre_trigger_delay_us =
-    59500; // Delay between droplet detection/RUN command and opening valve [µs]
+    0; // Delay between droplet detection/RUN command and opening valve [µs] ->
+       // example value 59500 (outdated)
 uint32_t pda_delay =
     10000; // Delay before photodiode starts detecting again [µs]
 
-// TODO: REMOVE:
-uint32_t valve_delay_open =
-    11000; // Delay between solenoid valve and proportional valve opening [µs]
-           // (positive is sol first)
-int32_t valve_delay_close = 0; // Delay between proportional valve and solenoid
-// valve closing [µs] (negative is sol first)
-
 // This is just another ticker
-uint32_t runCalltTime = 0; // Time elapsed since "RUN" command [µs]
+uint32_t runCallTime = 0; // Time elapsed since "RUN" command [µs]
 
 // ============================================================================
 // SENSOR CONFIGURATION
@@ -318,22 +313,23 @@ void setup() {
 // VALVE AND SENSOR FUNCTIONS
 // ============================================================================
 
-void openSolValveAndTrigOut() {
-  // Open solenoid valve and trigger using direct PORT register access for speed
-  // Equivalent to digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
+void openSolValve() {
+  // Open solenoid valve using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_VALVE, HIGH);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
-      ((1 << g_APinDescription[PIN_VALVE].ulPin) |
-       (1 << g_APinDescription[PIN_TRIG].ulPin));
+      (1 << g_APinDescription[PIN_VALVE].ulPin);
 
   recordEvent(1, -1,
               0.62350602 * R_click.get_EMA_mA() -
                   2.51344790); // Log valve open event
+}
 
-  DEBUG_PRINTLN(
-      "Solenoid valve opened using openSolValveAndTrigOut()"); // Valve opened
-                                                               // confirmation
-                                                               // (debug only
-                                                               // for speed)
+void trigOut() {
+  // Send trigger pulse using direct PORT register access for speed
+  // Equivalent to digitalWrite(PIN_TRIG, HIGH);
+  // TODO: Verify trigger timing in log output to confirm this is fast enough.
+  PORT->Group[g_APinDescription[PIN_TRIG].ulPort].OUTSET.reg =
+      (1 << g_APinDescription[PIN_TRIG].ulPin);
 }
 
 void closeSolValve() {
@@ -435,6 +431,7 @@ float readPhotodetector() {
 void resetDataArrays() {
   memset(time_array, 0, sizeof(time_array));
   memset(value_array, 0, sizeof(value_array));
+  memset(sol_enable_array, 0, sizeof(sol_enable_array));
   incomingCount = 0;
   // Todo: Review if these resets are necessary
   // Added these three resets after testing, need reviewing!
@@ -449,21 +446,14 @@ void resetDataArrays() {
 
 void loop() {
   // Static variables persist across loop iterations
-  static uint32_t duration = 0;     // How long valve should stay open [µs]
-  static bool solValveOpen = false; // Tracks if valve is currently open
-  static bool propValveOpen =
-      false; // Tracks if proportional valve is currently open
+  static bool solValveOpen = false;      // Tracks if valve is currently open
   static bool performingTrigger = false; // Tracks if trigger pulse is active
   static bool detectingDroplet = false;  // Tracks if in droplet detection mode
   static bool belowThreshold = false;    // Tracks if signal is below threshold
-  static bool waitingToOpenValve =
-      false; // Tracks if waiting for delay before opening valve
-  static uint32_t waitStartTime =
-      0; // When waiting for valve opening started [µs]
+  static bool delayedRunPending = false; // Waiting pre-trigger delay before RUN
+  static uint32_t delayedRunStartTime = 0; // When delay waiting started [µs]
   static uint32_t detectionStartTime =
-      0; // When laser/detection was started [µs]
-  static bool continuousDetection =
-      false;                       // Tracks if in continuous detection mode
+      0;                           // When laser/detection was started [µs]
   static bool isExecuting = false; // Tracks if waiting to run loaded sequence
   static bool setPressure =
       false; // Tracks if pressure regulator has been set at least once
@@ -476,30 +466,6 @@ void loop() {
   if (performingTrigger && (micros() - tick >= TRIGGER_WIDTH)) {
     stopTrigger();
     performingTrigger = false;
-  }
-
-  // -------------------------------------------------------------------------
-  // Handle valve timing
-  // -------------------------------------------------------------------------
-  // Close valve after duration (duration=0 means stay open)
-  if (solValveOpen && duration > 0 && (micros() - tick >= duration)) {
-    DEBUG_PRINTLN("Solenoïd valve closed after duration check.");
-    closeSolValve();
-    solValveOpen = false;
-    saveToFlash(); // Save log to flash
-
-    // If in continuous detection mode, restart detection immediately
-    if (continuousDetection) {
-      // Turn on laser and restart detection
-      startLaser();
-      setLedColor(COLOR_LASER);
-      detectingDroplet = true;
-      belowThreshold = false;
-      detectionStartTime = micros();
-      DEBUG_PRINTLN("Restarting droplet detection");
-    } else {
-      setLedColor(COLOR_IDLE);
-    }
   }
 
   // -------------------------------------------------------------------------
@@ -521,8 +487,8 @@ void loop() {
       // Falling edge: droplet detected (signal drops below threshold)
       if (!belowThreshold && signalVoltage < PDA_THR) {
         belowThreshold = true;
-        waitingToOpenValve = true;
-        waitStartTime = micros();
+        delayedRunPending = true;
+        delayedRunStartTime = micros();
 
         Serial.println("!");
         // Turn off laser immediately when droplet is detected
@@ -536,98 +502,75 @@ void loop() {
   }
 
   // -------------------------------------------------------------------------
-  // Handle delay and valve opening (for both droplet detection and O command)
+  // Handle delayed dataset start after droplet detection/R command
+  // TODO: Test whether this also works for R command with pre-trigger delay
   // -------------------------------------------------------------------------
-  if (waitingToOpenValve && !solValveOpen) {
-    uint32_t elapsed = micros() - waitStartTime;
+  if (delayedRunPending) {
+    uint32_t elapsed = micros() - delayedRunStartTime;
 
-    // Show purple LED during delay period
     if (elapsed < pre_trigger_delay_us) {
       setLedColor(COLOR_WAITING);
-    }
-
-    // Open valve after delay has elapsed
-    if (elapsed >= pre_trigger_delay_us) {
-      // Open valve and trigger
-      // openValveTrigger();
+    } else {
+      // Start executing the already-loaded dataset now
+      delayedRunPending = false;
       isExecuting = true;
+      runCallTime = micros();
 
-      setLedColor(COLOR_VALVE_OPEN);
-      solValveOpen = true;
-      performingTrigger = true;
-      tick = micros();
+      // Initialise dataset execution variables
+      sequenceIndex = 0;
+      solValveOpen = false;
+      valve.set_mA(default_valve);
 
-      // Reset flag after opening valve
-      waitingToOpenValve = false;
+      setLedColor(COLOR_EXECUTING);
+      Serial.println("EXECUTING_DATASET");
     }
   }
 
   // Execute loaded dataset
   if (isExecuting) {
-    // Caclulate time since start execution
-    uint32_t now = (micros() - runCalltTime); // Time since RUN is called [µs]
+    // Calculate time since start execution
+    uint32_t now = (micros() - runCallTime); // Time since RUN is called [µs]
 
-    // If valve isn't open and timing of first datapoint has been reached open
-    // solenoid valve
-    if (!solValveOpen && sequenceIndex == 0 && (now / 1000) >= time_array[0]) {
-      openSolValveAndTrigOut(); // Open solenoid valve and trigger
-      performingTrigger = true; // Set trigger flag
-      tick = micros();
-      DEBUG_PRINT("Time to opening solenoid valve: ");
-      DEBUG_PRINT(now / 1000);
-      DEBUG_PRINTLN(" ms.");
-      solValveOpen = true;
-      propValveOpen = true;
-      setLedColor(COLOR_VALVE_OPEN);
-    }
+    uint32_t now_ms = now / 1000;
 
-    int32_t solValveCloseTime = datasetDuration + (valve_delay_close / 1000);
+    // Apply all dataset points that are due
+    while (sequenceIndex < dataIndex && now_ms >= time_array[sequenceIndex]) {
+      uint8_t enable = sol_enable_array[sequenceIndex];
 
-    // Check if solenoid valve needs to be closed
-    if (solValveOpen && (now / 1000) >= (uint32_t)solValveCloseTime) {
-      closeSolValve();
-      solValveOpen = false;
-      DEBUG_PRINT("Solenoïd valve closed after: ");
-      DEBUG_PRINT(now / 1000);
-      DEBUG_PRINT("ms, time goal: ");
-      DEBUG_PRINTLN(solValveCloseTime);
-    }
+      // Proportional valve follows mA column regardless of solenoid enable
+      valve.set_mA(value_array[sequenceIndex]);
+      recordEvent(-1, value_array[sequenceIndex],
+                  0.62350602 * R_click.get_EMA_mA() - 2.51344790);
 
-    // If time since start execution >= (dataset index time + valve timing
-    // delay) -> set mA value of valve to dataset index value
-    if ((now / 1000) >= time_array[sequenceIndex] + (valve_delay_open / 1000)) {
-      // If whole dataset has been executed, exit execution state
-      if (sequenceIndex >= dataIndex) {
-        isExecuting = false;         // Reset executing flag
-        sequenceIndex = 0;           // Reset dataset index
-        valve.set_mA(default_valve); // Close proportional valve
-        propValveOpen = false;
-        setLedColor(COLOR_OFF);
-        saveToFlash(); // Save log to flash instead of RAM
-        return;
-      } else {
-        valve.set_mA(value_array[sequenceIndex]);
-        // This Serial.print(); shows that the timing is accurate to within a ms
-        // and that the DEBUG prints delay the code Serial.println((now / 1000)
-        // - time_array[sequenceIndex]); Debug print dataset execution, expected
-        // time and value vs actual time and value
-        DEBUG_PRINT("Sequence index: ");
-        DEBUG_PRINT(sequenceIndex);
-        DEBUG_PRINT(", time elapsed: ");
-        DEBUG_PRINT(now / 1000);
-        DEBUG_PRINT("ms, time goal: ");
-        DEBUG_PRINT(time_array[sequenceIndex]);
-        DEBUG_PRINT("ms, difference: ");
-        DEBUG_PRINT((now / 1000) - time_array[sequenceIndex]);
-        DEBUG_PRINT("ms, setpoint: ");
-        DEBUG_PRINTLN(value_array[sequenceIndex]);
-
-        // Record event in packed structure in RAM
-        recordEvent(-1, value_array[sequenceIndex],
-                    0.62350602 * R_click.get_EMA_mA() - 2.51344790);
-
-        sequenceIndex++;
+      // Solenoid enable controls solenoid and trigger
+      if (enable && !solValveOpen) {
+        openSolValve();
+        solValveOpen = true;
+        trigOut();
+        performingTrigger = true;
+        tick = micros();
+        setLedColor(COLOR_VALVE_OPEN);
+      } else if (!enable && solValveOpen) {
+        closeSolValve();
+        solValveOpen = false;
       }
+
+      sequenceIndex++;
+    }
+
+    // End condition: dataset duration elapsed AND all points processed
+    if (now_ms >= (uint32_t)datasetDuration && sequenceIndex >= dataIndex) {
+      valve.set_mA(default_valve);
+      if (solValveOpen) {
+        closeSolValve();
+        solValveOpen = false;
+      }
+
+      isExecuting = false;
+      sequenceIndex = 0;
+      setLedColor(COLOR_OFF);
+      saveToFlash();
+      return;
     }
   }
 
@@ -641,12 +584,12 @@ void loop() {
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (strncmp(command, "SV", 2) == 0) {
-      // Command: SV <mA>
+    if (strncmp(command, "V", 1) == 0) {
+      // Command: V <mA>
       // Set milli amps of proportional valve to <mA>
 
       float current = parseFloatInString(
-          command, 2); // Parse float from char array 'command'
+          command, 1); // Parse float from char array 'command'
 
       // Handle out of allowable range inputs, defaults to specified value
       if (!current || current < min_mA_valve || current > max_mA) {
@@ -667,16 +610,24 @@ void loop() {
         DEBUG_PRINTLN(valve.get_last_set_bitval());
       }
 
-    } else if (strncmp(command, "SP", 2) == 0) {
-      // Command: SP <mA>
-      // Set milli amps of pressure regulator to <mA>
+      // ---------------------------------------------------------------------
+      // Pressure regulator: P? (read) or P <bar> (set)
+      // ---------------------------------------------------------------------
+    } else if (strncmp(command, "P?", 2) == 0) {
+      // Command: P?
+      // Read and return current pressure
+      readPressure(solValveOpen);
+
+    } else if (strncmp(command, "P", 1) == 0) {
+      // Command: P <bar>
+      // Set pressure regulator to <bar>
 
       if (!setPressure) {
         setPressure = true;
       }
 
       float bar =
-          parseFloatInString(command, 2); // Parse float from char array command
+          parseFloatInString(command, 1); // Parse float from char array command
       float current = (bar + 2.48821429) / 0.62242857;
 
       // Handle out of allowable range inputs, defaults to specified value
@@ -699,10 +650,13 @@ void loop() {
         DEBUG_PRINTLN(pressure.get_last_set_bitval());
       }
 
-    } else if (strncmp(command, "SHOW", 4) == 0) {
+      // ---------------------------------------------------------------------
+      // Dataset: L? / L / R / F
+      // ---------------------------------------------------------------------
+    } else if (strncmp(command, "L?", 2) == 0) {
 
       if (dataIndex == 0) {
-        Serial.println("No dataset in memory! LOAD one first.");
+        Serial.println("No dataset in memory! L one first.");
       } else {
         Serial.print("Saved dataset is: ");
         Serial.print(incomingCount);
@@ -711,26 +665,27 @@ void loop() {
         Serial.println(" ms.");
       }
 
-    } else if (strncmp(command, "LOAD", 4) == 0) {
-      // Parse incomming dataset. Command: "LOAD <N_datapoints>
-      // <Time0>,<mA0>,<Time1>,<mA1>,<TimeN>,<mAN>"
+    } else if (strncmp(command, "L", 1) == 0) {
+      // Parse incomming dataset. Command: "L <N_datapoints>
+      // <Time0>,<mA0>,<E0>,<Time1>,<mA1>,<E1>,...,<TimeN>,<mAN>,<EN>"
+      // where E is 0/1 solenoid enable.
 
       setLedColor(COLOR_RECEIVING);
 
       const char *delim = ","; // Serial dataset delimiter
 
-      if (strlen(command) < 6) {
-        DEBUG_PRINTLN("ERROR: \"LOAD\" command is not followed by dataset");
+      if (strlen(command) < 3) {
+        DEBUG_PRINTLN("ERROR: \"L\" command is not followed by dataset");
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
         return;
       }
 
-      // read dataset length from char 5 until space (_)
-      // "LOAD_<length>_<dataset>" and instantialize position to start reading
+      // read dataset length from char 2 until space (_)
+      // "L_<length>_<dataset>" and instantialize position to start reading
       // data from in strtok
-      char *idx = strtok(command + 5, " ");
+      char *idx = strtok(command + 2, " ");
       incomingCount = atoi(idx); // Dataset length (int)
 
       idx = strtok(NULL, " ");
@@ -741,17 +696,6 @@ void loop() {
         DEBUG_PRINT("ERROR: data length is not allowed: 0 < N < ");
         DEBUG_PRINT(MAX_DATA_LENGTH);
         DEBUG_PRINTLN(", upload new dataset!");
-        resetDataArrays();
-        setLedColor(COLOR_ERROR);
-        delay(300);
-        setLedColor(COLOR_OFF);
-        return;
-        // Check if dataset duration minus valve delay is not negative (needs to
-        // be compared to uint32_t later)
-      } else if ((datasetDuration + (valve_delay_close / 1000)) < 0) {
-        DEBUG_PRINT("ERROR: dataset duration is too short, must be at least ");
-        DEBUG_PRINT(-valve_delay_close / 1000);
-        DEBUG_PRINTLN(" ms, upload new dataset!");
         resetDataArrays();
         setLedColor(COLOR_ERROR);
         delay(300);
@@ -801,11 +745,41 @@ void loop() {
         // value array
         value_array[i] = parseFloatInString(idx, 0);
 
+        idx = strtok(NULL, delim); // Get next csv buffer index: enable flag
+        if (idx == NULL) {
+          DEBUG_PRINT("ERROR: token was NULL, breaking CSV parsing. Upload new "
+                      "dataset! (enable flag missing at data index: ");
+          DEBUG_PRINT(dataIndex);
+          DEBUG_PRINTLN(")");
+          resetDataArrays();
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+          break;
+        }
+
+        int enableInt = atoi(idx);
+        if (enableInt != 0 && enableInt != 1) {
+          DEBUG_PRINT(
+              "ERROR: enable flag must be 0 or 1. Upload new dataset! (at "
+              "data index: ");
+          DEBUG_PRINT(dataIndex);
+          DEBUG_PRINTLN(")");
+          resetDataArrays();
+          setLedColor(COLOR_ERROR);
+          delay(300);
+          setLedColor(COLOR_OFF);
+          break;
+        }
+        sol_enable_array[i] = (uint8_t)enableInt;
+
         // Debug print whole received dataset
         DEBUG_PRINT("Timestamp: ");
         DEBUG_PRINT(time_array[i]);
         DEBUG_PRINT(", mA: ");
-        DEBUG_PRINTLN(value_array[i]);
+        DEBUG_PRINT(value_array[i]);
+        DEBUG_PRINT(", enable: ");
+        DEBUG_PRINTLN(sol_enable_array[i]);
 
         // Increase working index, used later to only read valuable data from
         // data arrays
@@ -817,22 +791,27 @@ void loop() {
       // LED color off when whole dataset is received
       setLedColor(COLOR_OFF);
 
-    } else if (strncmp(command, "RUN", 3) == 0) {
+    } else if (strncmp(command, "R", 1) == 0) {
       if (dataIndex == 0) {
-        printError("Dataset is empty! Upload first using LOAD command.");
+        printError("Dataset is empty! Upload first using L command.");
         setLedColor(COLOR_ERROR);
         delay(300);
         setLedColor(COLOR_OFF);
       } else if (!setPressure) {
-        printError(
-            "Pressure regulator not set! Set it first using SP command.");
+        printError("Pressure regulator not set! Set it first using P command.");
       } else {
-        duration = 0;
-        isExecuting = true;
-        runCalltTime = micros();
-        sequenceIndex = 0;
-        setLedColor(COLOR_EXECUTING);
-        Serial.println("EXECUTING_DATASET");
+        delayedRunPending = (pre_trigger_delay_us > 0);
+        delayedRunStartTime = micros();
+
+        if (!delayedRunPending) {
+          isExecuting = true;
+          runCallTime = micros();
+          sequenceIndex = 0;
+          solValveOpen = false;
+          valve.set_mA(default_valve);
+          setLedColor(COLOR_EXECUTING);
+          Serial.println("EXECUTING_DATASET");
+        }
       }
 
     } else if (strncmp(command, "F", 1) == 0) {
@@ -840,91 +819,79 @@ void loop() {
       DEBUG_PRINTLN("Dumping data to serial");
       dumpToSerial();
 
+      // ---------------------------------------------------------------------
+      // Solenoid and droplet detection: O / C / D / W
+      // ---------------------------------------------------------------------
     } else if (strncmp(command, "O", 1) == 0) {
-      // Command: O or O <duration_ms>
-      // O = open indefinitely, O <ms> = open for specified time
-
-      if (strlen(command) == 1) {
-        duration = 0; // 0 means stay open
-        DEBUG_PRINTLN("Opening valve indefinitely");
-      } else {
-        duration = 1000 * parseFloatInString(command, 1);
-        DEBUG_PRINT("Opening valve for ");
-        DEBUG_PRINT(duration);
-        DEBUG_PRINTLN(" µs");
+      // Command: O
+      // Manually open solenoid valve
+      if (!solValveOpen) {
+        openSolValve();
+        solValveOpen = true;
       }
-
-      // Start waiting period before opening valve
-      waitingToOpenValve = true;
-      waitStartTime = micros();
-
-      if (pre_trigger_delay_us > 0) {
-        setLedColor(COLOR_WAITING);
-        DEBUG_PRINT("Waiting ");
-        DEBUG_PRINT(pre_trigger_delay_us);
-        DEBUG_PRINTLN(" µs before opening");
-      } else {
-        // If no delay, proceed immediately in next loop iteration
-        setLedColor(COLOR_VALVE_OPEN);
-      }
+      setLedColor(COLOR_VALVE_OPEN);
 
     } else if (strncmp(command, "C", 1) == 0) {
       // Command: C
-      // Manually close valve (override)
-      closeSolValve();
-      saveToFlash(); // Save log to flash
-      solValveOpen = false;
-
-      // Stop detection if it was running
+      // Manually close solenoid valve and stop any active run/detection
+      if (solValveOpen) {
+        closeSolValve();
+        solValveOpen = false;
+      }
+      valve.set_mA(default_valve);
+      if (isExecuting) {
+        isExecuting = false;
+        sequenceIndex = 0;
+      }
       if (detectingDroplet) {
         stopLaser();
         detectingDroplet = false;
       }
-
-      // Stop continuous detection mode
-      continuousDetection = false;
-
+      delayedRunPending = false;
       setLedColor(COLOR_IDLE);
 
     } else if (strncmp(command, "D", 1) == 0) {
-      // Command: D or D <duration_ms>
-      // D = detect droplet and open indefinitely, D <ms> = open for specified
-      // time
-
-      if (strlen(command) == 1) {
-        duration = 0; // 0 means stay open
-        DEBUG_PRINTLN("Droplet detection: valve will stay open");
-      } else {
-        duration = 1000 * parseIntInString(command, 1);
-        DEBUG_PRINT("Droplet detection: valve will open for ");
-        DEBUG_PRINT(duration);
-        DEBUG_PRINTLN(" µs");
+      // Command: D
+      // Arm droplet detection; upon droplet detection wait W delay and run
+      // the currently loaded dataset.
+      if (dataIndex == 0) {
+        printError("Dataset is empty! Upload first using L command.");
+        return;
       }
+      if (!setPressure) {
+        printError("Pressure regulator not set! Set it first using P command.");
+        return;
+      }
+
+      // Ensure clean state
+      if (solValveOpen) {
+        closeSolValve();
+        solValveOpen = false;
+      }
+      valve.set_mA(default_valve);
+      isExecuting = false;
+      sequenceIndex = 0;
+      delayedRunPending = false;
 
       // Turn on laser
       startLaser();
-
       setLedColor(COLOR_LASER);
       detectingDroplet = true;
       belowThreshold = false;
       detectionStartTime = micros();
-      continuousDetection = true; // Enable continuous detection mode
+      DEBUG_PRINTLN("Detecting droplets (armed to RUN dataset)");
 
-      DEBUG_PRINTLN("Detecting droplets");
-
-    } else if (strncmp(command, "L", 1) == 0) {
-      // Command: L <delay_us>
-      // Set delay before opening valve (applies to both O and D commands)
+    } else if (strncmp(command, "W", 1) == 0) {
+      // Command: W <delay_us>
+      // Set delay between droplet detection and starting dataset execution
       pre_trigger_delay_us = parseIntInString(command, 1);
-      DEBUG_PRINT("Delay before opening valve: ");
+      DEBUG_PRINT("Pre-trigger wait: ");
       DEBUG_PRINT(pre_trigger_delay_us);
       DEBUG_PRINTLN(" µs");
 
-    } else if (strncmp(command, "P?", 2) == 0) {
-      // Command: P?
-      // Read and return current pressure
-      readPressure(solValveOpen);
-
+      // ---------------------------------------------------------------------
+      // Sensors: T? / S?
+      // ---------------------------------------------------------------------
     } else if (strncmp(command, "T?", 2) == 0) {
       // Command: T?
       // Read and return temperature & humidity
@@ -934,21 +901,19 @@ void loop() {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
-      DEBUG_PRINTLN("O       - Open valve indefinitely");
-      DEBUG_PRINTLN("O <ms>  - Open valve for <ms> milliseconds (e.g., O 100)");
-      DEBUG_PRINTLN("C       - Close valve immediately");
-      DEBUG_PRINTLN("D       - Detect droplet, open valve indefinitely");
-      DEBUG_PRINTLN("D <ms>  - Detect droplet, open for <ms> milliseconds");
-      DEBUG_PRINTLN(
-          "L <us>  - Set delay before valve opening to <us> microseconds");
-      DEBUG_PRINTLN("SV <mA> - Set proportional valve milliamps to <mA>");
-      DEBUG_PRINTLN("SP <bar> - Set pressure regulator to <bar>");
-      DEBUG_PRINTLN("LOAD <N_datapoints> <dataset duration (ms)> <csv dataset> "
-                    "- Load dataset, format: "
-                    "<ms0>,<mA0>,<ms1>,<mA1>,<msN>,<mAN>");
-      DEBUG_PRINTLN("RUN     - Execute loaded dataset");
-      DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
+      DEBUG_PRINTLN("O       - Open solenoid valve");
+      DEBUG_PRINTLN("C       - Close solenoid valve (and stop any run)");
+      DEBUG_PRINTLN("D       - Droplet-detect then RUN dataset");
+      DEBUG_PRINTLN("W <us>  - Set wait before RUN (µs)");
+      DEBUG_PRINTLN("V <mA> - Set proportional valve milliamps to <mA>");
       DEBUG_PRINTLN("P?      - Read pressure");
+      DEBUG_PRINTLN("P <bar> - Set pressure regulator to <bar>");
+      DEBUG_PRINTLN("L <N_datapoints> <dataset duration (ms)> <csv dataset> "
+                    "- Load dataset, format: "
+                    "<ms0>,<mA0>,<e0>,<ms1>,<mA1>,<e1>,...,<msN>,<mAN>,<eN>");
+      DEBUG_PRINTLN("R       - Execute loaded dataset");
+      DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
+      DEBUG_PRINTLN("L?      - Show dataset status");
       DEBUG_PRINTLN("T?      - Read temperature & humidity");
       DEBUG_PRINTLN("S?      - System status");
       DEBUG_PRINTLN("?       - Show this help");
@@ -957,20 +922,8 @@ void loop() {
       // Command: S?
       // Print system status (debug only)
       DEBUG_PRINTLN("\n=== System Status ===");
-      DEBUG_PRINT("Solenoïd valve: ");
+      DEBUG_PRINT("Solenoid valve: ");
       DEBUG_PRINTLN(solValveOpen ? "OPEN" : "CLOSED");
-      if (solValveOpen) {
-        DEBUG_PRINT("Time remaining: ");
-        uint32_t elapsed = micros() - tick;
-        if (elapsed < duration) {
-          DEBUG_PRINT((duration - elapsed) / 1000);
-          DEBUG_PRINTLN(" ms");
-        } else if (duration == 0) {
-          DEBUG_PRINTLN("inf");
-        }
-      }
-      DEBUG_PRINT("Proportional valve: ");
-      DEBUG_PRINTLN(valve.get_last_set_bitval() > 2402 ? "OPEN" : "CLOSED");
       DEBUG_PRINT("Dataset in memory: ");
       DEBUG_PRINTLN((dataIndex == 0) ? "FALSE" : "TRUE");
       DEBUG_PRINT("Executing dataset: ");
@@ -984,7 +937,7 @@ void loop() {
         DEBUG_PRINT(readPhotodetector());
         DEBUG_PRINTLN(" V");
       }
-      DEBUG_PRINT("Delay before opening valve: ");
+      DEBUG_PRINT("Wait before RUN: ");
       DEBUG_PRINT(pre_trigger_delay_us);
       DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Photodiode detection delay: ");
