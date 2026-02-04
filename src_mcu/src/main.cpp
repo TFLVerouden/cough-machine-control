@@ -100,10 +100,10 @@ int currentCount = 0;
 const uint32_t TRIGGER_WIDTH = 10000; // Trigger pulse width [µs] (10ms)
 uint32_t tick = 0;                    // Timestamp for timing events [µs]
 
-// TODO: Change name of tick_delay
-uint32_t tick_delay =
+uint32_t pre_trigger_delay_us =
     59500; // Delay between droplet detection/RUN command and opening valve [µs]
-uint32_t pda_delay = 10000; // Delay before photodiode starts detecting [µs]
+uint32_t pda_delay =
+    10000; // Delay before photodiode starts detecting again [µs]
 
 // TODO: REMOVE:
 uint32_t valve_delay_open =
@@ -318,7 +318,7 @@ void setup() {
 // VALVE AND SENSOR FUNCTIONS
 // ============================================================================
 
-void openValveTrigger() {
+void openSolValveAndTrigOut() {
   // Open solenoid valve and trigger using direct PORT register access for speed
   // Equivalent to digitalWrite(PIN_VALVE, HIGH); digitalWrite(PIN_TRIG, HIGH);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTSET.reg =
@@ -330,12 +330,13 @@ void openValveTrigger() {
                   2.51344790); // Log valve open event
 
   DEBUG_PRINTLN(
-      "Solenoid valve opened using openValveTrigger()"); // Valve opened
-                                                         // confirmation (debug
-                                                         // only for speed)
+      "Solenoid valve opened using openSolValveAndTrigOut()"); // Valve opened
+                                                               // confirmation
+                                                               // (debug only
+                                                               // for speed)
 }
 
-void closeValve() {
+void closeSolValve() {
   // Close valve using direct PORT register access for speed
   // Equivalent to digitalWrite(PIN_VALVE, LOW);
   PORT->Group[g_APinDescription[PIN_VALVE].ulPort].OUTCLR.reg =
@@ -345,9 +346,10 @@ void closeValve() {
               0.62350602 * R_click.get_EMA_mA() -
                   2.51344790); // Log valve close event
 
-  DEBUG_PRINT(
-      "Solenoid valve closed using closeValve()"); // Valve closed confirmation
-                                                   // (debug only for speed)
+  DEBUG_PRINTLN(
+      "Solenoid valve closed using closeSolValve()"); // Valve closed
+                                                      // confirmation (debug
+                                                      // only for speed)
   // Serial.println("!");
 }
 
@@ -401,7 +403,7 @@ void readPressure(bool valveOpen) {
   DEBUG_PRINTLN(R_click.get_EMA_bitval());
 }
 
-void readTemperature(bool valveOpen) {
+void readTemperatureHumidity(bool valveOpen) {
   // Read temperature and relative humidity from SHT4x sensor
   setLedColor(COLOR_READING); // Show color during reading
   sensors_event_t humidity, temp;
@@ -482,7 +484,7 @@ void loop() {
   // Close valve after duration (duration=0 means stay open)
   if (solValveOpen && duration > 0 && (micros() - tick >= duration)) {
     DEBUG_PRINTLN("Solenoïd valve closed after duration check.");
-    closeValve();
+    closeSolValve();
     solValveOpen = false;
     saveToFlash(); // Save log to flash
 
@@ -540,12 +542,12 @@ void loop() {
     uint32_t elapsed = micros() - waitStartTime;
 
     // Show purple LED during delay period
-    if (elapsed < tick_delay) {
+    if (elapsed < pre_trigger_delay_us) {
       setLedColor(COLOR_WAITING);
     }
 
     // Open valve after delay has elapsed
-    if (elapsed >= tick_delay) {
+    if (elapsed >= pre_trigger_delay_us) {
       // Open valve and trigger
       // openValveTrigger();
       isExecuting = true;
@@ -568,7 +570,7 @@ void loop() {
     // If valve isn't open and timing of first datapoint has been reached open
     // solenoid valve
     if (!solValveOpen && sequenceIndex == 0 && (now / 1000) >= time_array[0]) {
-      openValveTrigger();       // Open solenoid valve and trigger
+      openSolValveAndTrigOut(); // Open solenoid valve and trigger
       performingTrigger = true; // Set trigger flag
       tick = micros();
       DEBUG_PRINT("Time to opening solenoid valve: ");
@@ -583,7 +585,7 @@ void loop() {
 
     // Check if solenoid valve needs to be closed
     if (solValveOpen && (now / 1000) >= (uint32_t)solValveCloseTime) {
-      closeValve();
+      closeSolValve();
       solValveOpen = false;
       DEBUG_PRINT("Solenoïd valve closed after: ");
       DEBUG_PRINT(now / 1000);
@@ -856,10 +858,10 @@ void loop() {
       waitingToOpenValve = true;
       waitStartTime = micros();
 
-      if (tick_delay > 0) {
+      if (pre_trigger_delay_us > 0) {
         setLedColor(COLOR_WAITING);
         DEBUG_PRINT("Waiting ");
-        DEBUG_PRINT(tick_delay);
+        DEBUG_PRINT(pre_trigger_delay_us);
         DEBUG_PRINTLN(" µs before opening");
       } else {
         // If no delay, proceed immediately in next loop iteration
@@ -869,7 +871,7 @@ void loop() {
     } else if (strncmp(command, "C", 1) == 0) {
       // Command: C
       // Manually close valve (override)
-      closeValve();
+      closeSolValve();
       saveToFlash(); // Save log to flash
       solValveOpen = false;
 
@@ -913,9 +915,9 @@ void loop() {
     } else if (strncmp(command, "L", 1) == 0) {
       // Command: L <delay_us>
       // Set delay before opening valve (applies to both O and D commands)
-      tick_delay = parseIntInString(command, 1);
+      pre_trigger_delay_us = parseIntInString(command, 1);
       DEBUG_PRINT("Delay before opening valve: ");
-      DEBUG_PRINT(tick_delay);
+      DEBUG_PRINT(pre_trigger_delay_us);
       DEBUG_PRINTLN(" µs");
 
     } else if (strncmp(command, "P?", 2) == 0) {
@@ -926,7 +928,7 @@ void loop() {
     } else if (strncmp(command, "T?", 2) == 0) {
       // Command: T?
       // Read and return temperature & humidity
-      readTemperature(solValveOpen);
+      readTemperatureHumidity(solValveOpen);
 
     } else if (strncmp(command, "?", 1) == 0) {
       // Command: ?
@@ -983,7 +985,7 @@ void loop() {
         DEBUG_PRINTLN(" V");
       }
       DEBUG_PRINT("Delay before opening valve: ");
-      DEBUG_PRINT(tick_delay);
+      DEBUG_PRINT(pre_trigger_delay_us);
       DEBUG_PRINTLN(" µs");
       DEBUG_PRINT("Photodiode detection delay: ");
       DEBUG_PRINT(pda_delay);
