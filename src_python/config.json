@@ -25,12 +25,13 @@
         "mode": "PMP"
     },
     "run": {
-        "mode": "experimental",
+        "mode": "manual",
         "save_output": true,
         "save_name": "Test3CalibratedCurve",
         "save_path": "C:\\CoughMachineData\\Runs",
         "type": "profile",
         "duration": 500,
-        "tank_pressure": 1
+        "tank_pressure": 1,
+        "pre_trigger_delay_us": 0
     }
 }
