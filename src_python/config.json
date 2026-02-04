@@ -14,8 +14,8 @@
         "pump_description": "PHD"
     },
     "dataset": {
-        "dataset_file_path": "C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\src_python\\default_curve.csv",
-        "delimiter": ";",
+        "dataset_file_path": "C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\src_python\\default_curve_new.csv",
+        "delimiter": ",",
         "upload_dataset": true
     },
     "pump": {
