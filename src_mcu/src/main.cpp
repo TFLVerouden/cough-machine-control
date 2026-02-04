@@ -14,11 +14,9 @@
 #include <Arduino.h>
 
 // TODO: Make it so the opening procedure using loaded protocol can be used with
-// droplet detection
+// droplet detection -> to be tested
 // TODO: Allowed set pressure range is slightly above 0.00 bar, change mA range
 // to 3.99?
-// TODO: If droplet detection reports below certain threshold, power supply is
-// likely off so don't try to detect droplet then
 // TODO: Some more todos down in the code...
 
 // ============================================================================
@@ -125,9 +123,10 @@ R_Click R_click(PIN_CS_RCLICK, RT_Click_Calibration{4.04, 10.98, 806, 2191});
 Adafruit_SHT4x sht4;
 
 // Photodetector configuration for droplet detection
-const float PDA_R1 = 6710.0; // Voltage divider resistor [Ohm]
-const float PDA_R2 = 3260.0; // Voltage divider resistor [Ohm]
-const float PDA_THR = 4.5;   // Droplet detection threshold [V]
+const float PDA_R1 = 6710.0;     // Voltage divider resistor [Ohm]
+const float PDA_R2 = 3260.0;     // Voltage divider resistor [Ohm]
+const float PDA_THR = 4.5;       // Droplet detection threshold [V]
+const float PDA_MIN_VALID = 0.1; // Minimum valid signal [V] (detect PSU off)
 
 // ============================================================================
 // T CLICK CONFIGURATION (proportional valve and pressure regulator)
@@ -485,6 +484,17 @@ void loop() {
     // Only start checking photodiode after the configured delay
     if (elapsedSinceStart >= pda_delay) {
       float signalVoltage = readPhotodetector();
+
+      // If signal is near zero, assume PDA power is off -> abort detection
+      if (signalVoltage <= PDA_MIN_VALID) {
+        printError("PDA signal too low; check photodetector power.");
+        stopLaser();
+        detectingDroplet = false;
+        belowThreshold = false;
+        delayedRunPending = false;
+        setLedColor(COLOR_IDLE);
+        return;
+      }
 
       // Falling edge: droplet detected (signal drops below threshold)
       if (!belowThreshold && signalVoltage < PDA_THR) {
