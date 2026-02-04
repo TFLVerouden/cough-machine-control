@@ -219,6 +219,9 @@ def manual_mode():
     print("\n=== MANUAL MODE ===")
     print("Enter commands to send to MCU (type 'exit' to return to main menu)\n")
 
+    ser.write('B 1\n'.encode())
+    time.sleep(0.05)
+
     while True:
         cmd = input("Enter command: ").strip()
 

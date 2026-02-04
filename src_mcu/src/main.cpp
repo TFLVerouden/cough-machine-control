@@ -13,30 +13,32 @@
 #include <Adafruit_SHT4x.h>
 #include <Arduino.h>
 
-// TODO: Add/change function to adjust all delays via serial command
 // TODO: Make it so the opening procedure using loaded protocol can be used with
 // droplet detection
-// TODO: Streamline function names (can they all be one character, consistent
-// question mark, etc?)
-// TODO: Enable/disable debug mode via serial command
 // TODO: Allowed set pressure range is slightly above 0.00 bar, change mA range
 // to 3.99?
 // TODO: If droplet detection reports below certain threshold, power supply is
 // likely off so don't try to detect droplet then
+// TODO: Some more todos down in the code...
 
 // ============================================================================
 // DEBUG CONFIGURATION
 // ============================================================================
-// Set to 1 to enable debug messages, 0 to disable for maximum speed
-#define DEBUG 1
+// Debug output is disabled by default and can be enabled via the B command.
+bool debug_enabled = false;
 
-#if DEBUG
-#define DEBUG_PRINT(x) Serial.print(x)
-#define DEBUG_PRINTLN(x) Serial.println(x)
-#else
-#define DEBUG_PRINT(x)
-#define DEBUG_PRINTLN(x)
-#endif
+#define DEBUG_PRINT(x)                                                         \
+  do {                                                                         \
+    if (debug_enabled) {                                                       \
+      Serial.print(x);                                                         \
+    }                                                                          \
+  } while (0)
+#define DEBUG_PRINTLN(x)                                                       \
+  do {                                                                         \
+    if (debug_enabled) {                                                       \
+      Serial.println(x);                                                       \
+    }                                                                          \
+  } while (0)
 
 // ============================================================================
 // PIN DEFINITIONS
@@ -584,7 +586,14 @@ void loop() {
     DEBUG_PRINT("CMD: ");
     DEBUG_PRINTLN(command);
 
-    if (strncmp(command, "V", 1) == 0) {
+    if (strncmp(command, "B", 1) == 0) {
+      // Command: B <0|1>
+      // Enable (1) or disable (0) debug output
+      int enable = parseIntInString(command, 1);
+      debug_enabled = (enable == 1);
+      Serial.println(debug_enabled ? "DEBUG_ON" : "DEBUG_OFF");
+
+    } else if (strncmp(command, "V", 1) == 0) {
       // Command: V <mA>
       // Set milli amps of proportional valve to <mA>
 
@@ -901,22 +910,23 @@ void loop() {
       // Command: ?
       // Print help menu
       DEBUG_PRINTLN("\n=== Available Commands ===");
-      DEBUG_PRINTLN("O       - Open solenoid valve");
-      DEBUG_PRINTLN("C       - Close solenoid valve (and stop any run)");
-      DEBUG_PRINTLN("D       - Droplet-detect then RUN dataset");
-      DEBUG_PRINTLN("W <us>  - Set wait before RUN (µs)");
-      DEBUG_PRINTLN("V <mA> - Set proportional valve milliamps to <mA>");
-      DEBUG_PRINTLN("P?      - Read pressure");
-      DEBUG_PRINTLN("P <bar> - Set pressure regulator to <bar>");
+      DEBUG_PRINTLN("R       - RUN loaded dataset");
+      DEBUG_PRINTLN("D       - DROPLET-detect then run dataset");
+      DEBUG_PRINTLN("W <us>  - Set WAIT before run (µs)");
+      DEBUG_PRINTLN("P <bar> - Set PRESSURE on tank (bar)");
+      DEBUG_PRINTLN("P?      - Read PRESSURE");
+      DEBUG_PRINTLN("O       - OPEN solenoid valve");
+      DEBUG_PRINTLN("C       - CLOSE solenoid valve (and stop any run)");
+      DEBUG_PRINTLN("V <mA>  - Set proportional VALVE milliamps to <mA>");
       DEBUG_PRINTLN("L <N_datapoints> <dataset duration (ms)> <csv dataset> "
-                    "- Load dataset, format: "
+                    "- LOAD dataset, format: "
                     "<ms0>,<mA0>,<e0>,<ms1>,<mA1>,<e1>,...,<msN>,<mAN>,<eN>");
-      DEBUG_PRINTLN("R       - Execute loaded dataset");
-      DEBUG_PRINTLN("F       - Dump logged execution data file over serial");
-      DEBUG_PRINTLN("L?      - Show dataset status");
-      DEBUG_PRINTLN("T?      - Read temperature & humidity");
-      DEBUG_PRINTLN("S?      - System status");
-      DEBUG_PRINTLN("?       - Show this help");
+      DEBUG_PRINTLN("L?      - Show LOADED dataset status");
+      DEBUG_PRINTLN("F       - Dump logged execution data FILE over serial");
+      DEBUG_PRINTLN("T?      - Read TEMPERATURE & humidity");
+      DEBUG_PRINTLN("S?      - System STATUS");
+      DEBUG_PRINTLN("B <0|1> - DeBUG output off/on");
+      DEBUG_PRINTLN("?       - Show this help?");
 
     } else if (strncmp(command, "S?", 2) == 0) {
       // Command: S?
