@@ -1,10 +1,11 @@
 import csv
-import os
+from pathlib import Path
+
+from tcm_utils.file_dialogs import ask_open_file, find_repo_root, repo_config_path
 from dvg_devices.BaseDevice import SerialDevice
 
 # Configure variables
 baud = 115200
-filename = r"C:\Users\local2\Documents\GitHub\cough-machine-control\src_python\test_steps.csv"
 delimiter = ','
 
 # =========================================================================================
@@ -82,13 +83,13 @@ def format(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", 
 # =========================================================================================
 # arduino = Arduino(
     # name="MCU_1", long_name="Adafruit ItsyBitsy M4 Feather Express", connect_to_specific_ID="TCM_control")
-arduino = SerialDevice(name="MCU_1", long_name="TCM_control")
-arduino.serial_settings["baudrate"] = baud
-arduino.serial_settings["timeout"] = 1
+mcu_1 = SerialDevice(name="MCU_1", long_name="TCM_control")
+mcu_1.serial_settings["baudrate"] = baud
+mcu_1.serial_settings["timeout"] = 1
 
 
 def id_query():
-    _success, reply = arduino.query("id?")
+    _success, reply = mcu_1.query("id?")
     if isinstance(reply, str):
         reply_broad = reply.strip()
         reply_specific = None
@@ -98,28 +99,36 @@ def id_query():
     return reply_broad, reply_specific
 
 
-arduino.set_ID_validation_query(
+mcu_1.set_ID_validation_query(
     ID_validation_query=id_query,
     valid_ID_broad="TCM_control",
     valid_ID_specific=None,
 )
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
-config_dir = os.path.join(repo_root, ".config")
-os.makedirs(config_dir, exist_ok=True)
-last_port_path = os.path.join(config_dir, "MCU_1_port.txt")
+repo_root = find_repo_root()
+last_port_path = repo_config_path("MCU_1_port.txt")
 
-if not arduino.auto_connect(filepath_last_known_port=last_port_path):
+if not mcu_1.auto_connect(filepath_last_known_port=str(last_port_path)):
     raise SystemError("Arduino not found via auto_connect")
 
+flow_curve_path = ask_open_file(
+    key="flow_curve_csv",
+    title="Select flow curve CSV",
+    filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
+    default_dir=repo_root / "src_python",
+    start=repo_root,
+)
+
+if flow_curve_path is None:
+    raise SystemExit("No flow curve CSV selected")
+
 # data[0] is time array, data[1] is mA array, data[2] is enable array
-data = extract(filename, delimiter)
+data = extract(str(flow_curve_path), delimiter)
 serial_command = format(data[0], data[1], data[2])
 
 print(serial_command)                       # Debug print
 
 # Encode serial command to utf8 format for arduino.
-arduino.write(serial_command.encode('utf-8'))
+mcu_1.write(serial_command.encode('utf-8'))
 
-arduino.close()
+mcu_1.close()
