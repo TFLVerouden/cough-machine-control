@@ -129,10 +129,10 @@ def manual_mode():
             else:
                 continue
         else:
-            mcu_device.write(cmd + '\n')
+            mcu_device.write(cmd)
             time.sleep(0.1)  # Allow MCU to start responding
 
-            responses = read_ser_response(mcu_device, timeout=1.0)
+            responses = read_ser_response(mcu_device, timeout=0.2)
             for response in responses:
                 print(f"Response: {response}")
 

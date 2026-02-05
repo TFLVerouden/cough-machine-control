@@ -121,8 +121,8 @@ def read_ser_response(device: SerialDevice, timeout=1.0):
     while (time.time() - start_time) < timeout:
         if device.ser.in_waiting > 0:
             try:
-                line = device.readline().decode('utf-8', errors='ignore').rstrip()
-                if line:
+                success, line = device.readline()
+                if success:
                     responses.append(line)
             except Exception as e:
                 print(f"Error reading response: {e}")
