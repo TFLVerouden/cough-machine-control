@@ -129,12 +129,14 @@ def manual_mode():
             else:
                 continue
         else:
-            ser.write((cmd + '\n').encode('utf-8'))
+            mcu_device.write(cmd)
+            # ser.write((cmd + '\n').encode('utf-8'))
             time.sleep(0.1)  # Small delay to allow MCU to respond
 
-            if ser.in_waiting > 0:
-                response = ser.readline().decode('utf-8', errors='ignore').rstrip()
-                print(f"Response: {response}")
+            print(mcu_device.readline())
+            # if ser.in_waiting > 0:
+            #     response = ser.readline().decode('utf-8', errors='ignore').rstrip()
+            #     print(f"Response: {response}")
 
 
 def send_dataset(mcu, delimiter=',', file_path=None):
