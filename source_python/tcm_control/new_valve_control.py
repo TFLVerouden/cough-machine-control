@@ -1,15 +1,16 @@
 import propar
-import serial
 import time
-import serial.tools.list_ports
 import datetime
-import csv
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import pumpy3
 import json
+
+from devices import find_serial_device, SprayTecLift, create_serial_device, connect_serial_device
+from flow_profile import extract_flow_profile, format_flow_profile, resolve_flow_curve_path
+from tcm_utils.file_dialogs import ask_open_file, find_repo_root, repo_config_path
 
 
 # TODO: Consider: add config options for droplet detection delay (PRE) and
@@ -29,6 +30,10 @@ print(function_dir)
 sys.path.append(function_dir)
 
 # Finished loading Modules
+
+mcu_device = None
+lift_device = None
+lift = None
 
 
 def split_array_by_header_marker(arr, marker='Date-Time'):
@@ -75,33 +80,6 @@ def Spraytec_data_saved_check():
         print(f"Saved spraytec_data of {file_name_time}")
 
 
-def find_serial_device(description, continue_on_error=False):
-    ports = list(serial.tools.list_ports.comports())
-    ports.sort(key=lambda port: int(port.device.replace('COM', '')))
-
-    # Filter ports where the description contains the provided keyword
-    matching_ports = [
-        port.device for port in ports if description in port.description]
-
-    if len(matching_ports) == 1:
-        return matching_ports[0]
-    elif len(matching_ports) > 1:
-        print(f'Multiple matching devices found for "{description}":')
-        for idx, port in enumerate(ports):
-            print(f'{idx+1}. {port.device} - {port.description}')
-        choice = input(f'Select the device number for "{description}": ')
-        return matching_ports[int(choice) - 1]
-    else:
-        if continue_on_error:
-            return None
-        print(
-            f'No matching devices found for "{description}". Available devices:')
-        for port in ports:
-            print(f'{port.device} - {port.description}')
-        choice = input(f'Enter the COM port number for "{description}": COM')
-        return f'COM{choice}'
-
-
 def reading_temperature(verbose=False):
     ser.reset_input_buffer()
     ser.write('T?\n'.encode())
@@ -128,93 +106,6 @@ def reading_pressure(verbose=False):
     return pressure_value
 
 
-def extract_csv_dataset(filename, delimiter=','):
-    # Define output variables
-    time = []
-    mA = []
-    enable = []
-    row_idx = 0
-
-    with open(filename, 'r') as csvfile:
-        # Reader object of the file
-        csvreader = csv.reader(csvfile, delimiter=delimiter)
-
-        # extract data from the file and create time, value and enable arrays
-        for rows in csvreader:
-            if len(rows) < 3 or not rows[0] or not rows[1] or rows[2] == '':
-                print(
-                    f"Encountered empty cell in flow profile dataset, row index {row_idx}!")
-                time = []
-                mA = []
-                enable = []
-                break
-            else:
-                # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
-                time.append(rows[0].replace(',', '.'))
-                mA.append(rows[1].replace(',', '.'))
-                e = rows[2].strip()
-                if e not in ('0', '1'):
-                    raise ValueError(
-                        f"Invalid enable value '{e}' at row {row_idx}; expected 0 or 1")
-                enable.append(e)
-                row_idx += 1
-
-    return time, mA, enable
-
-
-def format_csv_dataset(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", data_delim=",", line_feed='\n'):
-
-    duration = time_array[-1]
-
-    # Check for inconsistent dataset length
-    if len(time_array) != len(mA_array) or len(time_array) != len(enable_array) or len(time_array) == 0:
-        print(
-            f"Arrays are not compatible! Time length: {len(time_array)}, mA length: {len(mA_array)}, enable length: {len(enable_array)}")
-        return
-    else:
-        # Create 'handshake' sequence
-        header = [prefix, handshake_delim, str(
-            len(time_array)), handshake_delim, duration, handshake_delim]
-
-        # Append timestamps and values in order <time0, mA0, e0, time1, mA1, e1, ...>
-        data = [str(val) for time, mA, e in zip(time_array, mA_array, enable_array)
-                for val in (time, mA, e)]
-
-        # format into one string to send over serial
-        output = "".join(header) + data_delim.join(data) + line_feed
-
-    return output
-
-
-class SprayTecLift(serial.Serial):
-    def __init__(self, port, baudrate=9600, timeout=1):
-        super().__init__(port=port, baudrate=baudrate, timeout=timeout)
-        time.sleep(1)  # Allow time for the connection to establish
-        print(f"Connected to SprayTec lift on {port}")
-
-    def get_height(self):
-        """Send a command to get the platform height and parse the response."""
-        try:
-            self.write(b'?\n')  # Send the status command
-            response = self.readlines()
-            for line in response:
-                if line.startswith(b'  Platform height [mm]: '):
-                    height = line.split(b': ')[1].strip().decode(
-                        'utf-8', errors='ignore')
-                    return float(height)
-            print(
-                'Warning: No valid response containing "Platform height [mm]" was found.')
-            return None
-        except Exception as e:
-            print(f"Error while reading lift height: {e}")
-            return None
-
-    def close_connection(self):
-        """Close the serial connection."""
-        self.close()
-        print("Lift connection closed.")
-
-
 def manual_mode():
     print("\n=== MANUAL MODE ===")
     print("Enter commands to send to MCU (type 'exit' to return to main menu)\n")
@@ -230,7 +121,8 @@ def manual_mode():
                 "Are you sure you want to exit manual mode? (y/n): ").strip().lower()
             if answer == 'y':
                 print("Exiting program.")
-                ser.close()
+                if mcu_device is not None:
+                    mcu_device.close()
                 if spraytech_lift_com_port:
                     lift.close_connection()
                 exit()
@@ -245,26 +137,20 @@ def manual_mode():
                 print(f"Response: {response}")
 
 
-def send_dataset(delimiter=',', file_path=None):
+def send_dataset(mcu, delimiter=',', file_path=None):
 
     # Defining defaul file path
-    if file_path is None:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        filename = os.path.join(script_dir, 'default.csv')
-    else:
-        filename = file_path
+    flow_curve_path = resolve_flow_curve_path(file_path)
+    print("Preparing to send dataset from file.")
 
-    print(f'Preparing to send dataset from file.')
+    data = extract_flow_profile(flow_curve_path, delimiter)
+    print(f"Sending dataset from file: {flow_curve_path}")
 
-    try:
-        data = extract_csv_dataset(filename, delimiter)
-        print(f'Sending dataset from file: {filename}')
-    except FileNotFoundError:
-        print(f'Error: File "{filename}" not found.')
-        exit()
+    serial_command = format_flow_profile(data[0], data[1], data[2])
+    if not serial_command:
+        raise ValueError("Flow profile formatting failed; no data sent.")
 
-    serial_command = format_csv_dataset(data[0], data[1], data[2])
-    ser.write(serial_command.encode('utf-8'))
+    mcu.write(serial_command.encode('utf-8'))
 
 
 def verify_mcu_dataset_received_with_timeout(expected_msg="DATASET_RECEIVED", timeout_sec=5):
@@ -355,7 +241,7 @@ def initialize_pump(pump_com_port=None, pump_baudrate=19200, pump_timeout=0.3, p
 
 def configure_settings():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, 'config.json')
+    config_path = os.path.join(script_dir, 'config', 'config.json')
 
     try:
         with open(config_path, 'r') as config_file:
@@ -411,17 +297,22 @@ if __name__ == '__main__':
     pre_trigger_delay_us = config['run'].get('pre_trigger_delay_us', 0)
 
     # Set up the Arduino serial connection
-    if not arduino_com_port:
-        arduino_com_port = find_serial_device(description=arduino_description)
+    mcu_device = create_serial_device(
+        arduino_baudrate,
+        arduino_timeout,
+        name="MCU_1",
+        expected_id="TCM_control",
+        display_name="TCM_control",
+    )
+    connect_serial_device(mcu_device, com_port=arduino_com_port,
+                          last_port_key=repo_config_path("MCU_1_port.txt"))
 
-    try:
-        ser = serial.Serial(arduino_com_port, arduino_baudrate,
-                            timeout=arduino_timeout)  # Non-blocking mode
-        time.sleep(1)  # Wait for the connection to establish
-        print(f'Connected to Arduino on {arduino_com_port}')
-    except Exception as e:
-        print(f'Error connecting to Arduino: {e}')
-        exit()
+    ser = mcu_device.ser
+    if ser is None:
+        raise SystemError("Arduino connection failed; serial port unavailable")
+
+    time.sleep(1)
+    print(f"Connected to Arduino on {ser.port}")
 
     # Initialize pump if required
     if use_pump == True:
@@ -429,16 +320,25 @@ if __name__ == '__main__':
                                pump_timeout, pump_diameter, pump_mode)
 
     # Connect to SprayTec lift if available
-    if not spraytech_lift_com_port:
-        spraytech_lift_com_port = find_serial_device(
-            description=spraytech_description, continue_on_error=False)
-
-    try:
-        lift = SprayTecLift(spraytech_lift_com_port,
-                            spraytech_lift_baud_rate, spraytech_lift_timeout)
-    except Exception as e:
-        print(f'Error connecting to SprayTec lift: {e}')
-        spraytech_lift_com_port = None
+    lift_device = create_serial_device(
+        spraytech_lift_baud_rate,
+        spraytech_lift_timeout,
+        name="SprayTec_lift",
+        expected_id="Arduino_MEGA_2560",
+        display_name="SprayTec lift",
+        id_query_cmds=["id?", "ID?", "*IDN?"],
+        boot_delay_sec=1.0,
+        query_wait_time=0.5,
+    )
+    connect_serial_device(
+        lift_device,
+        com_port=spraytech_lift_com_port,
+        last_port_key=repo_config_path("SprayTec_lift_port.txt")
+    )
+    if spraytech_lift_com_port and lift_device.ser is not None:
+        lift = SprayTecLift(lift_device.ser)
+    else:
+        lift = None
 
     # Create the data directory if it doesn't exist
     if spraytech_lift_com_port:
@@ -455,7 +355,7 @@ if __name__ == '__main__':
 
     if run_type == "profile" and upload_dataset == True:
 
-        send_dataset(delimiter, dataset_file_path)
+        send_dataset(mcu_device, delimiter, dataset_file_path)
 
         if verify_mcu_dataset_received_with_timeout():
             print("Proceeding to valve control phase.")
@@ -476,7 +376,7 @@ if __name__ == '__main__':
     # Take humidity, temprature, pressure readings and lift height readings
     RH, Temperature = reading_temperature()
 
-    if spraytech_lift_com_port:
+    if spraytech_lift_com_port and lift is not None:
         height = lift.get_height()
     else:
         height = np.nan
@@ -601,8 +501,9 @@ if __name__ == '__main__':
 
         # Break the loop if experiment is finished
         if finished_experiment:
-            ser.close()
-            if spraytech_lift_com_port:
+            if mcu_device is not None:
+                mcu_device.close()
+            if spraytech_lift_com_port and lift is not None:
                 lift.close_connection()
 
             print("Serial connections closed")
