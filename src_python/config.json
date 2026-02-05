@@ -27,7 +27,7 @@
     "run": {
         "mode": "manual",
         "save_output": true,
-        "save_name": "Test3CalibratedCurve",
+        "save_name": "Debug",
         "save_path": "C:\\CoughMachineData\\Runs",
         "type": "profile",
         "duration": 500,

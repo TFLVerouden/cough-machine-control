@@ -916,6 +916,11 @@ void loop() {
       // Read and return temperature & humidity
       readTemperatureHumidity(solValveOpen);
 
+    } else if (strncmp(command, "id?", 3) == 0) {
+      // Command: id?
+      // Return device ID for dvg-devices Arduino validation
+      Serial.println("TCM_control");
+
     } else if (strncmp(command, "?", 1) == 0) {
       // Command: ?
       // Print help menu
@@ -936,6 +941,7 @@ void loop() {
       DEBUG_PRINTLN("T?      - Read TEMPERATURE & humidity");
       DEBUG_PRINTLN("S?      - System STATUS");
       DEBUG_PRINTLN("B <0|1> - DeBUG output off/on");
+      DEBUG_PRINTLN("id?     - Show device ID for auto serial connection");
       DEBUG_PRINTLN("?       - Show this help?");
 
     } else if (strncmp(command, "S?", 2) == 0) {

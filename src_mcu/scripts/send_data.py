@@ -1,10 +1,10 @@
 import csv
-import serial
+import os
+from dvg_devices.BaseDevice import SerialDevice
 
 # Configure variables
-serial_port = "COM14"
 baud = 115200
-filename = "PyramidFlowProfile.csv"
+filename = r"C:\Users\local2\Documents\GitHub\cough-machine-control\src_python\test_steps.csv"
 delimiter = ','
 
 # =========================================================================================
@@ -80,7 +80,38 @@ def format(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", 
 # =========================================================================================
 # Write dataset over serial using communication protocol
 # =========================================================================================
-sc = serial.Serial(serial_port, baud, timeout=1)
+# arduino = Arduino(
+    # name="MCU_1", long_name="Adafruit ItsyBitsy M4 Feather Express", connect_to_specific_ID="TCM_control")
+arduino = SerialDevice(name="MCU_1", long_name="TCM_control")
+arduino.serial_settings["baudrate"] = baud
+arduino.serial_settings["timeout"] = 1
+
+
+def id_query():
+    _success, reply = arduino.query("id?")
+    if isinstance(reply, str):
+        reply_broad = reply.strip()
+        reply_specific = None
+    else:
+        reply_broad = ""
+        reply_specific = None
+    return reply_broad, reply_specific
+
+
+arduino.set_ID_validation_query(
+    ID_validation_query=id_query,
+    valid_ID_broad="TCM_control",
+    valid_ID_specific=None,
+)
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.abspath(os.path.join(script_dir, "..", ".."))
+config_dir = os.path.join(repo_root, ".config")
+os.makedirs(config_dir, exist_ok=True)
+last_port_path = os.path.join(config_dir, "MCU_1_port.txt")
+
+if not arduino.auto_connect(filepath_last_known_port=last_port_path):
+    raise SystemError("Arduino not found via auto_connect")
 
 # data[0] is time array, data[1] is mA array, data[2] is enable array
 data = extract(filename, delimiter)
@@ -89,4 +120,6 @@ serial_command = format(data[0], data[1], data[2])
 print(serial_command)                       # Debug print
 
 # Encode serial command to utf8 format for arduino.
-sc.write(serial_command.encode('utf8'))
+arduino.write(serial_command.encode('utf-8'))
+
+arduino.close()
