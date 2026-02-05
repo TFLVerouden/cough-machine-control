@@ -113,6 +113,25 @@ def connect_serial_device(
         raise SystemError("Device not found via scan")
 
 
+def read_ser_response(device: SerialDevice, timeout=1.0):
+    """Read all available serial responses with timeout."""
+    responses = []
+    start_time = time.time()
+
+    while (time.time() - start_time) < timeout:
+        if device.ser.in_waiting > 0:
+            try:
+                line = device.readline().decode('utf-8', errors='ignore').rstrip()
+                if line:
+                    responses.append(line)
+            except Exception as e:
+                print(f"Error reading response: {e}")
+                break
+        time.sleep(0.05)  # Small delay to prevent busy-waiting
+
+    return responses if responses else ["(no response)"]
+
+
 class SprayTecLift:
     def __init__(self, ser: serial.Serial):
         self.ser = ser

@@ -8,7 +8,7 @@ import sys
 import pumpy3
 import json
 
-from devices import find_serial_device, SprayTecLift, create_serial_device, connect_serial_device
+from devices import find_serial_device, SprayTecLift, create_serial_device, connect_serial_device, read_ser_response
 from flow_profile import extract_flow_profile, format_flow_profile, resolve_flow_curve_path
 from tcm_utils.file_dialogs import ask_open_file, find_repo_root, repo_config_path
 
@@ -129,14 +129,12 @@ def manual_mode():
             else:
                 continue
         else:
-            mcu_device.write(cmd)
-            # ser.write((cmd + '\n').encode('utf-8'))
-            time.sleep(0.1)  # Small delay to allow MCU to respond
+            mcu_device.write(cmd + '\n')
+            time.sleep(0.1)  # Allow MCU to start responding
 
-            print(mcu_device.readline())
-            # if ser.in_waiting > 0:
-            #     response = ser.readline().decode('utf-8', errors='ignore').rstrip()
-            #     print(f"Response: {response}")
+            responses = read_ser_response(mcu_device, timeout=1.0)
+            for response in responses:
+                print(f"Response: {response}")
 
 
 def send_dataset(mcu, delimiter=',', file_path=None):
