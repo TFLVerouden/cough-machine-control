@@ -184,7 +184,7 @@ def retreive_experiment_data(filename, experiment_name, start_time, end_time, Te
         f.write(f"Relative Humidity (%),{RH}\n")
         f.write(f"Lift Height (mm),{height}\n")
 
-        ser.write('L\n'.encode())
+        ser.write('F\n'.encode())
 
         while True:
             raw_line = ser.readline()
