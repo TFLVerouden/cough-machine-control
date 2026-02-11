@@ -200,6 +200,8 @@ Mounted using a [Thorlabs MK11F/M laser diode mount](https://www.thorlabs.com/th
 - [Website manufacturer](https://www.thorlabs.com/thorproduct.cfm?partnumber=PDA36A2)
 - [Manual](/docs/piv_addon/Thorlabs_photodiode_PDA36A2-manual.pdf)
 
+Gain is set to 35 dB.
+
 
 ## Peripherals
 ### Syringe pump

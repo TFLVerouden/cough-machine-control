@@ -76,7 +76,7 @@ pump.set_mode("PMP")        # Set to PuMP mode
 input("Press Enter to start flushing the pump...")
 
 # Set MCU delay to 0 us, make sure it is not in droplet detection mode
-ser_mcu.write('L 0\n'.encode())
+ser_mcu.write('W 0\n'.encode())
 # ser_mcu.write('C'.encode())  # Close valve
 
 # Flush pump for a bit
@@ -91,7 +91,7 @@ ser_mcu.write('D 1\n'.encode())
 while True:
     if ser_mcu.in_waiting > 0:
         response = ser_mcu.readline().decode('utf-8').rstrip()
-        if response == "!":
+        if response == "FINISHED":
             pump.stop()
             ser_mcu.write('C'.encode())  # Disable droplet detection
             break
@@ -113,7 +113,7 @@ temperature, humidity = read_temperature(verbose=True)
 
 # Set pump and MCU parameters
 pump.set_rate(0.3, "ml/mn")   # Flow rate
-ser_mcu.write('L 59500\n'.encode())  # Set valve opening delay to 59.5 ms
+ser_mcu.write('W 59500\n'.encode())  # Set valve opening delay to 59.5 ms
 
 # Setup readings array
 readings = np.array([], dtype=float)
@@ -135,7 +135,7 @@ while len(droplet_times) < nr_droplets:
     # Listen to commands
     if ser_mcu.in_waiting > 0:
         response = ser_mcu.readline().decode('utf-8').rstrip()
-        if response == "!":
+        if response == "FINISHED":
             droplet_times.append(elapsed)
             print(
                 f"Droplet {len(droplet_times)} detected at {elapsed:.3f} s")
@@ -151,19 +151,19 @@ while len(droplet_times) < nr_droplets:
 ser_mcu.write('C'.encode())  # Disable droplet detection
 pump.stop()
 
-# Make a quick plot of pressure in time, with vertical lines indicating the droplets
-plt.figure()
-plt.plot(readings[0::2] - readings[0], readings[1::2], label='Pressure (bar)')
-for dt in droplet_times:
-    plt.axvline(x=dt - readings[0], color='r', linestyle='--',
-                label='Droplet detected' if dt == droplet_times[0] else "")
-plt.xlabel('Time (s)')
-plt.ylabel('Pressure (bar)')
-plt.title(
-    f'Dripping drops (T: {temperature} °C, RH: {humidity} %)')
-plt.legend()
-plt.show()
+# # Make a quick plot of pressure in time, with vertical lines indicating the droplets
+# plt.figure()
+# plt.plot(readings[0::2] - readings[0], readings[1::2], label='Pressure (bar)')
+# for dt in droplet_times:
+#     plt.axvline(x=dt - readings[0], color='r', linestyle='--',
+#                 label='Droplet detected' if dt == droplet_times[0] else "")
+# plt.xlabel('Time (s)')
+# plt.ylabel('Pressure (bar)')
+# plt.title(
+#     f'Dripping drops (T: {temperature} °C, RH: {humidity} %)')
+# plt.legend()
+# plt.show()
 
-# Save droplet times to npz file
-np.savez('droplet_times.npz', droplet_times=np.array(droplet_times),
-         temperature=float(temperature), humidity=float(humidity))
+# # Save droplet times to npz file
+# np.savez('droplet_times.npz', droplet_times=np.array(droplet_times),
+#          temperature=float(temperature), humidity=float(humidity))
