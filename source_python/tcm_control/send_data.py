@@ -83,41 +83,43 @@ def format(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", 
 # =========================================================================================
 # arduino = Arduino(
     # name="MCU_1", long_name="Adafruit ItsyBitsy M4 Feather Express", connect_to_specific_ID="TCM_control")
-mcu_1 = SerialDevice(name="MCU_1", long_name="TCM_control")
-mcu_1.serial_settings["baudrate"] = baud
-mcu_1.serial_settings["timeout"] = 1
+# mcu_1 = SerialDevice(name="MCU_1", long_name="TCM_control")
+# mcu_1.serial_settings["baudrate"] = baud
+# mcu_1.serial_settings["timeout"] = 1
 
 
-def id_query():
-    _success, reply = mcu_1.query("id?")
-    if isinstance(reply, str):
-        reply_broad = reply.strip()
-        reply_specific = None
-    else:
-        reply_broad = ""
-        reply_specific = None
-    return reply_broad, reply_specific
+# def id_query():
+#     _success, reply = mcu_1.query("id?")
+#     if isinstance(reply, str):
+#         reply_broad = reply.strip()
+#         reply_specific = None
+#     else:
+#         reply_broad = ""
+#         reply_specific = None
+#     return reply_broad, reply_specific
 
 
-mcu_1.set_ID_validation_query(
-    ID_validation_query=id_query,
-    valid_ID_broad="TCM_control",
-    valid_ID_specific=None,
-)
+# mcu_1.set_ID_validation_query(
+#     ID_validation_query=id_query,
+#     valid_ID_broad="TCM_control",
+#     valid_ID_specific=None,
+# )
 
 repo_root = find_repo_root()
-last_port_path = repo_config_path("MCU_1_port.txt")
+# last_port_path = repo_config_path("MCU_1_port.txt")
 
-if not mcu_1.auto_connect(filepath_last_known_port=str(last_port_path)):
-    raise SystemError("Arduino not found via auto_connect")
+# if not mcu_1.auto_connect(filepath_last_known_port=str(last_port_path)):
+#     raise SystemError("Arduino not found via auto_connect")
 
-flow_curve_path = ask_open_file(
-    key="flow_curve_csv",
-    title="Select flow curve CSV",
-    filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
-    default_dir=repo_root / "src_python",
-    start=repo_root,
-)
+# flow_curve_path = ask_open_file(
+#     key="flow_curve_csv",
+#     title="Select flow curve CSV",
+#     filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
+#     default_dir=repo_root / "src_python",
+#     start=repo_root,
+# )
+
+flow_curve_path = "/Users/tommieverouden/Developer/cough-machine-control/source_python/tcm_control/flow_curves/step.csv"
 
 if flow_curve_path is None:
     raise SystemExit("No flow curve CSV selected")
@@ -129,6 +131,6 @@ serial_command = format(data[0], data[1], data[2])
 print(serial_command)                       # Debug print
 
 # Encode serial command to utf8 format for arduino.
-mcu_1.write(serial_command.encode('utf-8'))
+# mcu_1.write(serial_command.encode('utf-8'))
 
-mcu_1.close()
+# mcu_1.close()
