@@ -69,3 +69,7 @@ Thumbs.db
 
 # Config files
 .config/
+
+source_mcu/.pio
+source_mcu/.vscode
+source_mcu/logs/
