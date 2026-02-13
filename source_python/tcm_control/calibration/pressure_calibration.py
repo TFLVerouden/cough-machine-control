@@ -14,7 +14,7 @@ from tcm_utils.io_utils import (
     path_relative_to,
     load_two_column_numeric,
     save_metadata_json,
-    move_to_raw_subfolder,
+    # move_to_raw_subfolder,
     create_timestamped_filename,
 )
 
@@ -113,15 +113,15 @@ def main(argv: list[str] | None = None) -> int:
     np.savetxt(output_csv, csv_data, delimiter=",",
                header=csv_header, comments="")
 
-    # Move the original raw file into a raw_data subfolder
-    moved_raw = move_to_raw_subfolder(data_file, output_folder)
+    # # Move the original raw file into a raw_data subfolder
+    # moved_raw = move_to_raw_subfolder(data_file, output_folder)
 
     metadata = {
         "timestamp": timestamp,
         "timestamp_source": timestamp_source_description,
         "analysis_run_time": timestamp_str(),
         "input_file_original": path_relative_to(Path(data_file), repo_root),
-        "raw_data_path": path_relative_to(moved_raw, repo_root),
+        # "raw_data_path": path_relative_to(moved_raw, repo_root),
         "output_files": {
             "plot_pdf": path_relative_to(output_plot, repo_root),
             "calibration_csv": path_relative_to(output_csv, repo_root),
