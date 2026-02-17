@@ -83,7 +83,8 @@ def format(time_array, mA_array, enable_array, prefix="L", handshake_delim=" ", 
 # =========================================================================================
 # arduino = Arduino(
 #     name="MCU_1", long_name="Adafruit ItsyBitsy M4 Feather Express", connect_to_specific_ID="TCM_control")
-mcu_1 = SerialDevice(name="MCU_1", long_name="TCM_control")
+mcu_1 = SerialDevice(
+    name="TCM_control", long_name="Adafruit ItsyBitsy M4 Feather Express")
 mcu_1.serial_settings["baudrate"] = baud
 mcu_1.serial_settings["timeout"] = 1
 
