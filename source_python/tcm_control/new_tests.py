@@ -364,7 +364,12 @@ class CoughMachine(PoFSerialDevice):
 
     def clear_memory(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
-            "C!", expected="MEMORY_CLEARED", echo=echo)
+            "Q!", expected="MEMORY_CLEARED", echo=echo)
+        return reply or ""
+
+    def clear_logs(self, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain(
+            "Q", expected="LOGS_CLEARED", echo=echo)
         return reply or ""
 
     # DATASET HANDLING
@@ -633,6 +638,7 @@ class CoughMachine(PoFSerialDevice):
 if __name__ == "__main__":
 
     cough_machine = CoughMachine(debug=False)
+    cough_machine.clear_memory()
     cough_machine.load_dataset(
         csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\default_curve_new.csv")
     cough_machine.manual_mode()
