@@ -233,7 +233,7 @@ class CoughMachine(PoFSerialDevice):
         self,
         pressure_bar: float,
         *,
-        timeout_s: float = 60.0,
+        timeout_s: float = 120.0,
         avg_window_s: float = 5.0,
         tolerance_bar: float = 0.05,
         poll_interval_s: float = 0.2,
@@ -424,8 +424,20 @@ class CoughMachine(PoFSerialDevice):
         return reply or ""
 
     # COUGH
-    def run(self) -> None:
-        raise NotImplementedError("Run command needs a multi-line handler.")
+    def run(
+        self,
+        *,
+        timeout_s: float = 10.0,
+        echo: bool = True,
+        output_dir: Optional[str | Path] = None,
+    ) -> tuple[Optional[str], list[str], Optional[Path]]:
+        if not self.write("R"):
+            raise RuntimeError("Failed to send R command")
+        return self._read_run_log(
+            timeout_s=timeout_s,
+            echo=echo,
+            output_dir=output_dir,
+        )
 
     def detect_droplet(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
         cmd = "D" if runs is None else f"D {runs}"
@@ -497,6 +509,60 @@ class CoughMachine(PoFSerialDevice):
     # -------------------------------------------------------------------
     # Run logging
     # -------------------------------------------------------------------
+
+    def _read_run_log(
+        self,
+        *,
+        start_marker: str = "START_OF_FILE",
+        end_marker: str = "END_OF_FILE",
+        timeout_s: float = 10.0,
+        echo: bool = True,
+        output_dir: Optional[str | Path] = None,
+    ) -> tuple[Optional[str], list[str], Optional[Path]]:
+        # Read a single CSV log streamed between START_OF_FILE and END_OF_FILE.
+        start_time = time.time()
+        started = False
+        filename: Optional[str] = None
+        rows: list[str] = []
+
+        while (time.time() - start_time) < timeout_s:
+            if self.ser is not None and self.ser.in_waiting > 0:
+                success, line = self.readline()
+                if not success or not isinstance(line, str):
+                    continue
+                clean_line = line.strip()
+
+                if echo:
+                    print(f"[{self.name}] {clean_line}")
+
+                if not started:
+                    if clean_line.startswith(start_marker):
+                        started = True
+                        parts = clean_line.split(maxsplit=1)
+                        if len(parts) > 1:
+                            filename = parts[1].strip()
+                    continue
+
+                if clean_line == end_marker:
+                    break
+
+                rows.append(line)
+            else:
+                time.sleep(0.02)
+
+        if not started:
+            raise RuntimeError("Log stream did not start within timeout.")
+
+        saved_path: Optional[Path] = None
+        if output_dir is not None:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            if filename is None:
+                filename = "experiment_log.csv"
+            saved_path = output_dir / filename
+            saved_path.write_text("".join(rows))
+
+        return filename, rows, saved_path
 
 
 if __name__ == "__main__":
