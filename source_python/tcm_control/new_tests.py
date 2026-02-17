@@ -159,18 +159,42 @@ class CoughMachine(PoFSerialDevice):
         self._dataset_loaded = False
 
         # Set debug mode on device if requested
-        self.set_debug(debug)
+        self._set_debug(debug)
 
     # ------------------------------------------------------------------
     # Serial command wrappers
     # ------------------------------------------------------------------
-    def set_debug(self, enabled: bool) -> None:
+
+    # CONNECTION & DEBUGGING
+    def _identify(self, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain("id?", echo=echo)
+        return reply or ""
+
+    def _set_debug(self, enabled: bool) -> None:
         cmd = "B 1" if enabled else "B 0"
         expected = "DEBUG_ON" if enabled else "DEBUG_OFF"
         self._query_and_drain(cmd, expected=expected, echo=enabled)
         if enabled:
             print("Debug mode enabled on device.")
 
+    def read_status(self, *, echo: bool = True, timeout: float = 1.0) -> list[str]:
+        if not self._debug:
+            raise RuntimeError("read_status is only available in debug mode.")
+        if not self.write("S?"):
+            raise RuntimeError("Failed to send S? command")
+
+        lines = self._read_lines(timeout=timeout)
+        if echo:
+            for line in lines:
+                print(f"[{self.name}] {line}")
+        self._check_errors(lines, raise_on_error=True)
+        return lines
+
+    def help(self, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain("?", echo=echo)
+        return reply or ""
+
+    # CONTROL HARDWARE
     def set_valve_current(self, current_ma: float, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
             f"V {current_ma}", expected_prefix="SET_VALVE", echo=echo
@@ -183,37 +207,6 @@ class CoughMachine(PoFSerialDevice):
         )
         return reply or ""
 
-    def read_pressure(self, *, echo: bool = True) -> Optional[float]:
-        reply, _lines = self._query_and_drain(
-            "P?", expected_prefix="P", echo=echo)
-        if reply is None:
-            return None
-        try:
-            return float(reply[1:])
-        except ValueError:
-            return None
-
-    def set_wait_us(self, wait_us: int, *, echo: bool = True) -> str:
-        reply, _lines = self._query_and_drain(
-            f"W {wait_us}", expected_prefix="SET_WAIT", echo=echo
-        )
-        self._wait_us = wait_us
-        return reply or ""
-
-    def get_wait_us(self, *, echo: bool = True) -> Optional[int]:
-        reply, _lines = self._query_and_drain(
-            "W?", expected_prefix="W", echo=echo)
-        if reply is None:
-            return None
-        try:
-            return int(reply[1:])
-        except ValueError:
-            return None
-
-    def get_dataset_status(self, *, echo: bool = True) -> str:
-        reply, _lines = self._query_and_drain("L?", echo=echo)
-        return reply or ""
-
     def open_solenoid(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
             "O", expected="SOLENOID_OPENED", echo=echo)
@@ -222,17 +215,6 @@ class CoughMachine(PoFSerialDevice):
     def close_solenoid(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
             "C", expected="SOLENOID_CLOSED", echo=echo)
-        return reply or ""
-
-    def clear_memory(self, *, echo: bool = True) -> str:
-        reply, _lines = self._query_and_drain(
-            "C!", expected="MEMORY_CLEARED", echo=echo)
-        return reply or ""
-
-    def detect_droplet(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
-        cmd = "D" if runs is None else f"D {runs}"
-        reply, _lines = self._query_and_drain(
-            cmd, expected="DROPLET_ARMED", echo=echo)
         return reply or ""
 
     def laser_test(
@@ -258,6 +240,17 @@ class CoughMachine(PoFSerialDevice):
             cmd, expected=expected, echo=echo)
         return reply or ""
 
+    # READ OUT SENSORS
+    def read_pressure(self, *, echo: bool = True) -> Optional[float]:
+        reply, _lines = self._query_and_drain(
+            "P?", expected_prefix="P", echo=echo)
+        if reply is None:
+            return None
+        try:
+            return float(reply[1:])
+        except ValueError:
+            return None
+
     def read_temperature_humidity(self, *, echo: bool = True) -> tuple[Optional[float], Optional[float]]:
         reply, _lines = self._query_and_drain(
             "T?", expected_prefix="T", echo=echo)
@@ -271,32 +264,46 @@ class CoughMachine(PoFSerialDevice):
         except (IndexError, ValueError):
             return None, None
 
-    def read_status(self, *, echo: bool = True, timeout: float = 1.0) -> list[str]:
-        if not self._debug:
-            raise RuntimeError("read_status is only available in debug mode.")
-        if not self.write("S?"):
-            raise RuntimeError("Failed to send S? command")
-
-        lines = self._read_lines(timeout=timeout)
-        if echo:
-            for line in lines:
-                print(f"[{self.name}] {line}")
-        self._check_errors(lines, raise_on_error=True)
-        return lines
-
-    def identify(self, *, echo: bool = True) -> str:
-        reply, _lines = self._query_and_drain("id?", echo=echo)
+    # CONFIGURATION
+    def set_wait_us(self, wait_us: int, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain(
+            f"W {wait_us}", expected_prefix="SET_WAIT", echo=echo
+        )
+        self._wait_us = wait_us
         return reply or ""
 
-    def help(self, *, echo: bool = True) -> str:
-        reply, _lines = self._query_and_drain("?", echo=echo)
+    def get_wait_us(self, *, echo: bool = True) -> Optional[int]:
+        reply, _lines = self._query_and_drain(
+            "W?", expected_prefix="W", echo=echo)
+        if reply is None:
+            return None
+        try:
+            return int(reply[1:])
+        except ValueError:
+            return None
+
+    def clear_memory(self, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain(
+            "C!", expected="MEMORY_CLEARED", echo=echo)
         return reply or ""
 
+    # DATASET HANDLING
     def load_dataset(self) -> None:
         raise NotImplementedError("Dataset upload not implemented yet.")
 
+    def get_dataset_status(self, *, echo: bool = True) -> str:
+        reply, _lines = self._query_and_drain("L?", echo=echo)
+        return reply or ""
+
+    # COUGH
     def run(self) -> None:
         raise NotImplementedError("Run command needs a multi-line handler.")
+
+    def detect_droplet(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
+        cmd = "D" if runs is None else f"D {runs}"
+        reply, _lines = self._query_and_drain(
+            cmd, expected="DROPLET_ARMED", echo=echo)
+        return reply or ""
 
 
 # Class variables for testing
