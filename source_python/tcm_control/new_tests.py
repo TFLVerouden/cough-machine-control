@@ -162,6 +162,23 @@ class CoughMachine(PoFSerialDevice):
         self._set_debug(debug)
 
     # ------------------------------------------------------------------
+    # Manual mode
+    # ------------------------------------------------------------------
+
+    # Allow user to type commands directly to the device
+    def manual_mode(self) -> None:
+        print("Entering manual mode. Type commands to send to the device. Ctrl+C to exit.")
+        try:
+            while True:
+                cmd = input(">> ")
+                if cmd.strip().lower() in {"exit", "quit"}:
+                    print("Exiting manual mode.")
+                    break
+                self._query_and_drain(cmd, echo=True, raise_on_error=False)
+        except KeyboardInterrupt:
+            print("\nExiting manual mode.")
+
+    # ------------------------------------------------------------------
     # Serial command wrappers
     # ------------------------------------------------------------------
 
@@ -305,8 +322,16 @@ class CoughMachine(PoFSerialDevice):
             cmd, expected="DROPLET_ARMED", echo=echo)
         return reply or ""
 
+    # -------------------------------------------------------------------
+    # Dataset read and upload
+    # -------------------------------------------------------------------
 
-# Class variables for testing
-cough_machine = CoughMachine(debug=False)
+    # -------------------------------------------------------------------
+    # Run logging & metadata output
+    # -------------------------------------------------------------------
 
-cough_machine.read_status()
+
+if __name__ == "__main__":
+
+    cough_machine = CoughMachine(debug=False)
+    cough_machine.read_status()
