@@ -346,14 +346,16 @@ class CoughMachine(PoFSerialDevice):
         if not self.write(serial_command):
             raise RuntimeError("Failed to write dataset to device.")
 
-        lines = self._read_lines(timeout=timeout)
-        if echo:
-            for line in lines:
-                print(f"[{self.name}] {line}")
-        self._check_errors(lines, raise_on_error=True)
+        # Query status after upload to drain remaining output before new commands.
+        reply, _lines = self._query_and_drain(
+            "L?",
+            expected_prefix="DATASET",
+            echo=echo,
+            extra_timeout=timeout,
+        )
 
         self._dataset_loaded = True
-        return lines[-1] if lines else ""
+        return reply or ""
 
     def get_dataset_status(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain("L?", echo=echo)
@@ -443,5 +445,7 @@ class CoughMachine(PoFSerialDevice):
 
 if __name__ == "__main__":
 
-    cough_machine = CoughMachine(debug=False)
-    cough_machine.read_status()
+    cough_machine = CoughMachine(debug=True)
+    cough_machine.load_dataset(
+        csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\default_curve_new.csv")
+    cough_machine.manual_mode()
