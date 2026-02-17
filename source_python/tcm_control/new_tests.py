@@ -243,6 +243,7 @@ class CoughMachine(PoFSerialDevice):
             f"P {pressure_bar}", expected_prefix="SET_PRESSURE", echo=echo
         )
 
+        # Check parameters
         if timeout_s <= 0:
             return reply or ""
         if avg_window_s <= 0:
@@ -250,8 +251,11 @@ class CoughMachine(PoFSerialDevice):
         if poll_interval_s <= 0:
             raise ValueError("poll_interval_s must be > 0")
 
+        # Loop until we reach the setpoint within tolerance,
+        # using a rolling average to smooth out noise
         start = time.time()
         samples: list[tuple[float, float]] = []
+        first_sample_time = time.time()
         while (time.time() - start) < timeout_s:
             reading = self.read_pressure(echo=False)
             if reading is not None:
@@ -260,33 +264,24 @@ class CoughMachine(PoFSerialDevice):
                 cutoff = now - avg_window_s
                 samples = [(t, p) for t, p in samples if t >= cutoff]
 
-                if samples and (now - samples[0][0]) >= avg_window_s:
+                deviation = reading - pressure_bar
+                print(
+                    f"\rPressure: {reading:.2f} bar (dev {deviation:+.2f})",
+                    end="",
+                    flush=True,
+                )
+
+                if (now - first_sample_time) >= avg_window_s and samples:
                     avg = sum(p for _, p in samples) / len(samples)
-                    if echo:
-                        deviation = avg - pressure_bar
-                        print(
-                            f"\rPressure: {avg:.2f} bar (dev {deviation:+.2f})",
-                            end="",
-                            flush=True,
-                        )
                     if abs(avg - pressure_bar) <= tolerance_bar:
-                        if echo:
-                            print()
+                        print()
                         return reply or ""
-                elif echo:
-                    deviation = reading - pressure_bar
-                    print(
-                        f"\rPressure: {reading:.2f} bar (dev {deviation:+.2f})",
-                        end="",
-                        flush=True,
-                    )
-            elif echo:
+            else:
                 print("\rPressure: -.-- bar (dev ---)", end="", flush=True)
 
             time.sleep(poll_interval_s)
 
-        if echo:
-            print()
+        print()
         raise RuntimeError(
             "Could not reach setpoint value or pressure too unstable."
         )
