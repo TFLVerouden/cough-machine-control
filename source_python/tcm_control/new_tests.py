@@ -251,6 +251,8 @@ class CoughMachine(PoFSerialDevice):
             raise ValueError("avg_window_s must be > 0")
         if poll_interval_s <= 0:
             raise ValueError("poll_interval_s must be > 0")
+        if timeout_s <= avg_window_s:
+            avg_window_s = timeout_s / 2
 
         # Loop until we reach the setpoint within tolerance,
         # using a rolling average to smooth out noise
@@ -616,6 +618,8 @@ class CoughMachine(PoFSerialDevice):
                 if clean_line == end_marker:
                     break
 
+                if not line.endswith("\n"):
+                    line = f"{line}\n"
                 rows.append(line)
             else:
                 time.sleep(0.02)
@@ -631,6 +635,7 @@ class CoughMachine(PoFSerialDevice):
                 filename = "experiment_log.csv"
             saved_path = output_dir / filename
             saved_path.write_text("".join(rows))
+            print(f"Saved log to {saved_path}")
 
         return filename, rows, saved_path
 
@@ -640,5 +645,7 @@ if __name__ == "__main__":
     cough_machine = CoughMachine(debug=False)
     cough_machine.clear_memory()
     cough_machine.load_dataset(
-        csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\default_curve_new.csv")
+        csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\step.csv")
+    cough_machine.set_pressure(1.5, timeout_s=2.0)
+    cough_machine.run(output_dir="C:\\CoughMachineData")
     cough_machine.manual_mode()
