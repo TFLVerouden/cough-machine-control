@@ -1,6 +1,8 @@
 import contextlib
+import csv
 import os
 import time
+from pathlib import Path
 from typing import Optional
 
 from dvg_devices.BaseDevice import SerialDevice
@@ -157,6 +159,7 @@ class CoughMachine(PoFSerialDevice):
 
         self._wait_us: Optional[int] = None
         self._dataset_loaded = False
+        self._dataset_csv_path: Optional[Path] = None
 
         # Set debug mode on device if requested
         self._set_debug(debug)
@@ -305,8 +308,52 @@ class CoughMachine(PoFSerialDevice):
         return reply or ""
 
     # DATASET HANDLING
-    def load_dataset(self) -> None:
-        raise NotImplementedError("Dataset upload not implemented yet.")
+    def set_dataset_csv_path(self, csv_path: str | Path | None) -> None:
+        # Store a default path for later; load_dataset() will use this if no path is passed.
+        self._dataset_csv_path = Path(
+            csv_path) if csv_path is not None else None
+
+    def load_dataset(
+        self,
+        csv_path: str | Path | None = None,
+        *,
+        delimiter: str = ",",
+        echo: bool = True,
+        timeout: float = 1.0,
+    ) -> str:
+        # If a path is passed here, it overrides any previously stored default.
+        if csv_path is not None:
+            self._dataset_csv_path = Path(csv_path)
+
+        # If no path was provided or stored, fall back to the file picker dialog.
+        if self._dataset_csv_path is None:
+            repo_root = find_repo_root()
+            self._dataset_csv_path = ask_open_file(
+                key="flow_curve_csv",
+                title="Select flow curve CSV",
+                filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
+                default_dir=repo_root / "source_python" / "flow_curves",
+                start=repo_root,
+            )
+
+        if self._dataset_csv_path is None:
+            raise SystemExit("No flow curve CSV selected")
+
+        time_arr, mA_arr, enable_arr = self._extract_csv(
+            self._dataset_csv_path, delimiter=delimiter)
+        serial_command = self._format_dataset(time_arr, mA_arr, enable_arr)
+
+        if not self.write(serial_command):
+            raise RuntimeError("Failed to write dataset to device.")
+
+        lines = self._read_lines(timeout=timeout)
+        if echo:
+            for line in lines:
+                print(f"[{self.name}] {line}")
+        self._check_errors(lines, raise_on_error=True)
+
+        self._dataset_loaded = True
+        return lines[-1] if lines else ""
 
     def get_dataset_status(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain("L?", echo=echo)
@@ -325,6 +372,69 @@ class CoughMachine(PoFSerialDevice):
     # -------------------------------------------------------------------
     # Dataset read and upload
     # -------------------------------------------------------------------
+
+    @staticmethod
+    def _extract_csv(filename: str | Path, delimiter: str = ",") -> tuple[list[str], list[str], list[str]]:
+        # Parse a CSV file into time, current, enable arrays for the L command.
+        time_arr: list[str] = []
+        mA_arr: list[str] = []
+        enable_arr: list[str] = []
+        row_idx = 0
+
+        with open(filename, "r") as csvfile:
+            csvreader = csv.reader(csvfile, delimiter=delimiter)
+            for rows in csvreader:
+                if len(rows) < 3 or not rows[0] or not rows[1] or rows[2] == "":
+                    raise ValueError(
+                        f"Encountered empty cell at row index {row_idx}!")
+                # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
+                time_arr.append(rows[0].replace(",", "."))
+                mA_arr.append(rows[1].replace(",", "."))
+                enable_arr.append(rows[2].strip())
+                row_idx += 1
+
+        if not time_arr or not mA_arr or not enable_arr:
+            raise ValueError("CSV contains no data.")
+        return time_arr, mA_arr, enable_arr
+
+    @staticmethod
+    def _format_dataset(
+        time_array: list[str],
+        mA_array: list[str],
+        enable_array: list[str],
+        *,
+        prefix: str = "L",
+        handshake_delim: str = " ",
+        data_delim: str = ",",
+        line_feed: str = "\n",
+    ) -> str:
+        # Format the arrays into the serial protocol for dataset upload.
+        if (
+            len(time_array) != len(mA_array)
+            or len(time_array) != len(enable_array)
+            or len(time_array) == 0
+            or len(mA_array) == 0
+        ):
+            raise ValueError(
+                f"Arrays are not compatible! Time length: {len(time_array)}, "
+                f"mA length: {len(mA_array)}, enable length: {len(enable_array)}"
+            )
+
+        duration = time_array[-1]
+        header = [
+            prefix,
+            handshake_delim,
+            str(len(time_array)),
+            handshake_delim,
+            duration,
+            handshake_delim,
+        ]
+        data = [
+            str(val)
+            for t, mA, e in zip(time_array, mA_array, enable_array)
+            for val in (t, mA, e)
+        ]
+        return "".join(header) + data_delim.join(data) + line_feed
 
     # -------------------------------------------------------------------
     # Run logging & metadata output
