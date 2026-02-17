@@ -7,6 +7,7 @@ from typing import Optional
 
 from dvg_devices.BaseDevice import SerialDevice
 from tcm_utils.file_dialogs import ask_open_file, find_repo_root, get_config_path
+from tcm_utils.io_utils import prompt_yes_no
 
 
 # PoF serial class that invokes the auto connection features on initialisation
@@ -439,11 +440,75 @@ class CoughMachine(PoFSerialDevice):
             output_dir=output_dir,
         )
 
-    def detect_droplet(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
+    def detect_droplet(
+        self,
+        runs: Optional[int] = None,
+        *,
+        echo: bool = True,
+        output_dir: Optional[str | Path] = None,
+        log_timeout_s: float = 10.0,
+        prompt_interval_s: float = 5.0,
+    ) -> list[tuple[Optional[str], list[str], Optional[Path]]]:
         cmd = "D" if runs is None else f"D {runs}"
         reply, _lines = self._query_and_drain(
-            cmd, expected="DROPLET_ARMED", echo=echo)
-        return reply or ""
+            cmd, expected="DROPLET_ARMED", echo=echo
+        )
+
+        # TODO: Integrate into higher-level method such that we can also control the pump here.
+
+        remaining: Optional[int]
+        if runs is None:
+            remaining = None
+        else:
+            remaining = max(0, int(runs))
+
+        if reply != "DROPLET_ARMED":
+            raise RuntimeError(f"Unexpected reply to {cmd}: {reply!r}")
+
+        results: list[tuple[Optional[str], list[str], Optional[Path]]] = []
+        last_prompt = time.time()
+
+        while True:
+            if remaining is not None and remaining <= 0:
+                break
+
+            if self.ser is not None and self.ser.in_waiting > 0:
+                success, line = self.readline()
+                if not success or not isinstance(line, str):
+                    continue
+                clean_line = line.strip()
+
+                if echo:
+                    print(f"[{self.name}] {clean_line}")
+
+                if clean_line.startswith("ERROR"):
+                    raise RuntimeError(clean_line)
+
+                if clean_line == "DROPLET_DETECTED":
+                    result = self._read_run_log(
+                        timeout_s=log_timeout_s,
+                        echo=echo,
+                        output_dir=output_dir,
+                    )
+                    results.append(result)
+                    if remaining is not None:
+                        remaining -= 1
+                    continue
+            else:
+                now = time.time()
+                if now - last_prompt >= prompt_interval_s:
+                    if remaining is None:
+                        prompt = "Quit droplet detection? (y/n): "
+                    else:
+                        prompt = f"Quit droplet detection? ({remaining} remaining) (y/n): "
+                    if prompt_yes_no(prompt):
+                        if not self.write("C"):
+                            raise RuntimeError("Failed to send C command")
+                        return results
+                    last_prompt = now
+                time.sleep(0.05)
+
+        return results
 
     # -------------------------------------------------------------------
     # Dataset read and upload
