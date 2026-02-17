@@ -19,6 +19,7 @@ class PoFSerialDevice(SerialDevice):
         debug: bool = False,
     ):
         super().__init__(name=name, long_name=long_name)
+        self._debug = debug
         self.serial_settings["baudrate"] = baudrate
         self.serial_settings["timeout"] = timeout
 
@@ -74,7 +75,7 @@ class PoFSerialDevice(SerialDevice):
         # Detect MCU error lines and optionally raise.
         for line in lines:
             if line.startswith("ERROR"):
-                if raise_on_error:
+                if raise_on_error and not self._debug:
                     raise RuntimeError(line)
                 return False
         return True
@@ -100,20 +101,37 @@ class PoFSerialDevice(SerialDevice):
 
         if echo:
             for line in lines:
-                print(line)
+                print(f"[{self.name}] {line}")
 
         self._check_errors(lines, raise_on_error=raise_on_error)
 
-        if expected is not None and reply != expected:
-            raise RuntimeError(
-                f"Unexpected reply to {cmd}: {reply!r} (expected {expected!r})"
-            )
-        if expected_prefix is not None and (
-            not isinstance(reply, str) or not reply.startswith(expected_prefix)
-        ):
-            raise RuntimeError(
-                f"Unexpected reply to {cmd}: {reply!r} (expected prefix {expected_prefix!r})"
-            )
+        if not self._debug:
+            matched: Optional[str] = None
+            if expected is not None:
+                for line in lines:
+                    if line == expected:
+                        matched = line
+                        break
+            elif expected_prefix is not None:
+                for line in lines:
+                    if line.startswith(expected_prefix):
+                        matched = line
+                        break
+
+            if matched is not None:
+                reply = matched
+
+            if expected is not None and reply != expected:
+                raise RuntimeError(
+                    f"Unexpected reply to {cmd}: {reply!r} (expected {expected!r})"
+                )
+            if expected_prefix is not None and (
+                not isinstance(reply, str) or not reply.startswith(
+                    expected_prefix)
+            ):
+                raise RuntimeError(
+                    f"Unexpected reply to {cmd}: {reply!r} (expected prefix {expected_prefix!r})"
+                )
 
         return reply if isinstance(reply, str) else None, lines
 
@@ -146,11 +164,12 @@ class CoughMachine(PoFSerialDevice):
     # ------------------------------------------------------------------
     # Serial command wrappers
     # ------------------------------------------------------------------
-    def set_debug(self, enabled: bool, *, echo: bool = True) -> None:
+    def set_debug(self, enabled: bool) -> None:
         cmd = "B 1" if enabled else "B 0"
         expected = "DEBUG_ON" if enabled else "DEBUG_OFF"
-        self._query_and_drain(cmd, expected=expected, echo=echo)
-        print(f"Debug mode {'enabled' if enabled else 'disabled'} on device.")
+        self._query_and_drain(cmd, expected=expected, echo=enabled)
+        if enabled:
+            print("Debug mode enabled on device.")
 
     def set_valve_current(self, current_ma: float, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
@@ -181,7 +200,7 @@ class CoughMachine(PoFSerialDevice):
         self._wait_us = wait_us
         return reply or ""
 
-    def read_wait_us(self, *, echo: bool = True) -> Optional[int]:
+    def get_wait_us(self, *, echo: bool = True) -> Optional[int]:
         reply, _lines = self._query_and_drain(
             "W?", expected_prefix="W", echo=echo)
         if reply is None:
@@ -191,7 +210,7 @@ class CoughMachine(PoFSerialDevice):
         except ValueError:
             return None
 
-    def dataset_status(self, *, echo: bool = True) -> str:
+    def get_dataset_status(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain("L?", echo=echo)
         return reply or ""
 
@@ -210,13 +229,29 @@ class CoughMachine(PoFSerialDevice):
             "C!", expected="MEMORY_CLEARED", echo=echo)
         return reply or ""
 
-    def droplet_detect(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
+    def detect_droplet(self, runs: Optional[int] = None, *, echo: bool = True) -> str:
         cmd = "D" if runs is None else f"D {runs}"
         reply, _lines = self._query_and_drain(
             cmd, expected="DROPLET_ARMED", echo=echo)
         return reply or ""
 
-    def laser_test(self, enabled: bool, *, echo: bool = True) -> str:
+    def laser_test(
+        self,
+        enabled: bool = True,
+        *,
+        duration_s: Optional[float] = None,
+        echo: bool = True,
+    ) -> str:
+        if duration_s is not None and enabled:
+            reply_on, _lines_on = self._query_and_drain(
+                "A 1", expected="LASER_TEST_ON", echo=echo
+            )
+            time.sleep(duration_s)
+            reply_off, _lines_off = self._query_and_drain(
+                "A 0", expected="LASER_TEST_OFF", echo=echo
+            )
+            return reply_off or reply_on or ""
+
         cmd = "A 1" if enabled else "A 0"
         expected = "LASER_TEST_ON" if enabled else "LASER_TEST_OFF"
         reply, _lines = self._query_and_drain(
@@ -237,13 +272,15 @@ class CoughMachine(PoFSerialDevice):
             return None, None
 
     def read_status(self, *, echo: bool = True, timeout: float = 1.0) -> list[str]:
+        if not self._debug:
+            raise RuntimeError("read_status is only available in debug mode.")
         if not self.write("S?"):
             raise RuntimeError("Failed to send S? command")
 
         lines = self._read_lines(timeout=timeout)
         if echo:
             for line in lines:
-                print(line)
+                print(f"[{self.name}] {line}")
         self._check_errors(lines, raise_on_error=True)
         return lines
 
@@ -263,4 +300,6 @@ class CoughMachine(PoFSerialDevice):
 
 
 # Class variables for testing
-device = CoughMachine(debug=True)
+cough_machine = CoughMachine(debug=False)
+
+cough_machine.read_status()
