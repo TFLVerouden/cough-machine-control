@@ -20,9 +20,11 @@ class PoFSerialDevice(SerialDevice):
         baudrate: int = 115200,
         timeout: float = 1,
         debug: bool = False,
+        echo: bool = False,
     ):
         super().__init__(name=name, long_name=long_name)
         self._debug = debug
+        self._echo_default = echo
         self.serial_settings["baudrate"] = baudrate
         self.serial_settings["timeout"] = timeout
 
@@ -90,18 +92,22 @@ class PoFSerialDevice(SerialDevice):
                 return False
         return True
 
+    def _resolve_echo(self, echo: Optional[bool]) -> bool:
+        return self._echo_default if echo is None else echo
+
     def _query_and_drain(
         self,
         cmd: Optional[str],
         expected: Optional[str] = None,
         expected_prefix: Optional[str] = None,
         raise_on_error: bool = True,
-        echo: bool = True,
+        echo: Optional[bool] = None,
         extra_timeout: float = 0.2,
     ) -> tuple[Optional[str], list[str]]:
         # Issue a query (optional), collect additional lines, and validate responses.
         reply: Optional[str] = None
         lines: list[str] = []
+        echo = self._resolve_echo(echo)
         if cmd:
             success, reply = self.query(cmd, raises_on_timeout=True)
             if not success:
@@ -156,6 +162,7 @@ class CoughMachine(PoFSerialDevice):
         baudrate: int = 115200,
         timeout: float = 1,
         debug: bool = False,
+        echo: bool = False,
     ):
         super().__init__(
             name=name,
@@ -163,7 +170,8 @@ class CoughMachine(PoFSerialDevice):
             expected_id=expected_id,
             baudrate=baudrate,
             timeout=timeout,
-            debug=debug
+            debug=debug,
+            echo=echo,
         )
 
         self._wait_us: Optional[int] = None
@@ -195,7 +203,7 @@ class CoughMachine(PoFSerialDevice):
     # ------------------------------------------------------------------
 
     # CONNECTION & DEBUGGING
-    def _identify(self, *, echo: bool = True) -> str:
+    def _identify(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain("id?", echo=echo)
         return reply or ""
 
@@ -206,25 +214,25 @@ class CoughMachine(PoFSerialDevice):
         if enabled:
             print("Debug mode enabled on device.")
 
-    def read_status(self, *, echo: bool = True, timeout: float = 1.0) -> list[str]:
+    def read_status(self, *, echo: Optional[bool] = None, timeout: float = 1.0) -> list[str]:
         if not self._debug:
             raise RuntimeError("read_status is only available in debug mode.")
         if not self.write("S?"):
             raise RuntimeError("Failed to send S? command")
 
         lines = self._read_lines(timeout=timeout)
-        if echo:
+        if self._resolve_echo(echo):
             for line in lines:
                 print(f"[{self.name}] {line}")
         self._check_errors(lines, raise_on_error=True)
         return lines
 
-    def help(self, *, echo: bool = True) -> str:
+    def help(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain("?", echo=echo)
         return reply or ""
 
     # CONTROL HARDWARE
-    def set_valve_current(self, current_ma: float, *, echo: bool = True) -> str:
+    def set_valve_current(self, current_ma: float, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             f"V {current_ma}", expected_prefix="SET_VALVE", echo=echo
         )
@@ -238,7 +246,7 @@ class CoughMachine(PoFSerialDevice):
         avg_window_s: float = 5.0,
         tolerance_bar: float = 0.05,
         poll_interval_s: float = 0.2,
-        echo: bool = True,
+        echo: Optional[bool] = None,
     ) -> str:
         reply, _lines = self._query_and_drain(
             f"P {pressure_bar}", expected_prefix="SET_PRESSURE", echo=echo
@@ -269,7 +277,7 @@ class CoughMachine(PoFSerialDevice):
 
                 deviation = reading - pressure_bar
                 print(
-                    f"\rPressure: {reading:.2f} bar (dev {deviation:+.2f})",
+                    f"\rPressure settling: {reading:.2f} bar (dev {deviation:+.2f})",
                     end="",
                     flush=True,
                 )
@@ -280,7 +288,8 @@ class CoughMachine(PoFSerialDevice):
                         print()
                         return reply or ""
             else:
-                print("\rPressure: -.-- bar (dev ---)", end="", flush=True)
+                print("\rPressure settling: -.-- bar (dev ---)",
+                      end="", flush=True)
 
             time.sleep(poll_interval_s)
 
@@ -289,12 +298,12 @@ class CoughMachine(PoFSerialDevice):
             "Could not reach setpoint value or pressure too unstable."
         )
 
-    def open_solenoid(self, *, echo: bool = True) -> str:
+    def open_solenoid(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             "O", expected="SOLENOID_OPENED", echo=echo)
         return reply or ""
 
-    def close_solenoid(self, *, echo: bool = True) -> str:
+    def close_solenoid(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             "C", expected="SOLENOID_CLOSED", echo=echo)
         return reply or ""
@@ -304,7 +313,7 @@ class CoughMachine(PoFSerialDevice):
         enabled: bool = True,
         *,
         duration_s: Optional[float] = None,
-        echo: bool = True,
+        echo: Optional[bool] = None,
     ) -> str:
         if duration_s is not None and enabled:
             reply_on, _lines_on = self._query_and_drain(
@@ -323,7 +332,7 @@ class CoughMachine(PoFSerialDevice):
         return reply or ""
 
     # READ OUT SENSORS
-    def read_pressure(self, *, echo: bool = True) -> Optional[float]:
+    def read_pressure(self, *, echo: Optional[bool] = None) -> Optional[float]:
         reply, _lines = self._query_and_drain(
             "P?", expected_prefix="P", echo=echo)
         if reply is None:
@@ -333,7 +342,7 @@ class CoughMachine(PoFSerialDevice):
         except ValueError:
             return None
 
-    def read_temperature_humidity(self, *, echo: bool = True) -> tuple[Optional[float], Optional[float]]:
+    def read_temperature_humidity(self, *, echo: Optional[bool] = None) -> tuple[Optional[float], Optional[float]]:
         reply, _lines = self._query_and_drain(
             "T?", expected_prefix="T", echo=echo)
         if reply is None:
@@ -347,14 +356,14 @@ class CoughMachine(PoFSerialDevice):
             return None, None
 
     # CONFIGURATION
-    def set_wait_us(self, wait_us: int, *, echo: bool = True) -> str:
+    def set_wait_us(self, wait_us: int, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             f"W {wait_us}", expected_prefix="SET_WAIT", echo=echo
         )
         self._wait_us = wait_us
         return reply or ""
 
-    def get_wait_us(self, *, echo: bool = True) -> Optional[int]:
+    def get_wait_us(self, *, echo: Optional[bool] = None) -> Optional[int]:
         reply, _lines = self._query_and_drain(
             "W?", expected_prefix="W", echo=echo)
         if reply is None:
@@ -364,12 +373,12 @@ class CoughMachine(PoFSerialDevice):
         except ValueError:
             return None
 
-    def clear_memory(self, *, echo: bool = True) -> str:
+    def clear_memory(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             "Q!", expected="MEMORY_CLEARED", echo=echo)
         return reply or ""
 
-    def clear_logs(self, *, echo: bool = True) -> str:
+    def clear_logs(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
             "Q", expected="LOGS_CLEARED", echo=echo)
         return reply or ""
@@ -385,7 +394,7 @@ class CoughMachine(PoFSerialDevice):
         csv_path: str | Path | None = None,
         *,
         delimiter: str = ",",
-        echo: bool = True,
+        echo: Optional[bool] = None,
         timeout: float = 1.0,
     ) -> str:
         # If a path is passed here, it overrides any previously stored default.
@@ -427,7 +436,7 @@ class CoughMachine(PoFSerialDevice):
         self._dataset_loaded = True
         return reply or ""
 
-    def get_dataset_status(self, *, echo: bool = True) -> str:
+    def get_dataset_status(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain("L?", echo=echo)
         return reply or ""
 
@@ -436,7 +445,7 @@ class CoughMachine(PoFSerialDevice):
         self,
         *,
         timeout_s: float = 10.0,
-        echo: bool = True,
+        echo: Optional[bool] = None,
         output_dir: Optional[str | Path] = None,
     ) -> tuple[Optional[str], list[str], Optional[Path]]:
         if not self.write("R"):
@@ -451,7 +460,7 @@ class CoughMachine(PoFSerialDevice):
         self,
         runs: Optional[int] = None,
         *,
-        echo: bool = True,
+        echo: Optional[bool] = None,
         output_dir: Optional[str | Path] = None,
         log_timeout_s: float = 10.0,
         prompt_interval_s: float = 5.0,
@@ -474,7 +483,6 @@ class CoughMachine(PoFSerialDevice):
 
         results: list[tuple[Optional[str], list[str], Optional[Path]]] = []
         last_prompt = time.time()
-
         while True:
             if remaining is not None and remaining <= 0:
                 break
@@ -484,9 +492,6 @@ class CoughMachine(PoFSerialDevice):
                 if not success or not isinstance(line, str):
                     continue
                 clean_line = line.strip()
-
-                if echo:
-                    print(f"[{self.name}] {clean_line}")
 
                 if clean_line.startswith("ERROR"):
                     raise RuntimeError(clean_line)
@@ -505,13 +510,10 @@ class CoughMachine(PoFSerialDevice):
                 now = time.time()
                 if now - last_prompt >= prompt_interval_s:
                     if remaining is None:
-                        prompt = "Quit droplet detection? (y/n): "
+                        status = "Waiting for droplet..."
                     else:
-                        prompt = f"Quit droplet detection? ({remaining} remaining) (y/n): "
-                    if prompt_yes_no(prompt):
-                        if not self.write("C"):
-                            raise RuntimeError("Failed to send C command")
-                        return results
+                        status = f"Waiting for droplet... {remaining} remaining"
+                    print(f"\r{status}")
                     last_prompt = now
                 time.sleep(0.05)
 
@@ -588,7 +590,7 @@ class CoughMachine(PoFSerialDevice):
         start_marker: str = "START_OF_FILE",
         end_marker: str = "END_OF_FILE",
         timeout_s: float = 10.0,
-        echo: bool = True,
+        echo: Optional[bool] = None,
         output_dir: Optional[str | Path] = None,
     ) -> tuple[Optional[str], list[str], Optional[Path]]:
         # Read a single CSV log streamed between START_OF_FILE and END_OF_FILE.
@@ -596,7 +598,6 @@ class CoughMachine(PoFSerialDevice):
         started = False
         filename: Optional[str] = None
         rows: list[str] = []
-
         while (time.time() - start_time) < timeout_s:
             if self.ser is not None and self.ser.in_waiting > 0:
                 success, line = self.readline()
@@ -604,7 +605,7 @@ class CoughMachine(PoFSerialDevice):
                     continue
                 clean_line = line.strip()
 
-                if echo:
+                if self._resolve_echo(echo):
                     print(f"[{self.name}] {clean_line}")
 
                 if not started:
@@ -642,10 +643,21 @@ class CoughMachine(PoFSerialDevice):
 
 if __name__ == "__main__":
 
+    # Set up
     cough_machine = CoughMachine(debug=False)
     cough_machine.clear_memory()
+    cough_machine.set_pressure(1.5, timeout_s=2.0)
+
+    # Run tests
+    # cough_machine.load_dataset(
+    #     csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\step.csv")
+    # cough_machine.run(output_dir="C:\\CoughMachineData")
+
+    # Droplet tests
     cough_machine.load_dataset(
         csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\step.csv")
-    cough_machine.set_pressure(1.5, timeout_s=2.0)
-    cough_machine.run(output_dir="C:\\CoughMachineData")
+    cough_machine.detect_droplet(
+        runs=2, output_dir="C:\\CoughMachineData\\Tests")
+
+    # Finally
     cough_machine.manual_mode()
