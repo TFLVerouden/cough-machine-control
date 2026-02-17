@@ -91,21 +91,22 @@ class PoFSerialDevice(SerialDevice):
 
     def _query_and_drain(
         self,
-        cmd: str,
+        cmd: Optional[str],
         expected: Optional[str] = None,
         expected_prefix: Optional[str] = None,
         raise_on_error: bool = True,
         echo: bool = True,
         extra_timeout: float = 0.2,
     ) -> tuple[Optional[str], list[str]]:
-        # Issue a query, collect additional lines, and validate responses.
-        success, reply = self.query(cmd, raises_on_timeout=True)
-        if not success:
-            raise RuntimeError(f"Query failed: {cmd}")
-
+        # Issue a query (optional), collect additional lines, and validate responses.
+        reply: Optional[str] = None
         lines: list[str] = []
-        if isinstance(reply, str):
-            lines.append(reply)
+        if cmd:
+            success, reply = self.query(cmd, raises_on_timeout=True)
+            if not success:
+                raise RuntimeError(f"Query failed: {cmd}")
+            if isinstance(reply, str):
+                lines.append(reply)
         lines.extend(self._read_lines(timeout=extra_timeout))
 
         if echo:
@@ -350,13 +351,16 @@ class CoughMachine(PoFSerialDevice):
             self._dataset_csv_path, delimiter=delimiter)
         serial_command = self._format_dataset(time_arr, mA_arr, enable_arr)
 
+        if self._debug:
+            print(f"Formatted serial command:\n{serial_command}")
+
         if not self.write(serial_command):
             raise RuntimeError("Failed to write dataset to device.")
 
-        # Query status after upload to drain remaining output before new commands.
+        # Wait for dataset upload confirmation without issuing extra commands.
         reply, _lines = self._query_and_drain(
-            "L?",
-            expected_prefix="DATASET",
+            None,
+            expected="DATASET_SAVED",
             echo=echo,
             extra_timeout=timeout,
         )
@@ -415,14 +419,12 @@ class CoughMachine(PoFSerialDevice):
         prefix: str = "L",
         handshake_delim: str = " ",
         data_delim: str = ",",
-        line_feed: str = "\n",
     ) -> str:
         # Format the arrays into the serial protocol for dataset upload.
         if (
-            len(time_array) != len(mA_array)
+            not time_array
+            or len(time_array) != len(mA_array)
             or len(time_array) != len(enable_array)
-            or len(time_array) == 0
-            or len(mA_array) == 0
         ):
             raise ValueError(
                 f"Arrays are not compatible! Time length: {len(time_array)}, "
@@ -430,20 +432,16 @@ class CoughMachine(PoFSerialDevice):
             )
 
         duration = time_array[-1]
-        header = [
-            prefix,
-            handshake_delim,
-            str(len(time_array)),
-            handshake_delim,
-            duration,
-            handshake_delim,
-        ]
+        header = (
+            f"{prefix}{handshake_delim}{len(time_array)}"
+            f"{handshake_delim}{duration}{handshake_delim}"
+        )
         data = [
             str(val)
             for t, mA, e in zip(time_array, mA_array, enable_array)
             for val in (t, mA, e)
         ]
-        return "".join(header) + data_delim.join(data) + line_feed
+        return header + data_delim.join(data)
 
     # -------------------------------------------------------------------
     # Run logging & metadata output
@@ -452,7 +450,7 @@ class CoughMachine(PoFSerialDevice):
 
 if __name__ == "__main__":
 
-    cough_machine = CoughMachine(debug=True)
+    cough_machine = CoughMachine(debug=False)
     cough_machine.load_dataset(
         csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\default_curve_new.csv")
     cough_machine.manual_mode()
