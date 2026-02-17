@@ -1,156 +1,11 @@
-import contextlib
 import csv
-import os
 import time
 from pathlib import Path
 from typing import Optional
 
-from dvg_devices.BaseDevice import SerialDevice
-from tcm_utils.file_dialogs import ask_open_file, find_repo_root, get_config_path
-from tcm_utils.io_utils import prompt_yes_no
+from tcm_utils.file_dialogs import ask_open_file, find_repo_root
 
-
-# PoF serial class that invokes the auto connection features on initialisation
-class PoFSerialDevice(SerialDevice):
-    def __init__(
-        self,
-        name: str,
-        long_name: str,
-        expected_id: str,
-        baudrate: int = 115200,
-        timeout: float = 1,
-        debug: bool = False,
-        echo: bool = False,
-    ):
-        super().__init__(name=name, long_name=long_name)
-        self._debug = debug
-        self._echo_default = echo
-        self.serial_settings["baudrate"] = baudrate
-        self.serial_settings["timeout"] = timeout
-
-        last_known_port_path = get_config_path(f"{name}_path.txt")
-
-        def id_query() -> tuple[str, None]:
-            _success, reply = self.query("id?")
-            if isinstance(reply, str):
-                reply_broad = reply.strip()
-            else:
-                reply_broad = ""
-            return reply_broad, None
-
-        self.set_ID_validation_query(
-            ID_validation_query=id_query,
-            valid_ID_broad=expected_id,
-        )
-
-        # Auto connect to device; suppress print of connection attempts
-        if debug:
-            connected = self.auto_connect(
-                filepath_last_known_port=str(last_known_port_path)
-            )
-        else:
-            with open(os.devnull, "w") as devnull, contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-                connected = self.auto_connect(
-                    filepath_last_known_port=str(last_known_port_path)
-                )
-
-        if not connected:
-            raise SystemError(
-                f"Serial device {name} not found via auto_connect")
-        else:
-            # Drain any boot/session leftovers before issuing new commands.
-            pending = self._read_lines(timeout=0.5)
-            if pending:
-                if self._debug:
-                    for line in pending:
-                        print(f"[{self.name}] {line}")
-                self._check_errors(pending, raise_on_error=True)
-            print(f"Connected to serial device {name} at {self.ser.port}")
-
-    # ------------------------------------------------------------------
-    # Low-level helpers
-    # ------------------------------------------------------------------
-    def _read_lines(self, timeout: float = 0.2) -> list[str]:
-        # Drain any pending serial lines within the timeout window.
-        lines: list[str] = []
-        start = time.time()
-        while (time.time() - start) < timeout:
-            if self.ser is not None and self.ser.in_waiting > 0:
-                success, line = self.readline()
-                if success and isinstance(line, str):
-                    lines.append(line)
-            else:
-                time.sleep(0.02)
-        return lines
-
-    def _check_errors(self, lines: list[str], raise_on_error: bool) -> bool:
-        # Detect MCU error lines and optionally raise.
-        for line in lines:
-            if line.startswith("ERROR"):
-                if raise_on_error and not self._debug:
-                    raise RuntimeError(line)
-                return False
-        return True
-
-    def _resolve_echo(self, echo: Optional[bool]) -> bool:
-        return self._echo_default if echo is None else echo
-
-    def _query_and_drain(
-        self,
-        cmd: Optional[str],
-        expected: Optional[str] = None,
-        expected_prefix: Optional[str] = None,
-        raise_on_error: bool = True,
-        echo: Optional[bool] = None,
-        extra_timeout: float = 0.2,
-    ) -> tuple[Optional[str], list[str]]:
-        # Issue a query (optional), collect additional lines, and validate responses.
-        reply: Optional[str] = None
-        lines: list[str] = []
-        echo = self._resolve_echo(echo)
-        if cmd:
-            success, reply = self.query(cmd, raises_on_timeout=True)
-            if not success:
-                raise RuntimeError(f"Query failed: {cmd}")
-            if isinstance(reply, str):
-                lines.append(reply)
-        lines.extend(self._read_lines(timeout=extra_timeout))
-
-        if echo:
-            for line in lines:
-                print(f"[{self.name}] {line}")
-
-        self._check_errors(lines, raise_on_error=raise_on_error)
-
-        if not self._debug:
-            matched: Optional[str] = None
-            if expected is not None:
-                for line in lines:
-                    if line == expected:
-                        matched = line
-                        break
-            elif expected_prefix is not None:
-                for line in lines:
-                    if line.startswith(expected_prefix):
-                        matched = line
-                        break
-
-            if matched is not None:
-                reply = matched
-
-            if expected is not None and reply != expected:
-                raise RuntimeError(
-                    f"Unexpected reply to {cmd}: {reply!r} (expected {expected!r})"
-                )
-            if expected_prefix is not None and (
-                not isinstance(reply, str) or not reply.startswith(
-                    expected_prefix)
-            ):
-                raise RuntimeError(
-                    f"Unexpected reply to {cmd}: {reply!r} (expected prefix {expected_prefix!r})"
-                )
-
-        return reply if isinstance(reply, str) else None, lines
+from .base import PoFSerialDevice
 
 
 class CoughMachine(PoFSerialDevice):
@@ -214,7 +69,9 @@ class CoughMachine(PoFSerialDevice):
         if enabled:
             print("Debug mode enabled on device.")
 
-    def read_status(self, *, echo: Optional[bool] = None, timeout: float = 1.0) -> list[str]:
+    def read_status(
+        self, *, echo: Optional[bool] = None, timeout: float = 1.0
+    ) -> list[str]:
         if not self._debug:
             raise RuntimeError("read_status is only available in debug mode.")
         if not self.write("S?"):
@@ -295,17 +152,18 @@ class CoughMachine(PoFSerialDevice):
 
         print()
         raise RuntimeError(
-            "Could not reach setpoint value or pressure too unstable."
-        )
+            "Could not reach setpoint value or pressure too unstable.")
 
     def open_solenoid(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
-            "O", expected="SOLENOID_OPENED", echo=echo)
+            "O", expected="SOLENOID_OPENED", echo=echo
+        )
         return reply or ""
 
     def close_solenoid(self, *, echo: Optional[bool] = None) -> str:
         reply, _lines = self._query_and_drain(
-            "C", expected="SOLENOID_CLOSED", echo=echo)
+            "C", expected="SOLENOID_CLOSED", echo=echo
+        )
         return reply or ""
 
     def laser_test(
@@ -342,7 +200,9 @@ class CoughMachine(PoFSerialDevice):
         except ValueError:
             return None
 
-    def read_temperature_humidity(self, *, echo: Optional[bool] = None) -> tuple[Optional[float], Optional[float]]:
+    def read_temperature_humidity(
+        self, *, echo: Optional[bool] = None
+    ) -> tuple[Optional[float], Optional[float]]:
         reply, _lines = self._query_and_drain(
             "T?", expected_prefix="T", echo=echo)
         if reply is None:
@@ -408,7 +268,7 @@ class CoughMachine(PoFSerialDevice):
                 key="flow_curve_csv",
                 title="Select flow curve CSV",
                 filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
-                default_dir=repo_root / "source_python" / "flow_curves",
+                default_dir=repo_root / "source_python" / "tcm_control" / "flow_curves",
                 start=repo_root,
             )
 
@@ -416,7 +276,8 @@ class CoughMachine(PoFSerialDevice):
             raise SystemExit("No flow curve CSV selected")
 
         time_arr, mA_arr, enable_arr = self._extract_csv(
-            self._dataset_csv_path, delimiter=delimiter)
+            self._dataset_csv_path, delimiter=delimiter
+        )
         serial_command = self._format_dataset(time_arr, mA_arr, enable_arr)
 
         if self._debug:
@@ -467,10 +328,7 @@ class CoughMachine(PoFSerialDevice):
     ) -> list[tuple[Optional[str], list[str], Optional[Path]]]:
         cmd = "D" if runs is None else f"D {runs}"
         reply, _lines = self._query_and_drain(
-            cmd, expected="DROPLET_ARMED", echo=echo
-        )
-
-        # TODO: Integrate into higher-level method such that we can also control the pump here.
+            cmd, expected="DROPLET_ARMED", echo=echo)
 
         remaining: Optional[int]
         if runs is None:
@@ -524,7 +382,9 @@ class CoughMachine(PoFSerialDevice):
     # -------------------------------------------------------------------
 
     @staticmethod
-    def _extract_csv(filename: str | Path, delimiter: str = ",") -> tuple[list[str], list[str], list[str]]:
+    def _extract_csv(
+        filename: str | Path, delimiter: str = ","
+    ) -> tuple[list[str], list[str], list[str]]:
         # Parse a CSV file into time, current, enable arrays for the L command.
         time_arr: list[str] = []
         mA_arr: list[str] = []
@@ -536,7 +396,8 @@ class CoughMachine(PoFSerialDevice):
             for rows in csvreader:
                 if len(rows) < 3 or not rows[0] or not rows[1] or rows[2] == "":
                     raise ValueError(
-                        f"Encountered empty cell at row index {row_idx}!")
+                        f"Encountered empty cell at row index {row_idx}!"
+                    )
                 # replace ',' with '.' depending on csv format (';' delim vs ',' delim)
                 time_arr.append(rows[0].replace(",", "."))
                 mA_arr.append(rows[1].replace(",", "."))
@@ -639,25 +500,3 @@ class CoughMachine(PoFSerialDevice):
             print(f"Saved log to {saved_path}")
 
         return filename, rows, saved_path
-
-
-if __name__ == "__main__":
-
-    # Set up
-    cough_machine = CoughMachine(debug=False)
-    cough_machine.clear_memory()
-    cough_machine.set_pressure(1.5, timeout_s=2.0)
-
-    # Run tests
-    # cough_machine.load_dataset(
-    #     csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\step.csv")
-    # cough_machine.run(output_dir="C:\\CoughMachineData")
-
-    # Droplet tests
-    cough_machine.load_dataset(
-        csv_path="C:\\Users\\local2\\Documents\\GitHub\\cough-machine-control\\source_python\\tcm_control\\flow_curves\\step.csv")
-    cough_machine.detect_droplet(
-        runs=2, output_dir="C:\\CoughMachineData\\Tests")
-
-    # Finally
-    cough_machine.manual_mode()

@@ -33,4 +33,11 @@ dependencies = [
 ]
 
 [tool.setuptools]
-packages = []
+package-dir = {"" = "source_python"}
+
+[tool.setuptools.packages.find]
+where = ["source_python"]
+include = ["tcm_control*"]
+
+[tool.setuptools.package-data]
+tcm_control = ["flow_curves/*.csv", "config/*.json"]
