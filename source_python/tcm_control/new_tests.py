@@ -229,11 +229,67 @@ class CoughMachine(PoFSerialDevice):
         )
         return reply or ""
 
-    def set_pressure(self, pressure_bar: float, *, echo: bool = True) -> str:
+    def set_pressure(
+        self,
+        pressure_bar: float,
+        *,
+        timeout_s: float = 60.0,
+        avg_window_s: float = 5.0,
+        tolerance_bar: float = 0.05,
+        poll_interval_s: float = 0.2,
+        echo: bool = True,
+    ) -> str:
         reply, _lines = self._query_and_drain(
             f"P {pressure_bar}", expected_prefix="SET_PRESSURE", echo=echo
         )
-        return reply or ""
+
+        if timeout_s <= 0:
+            return reply or ""
+        if avg_window_s <= 0:
+            raise ValueError("avg_window_s must be > 0")
+        if poll_interval_s <= 0:
+            raise ValueError("poll_interval_s must be > 0")
+
+        start = time.time()
+        samples: list[tuple[float, float]] = []
+        while (time.time() - start) < timeout_s:
+            reading = self.read_pressure(echo=False)
+            if reading is not None:
+                now = time.time()
+                samples.append((now, reading))
+                cutoff = now - avg_window_s
+                samples = [(t, p) for t, p in samples if t >= cutoff]
+
+                if samples and (now - samples[0][0]) >= avg_window_s:
+                    avg = sum(p for _, p in samples) / len(samples)
+                    if echo:
+                        deviation = avg - pressure_bar
+                        print(
+                            f"\rPressure: {avg:.2f} bar (dev {deviation:+.2f})",
+                            end="",
+                            flush=True,
+                        )
+                    if abs(avg - pressure_bar) <= tolerance_bar:
+                        if echo:
+                            print()
+                        return reply or ""
+                elif echo:
+                    deviation = reading - pressure_bar
+                    print(
+                        f"\rPressure: {reading:.2f} bar (dev {deviation:+.2f})",
+                        end="",
+                        flush=True,
+                    )
+            elif echo:
+                print("\rPressure: -.-- bar (dev ---)", end="", flush=True)
+
+            time.sleep(poll_interval_s)
+
+        if echo:
+            print()
+        raise RuntimeError(
+            "Could not reach setpoint value or pressure too unstable."
+        )
 
     def open_solenoid(self, *, echo: bool = True) -> str:
         reply, _lines = self._query_and_drain(
@@ -444,7 +500,7 @@ class CoughMachine(PoFSerialDevice):
         return header + data_delim.join(data)
 
     # -------------------------------------------------------------------
-    # Run logging & metadata output
+    # Run logging
     # -------------------------------------------------------------------
 
 
