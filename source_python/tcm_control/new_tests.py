@@ -14,7 +14,7 @@ class PoFSerialDevice(SerialDevice):
         expected_id: str,
         baudrate: int = 115200,
         timeout: float = 1,
-        verbose: bool = False,
+        debug: bool = False,
     ):
         super().__init__(name=name, long_name=long_name)
         self.serial_settings["baudrate"] = baudrate
@@ -36,7 +36,7 @@ class PoFSerialDevice(SerialDevice):
         )
 
         # Auto connect to device; suppress print of connection attempts
-        if verbose:
+        if debug:
             connected = self.auto_connect(
                 filepath_last_known_port=str(last_known_port_path)
             )
@@ -52,24 +52,33 @@ class PoFSerialDevice(SerialDevice):
         else:
             print(f"Connected to serial device {name} at {self.ser.port}")
 
-    def receive_data(self, str_start, str_end, timeout_sec=10)
+
+class CoughMachine(PoFSerialDevice):
+    def __init__(
+        self,
+        name: str = "CoughMachine_MCU",
+        long_name: str = "Adafruit ItsyBitsy M4 Express",
+        expected_id: str = "TCM_control",
+        baudrate: int = 115200,
+        timeout: float = 1,
+        debug: bool = False,
+    ):
+        super().__init__(
+            name=name,
+            long_name=long_name,
+            expected_id=expected_id,
+            baudrate=baudrate,
+            timeout=timeout,
+            debug=debug
+        )
+
+        if debug:
+            if self.query("B 1", raises_on_timeout=True)[1] == "DEBUG_ON":
+                print("Debug mode enabled on device.")
+        else:
+            if self.query("B 1")[1] == "DEBUG_OFF":
+                print("Debug mode disabled on device.")
 
 
 # Class variables for testing
-NAME = "TCM_control"
-LONG_NAME = "Adafruit ItsyBitsy M4 Feather Express"
-ID = "TCM_control"
-BAUD_RATE = 115200
-TIMEOUT = 1
-VERBOSE = False
-
-last_known_port_path = get_config_path("TCM_control_path.txt")
-
-device = PoFSerialDevice(
-    name=NAME,
-    long_name=LONG_NAME,
-    expected_id=ID,
-    baudrate=BAUD_RATE,
-    timeout=TIMEOUT,
-    verbose=VERBOSE
-)
+device = CoughMachine(debug=True)
